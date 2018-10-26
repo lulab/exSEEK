@@ -16,7 +16,8 @@
 * h5py
 
 **Bioconda packages**
-List of Bioconda packages: (https://bioconda.github.io/recipes.html)
+
+List of all available Bioconda packages: (https://bioconda.github.io/recipes.html)
 
 * bedtools
 * samtools
