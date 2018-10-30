@@ -34,3 +34,12 @@ List of all available Bioconda packages: (https://bioconda.github.io/recipes.htm
 * pigz
 
 **R packages**
+* SingleCellExperiment
+* scater
+* scImpute
+* scran
+* SCnorm
+* EDASeq
+* RUVSeq
+* sva
+* scRNA.seq.funcs
