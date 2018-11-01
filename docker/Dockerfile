@@ -28,7 +28,9 @@ RUN echo "options(Ncpus = 8L)" >> /usr/lib/R/etc/Rprofile.site
 RUN echo "options(BioC_mirror = 'https://mirrors4.tuna.tsinghua.edu.cn/bioconductor')" >> /usr/lib/R/etc/Rprofile.site 
 RUN echo "options(repos = c('CRAN' = 'https://mirrors4.tuna.tsinghua.edu.cn/CRAN'))" >> /usr/lib/R/etc/Rprofile.site 
 
+RUN R --slave -e ".libPaths(c('/usr/lib/R/site-library', '/usr/lib/R/library')); source('http://bioconductor.org/biocLite.R')"
 RUN R -e "BiocInstaller::biocLite(c('SingleCellExperiment', 'scater', 'scran', 'SCnorm', 'EDASeq', 'RUVSeq', 'sva'))"
+RUN R -e "install.packages('devtools')"
 RUN R -e "devtools::install_github('hemberg-lab/scRNA.seq.funcs')"
 RUN R -e "devtools::install_github('Vivianstats/scImpute')"
 
