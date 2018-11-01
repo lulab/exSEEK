@@ -2,7 +2,7 @@ language: generic
 services: docker
 
 script:
-  - docker build -t dongzhuoer/exSeek docker
+  - docker build -t dongzhuoer/exseek docker
   # build
   #- docker build -t dongzhuoer/lulab:diff-exp .
   # deploy
