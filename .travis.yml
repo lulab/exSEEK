@@ -1,0 +1,15 @@
+language: generic
+services: docker
+
+script:
+  - docker build -t dongzhuoer/exSeek docker
+  # build
+  #- docker build -t dongzhuoer/lulab:diff-exp .
+  # deploy
+  #- echo "$DOCKER_PASSWORD" | docker login -u dongzhuoer --password-stdin
+  #- docker push dongzhuoer/lulab:diff-exp
+  # test
+  #- bash -e test.sh
+
+notifications:
+  email: false

@@ -12,7 +12,6 @@ FROM dongzhuoer/ubuntu-cn:rolling
 
 # Set a default user ---------------
 RUN useradd exseek -m -s /bin/bash
-WORKDIR /home/exseek
 
 # install R ----------
 # tzdata is a dependency of r-base-dev, so it's the same as we just install the latter
@@ -29,8 +28,9 @@ RUN echo "options(Ncpus = 8L)" >> /usr/lib/R/etc/Rprofile.site
 RUN echo "options(BioC_mirror = 'https://mirrors4.tuna.tsinghua.edu.cn/bioconductor')" >> /usr/lib/R/etc/Rprofile.site 
 RUN echo "options(repos = c('CRAN' = 'https://mirrors4.tuna.tsinghua.edu.cn/CRAN'))" >> /usr/lib/R/etc/Rprofile.site 
 
+RUN R -e "BiocInstaller::biocLite(c('SingleCellExperiment', 'scater', 'scran', 'SCnorm', 'EDASeq', 'RUVSeq', 'sva'))"
+RUN R -e "devtools::install_github('hemberg-lab/scRNA.seq.funcs')"
+RUN R -e "devtools::install_github('Vivianstats/scImpute')"
 
-
-RUN mkdir -p /home/exseek/.local/lib/R && chown -R exseek:exseek /home/exseek
 
  
