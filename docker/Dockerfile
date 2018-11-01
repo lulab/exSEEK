@@ -29,7 +29,7 @@ RUN echo "options(BioC_mirror = 'https://mirrors4.tuna.tsinghua.edu.cn/bioconduc
 RUN echo "options(repos = c('CRAN' = 'https://mirrors4.tuna.tsinghua.edu.cn/CRAN'))" >> /usr/lib/R/etc/Rprofile.site 
 
 RUN R --slave -e ".libPaths(c('/usr/lib/R/site-library', '/usr/lib/R/library')); source('http://bioconductor.org/biocLite.R')"
-RUN R -e "BiocInstaller::biocLite(c('SingleCellExperiment', 'scater', 'scran', 'SCnorm', 'EDASeq', 'RUVSeq', 'sva'))"
+#RUN R -e "BiocInstaller::biocLite(c('SingleCellExperiment', 'scater', 'scran', 'SCnorm', 'EDASeq', 'RUVSeq', 'sva'))"
                                # curl                 openssl
 RUN apt update && apt -y install libcurl4-openssl-dev libssl-dev && rm -r /var/lib/apt/lists/
 RUN R -e "install.packages('devtools', lib = '/usr/lib/R/site-library')"
