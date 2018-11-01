@@ -30,7 +30,9 @@ RUN echo "options(repos = c('CRAN' = 'https://mirrors4.tuna.tsinghua.edu.cn/CRAN
 
 RUN R --slave -e ".libPaths(c('/usr/lib/R/site-library', '/usr/lib/R/library')); source('http://bioconductor.org/biocLite.R')"
 RUN R -e "BiocInstaller::biocLite(c('SingleCellExperiment', 'scater', 'scran', 'SCnorm', 'EDASeq', 'RUVSeq', 'sva'))"
-RUN R -e "install.packages('devtools')"
+                               # curl                 openssl
+RUN apt update && apt -y install libcurl4-openssl-dev libssl-dev && rm -r /var/lib/apt/lists/
+RUN R -e "install.packages('devtools', lib = '/usr/lib/R/site-library')"
 RUN R -e "devtools::install_github('hemberg-lab/scRNA.seq.funcs')"
 RUN R -e "devtools::install_github('Vivianstats/scImpute')"
 
