@@ -11,8 +11,8 @@ Normalization is performed for the systematic error of each sample (such as the 
 
 * CPM\(counts per million\)
 * Use candidate reference gene. For example: `'MIR1228', 'MIR16-1', 'MIR16-2', 'MIR21', 'MIR23A', 'MIR23B', 'MIR23C', 'MIR451A', 'MIR15A', 'MIR15B'`
-
 * remove piRNA and miRNA and use CPM\(counts per million\)
+* Use top20 as scale factor
 * use packages:
     * SCNorm
     * RLE
@@ -30,12 +30,22 @@ A density plot or a violin plot is used to analyze the coefficient of variation 
 
 - [ ]to do: add more details
 
+### Criteria to use top20
+
+We recommend to use top20 as scale factor if they account for more than 50% of total counts.
+
+
+![](../assets/hccrefcvbox.png)
+
+
 
 ## Batch Removal
 
 ### Visualize Batch Effect
 
-![](../assets/boxplotbatch.png)
+![](../assets/top20_counts.png)
+
+![](../assets/top30.png)
 
 Batch Removal methods:
 
