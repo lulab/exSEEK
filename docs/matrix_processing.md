@@ -35,7 +35,9 @@ A density plot or a violin plot is used to analyze the coefficient of variation 
 We recommend to use top20 as scale factor if they account for more than 50% of total counts.
 
 
-![](../assets/hccrefcvbox.png)
+![](../assets/top20_counts.png)
+
+![](../assets/top30.png)
 
 
 
@@ -43,9 +45,7 @@ We recommend to use top20 as scale factor if they account for more than 50% of t
 
 ### Visualize Batch Effect
 
-![](../assets/top20_counts.png)
 
-![](../assets/top30.png)
 
 Batch Removal methods:
 
