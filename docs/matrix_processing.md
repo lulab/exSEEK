@@ -89,8 +89,6 @@ def knn_score(X, y, K=10):
     return scores.mean()
 ```
 
-如下图所示，可以通过_knn\_score_计算出以batch信息所谓label时scirep数据的alignment score。0.27996表示不同batch的分离程度比较差，基本混合在一起
-
 ![](../assets/alignment_score.png)
 
 ### Matrix processing function
