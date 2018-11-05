@@ -2,7 +2,7 @@
 
 **Overall flow chart**
 
-![](../../.gitbook/assets/mapping_pipe%20%281%29.png)
+![](../assets/mapping_pipe%20%281%29.png)
 
 ## Data Structure
 
@@ -248,6 +248,3 @@ def get_counts(samplename):
     return df
 get_counts('Sample_N14')
 ```
-
-[**Other reference tutorials**](https://lulab.gitbook.io/training/part-ii.-basic-bioinfo-analyses/1.mapping-annotation-and-qc)
-
