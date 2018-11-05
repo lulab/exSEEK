@@ -2,7 +2,7 @@
 
 **Overall flow chart**
 
-![](../assets/mapping_pipe%20%281%29.png)
+![](../assets/mapping_pipe.png)
 
 ## Data Structure
 
