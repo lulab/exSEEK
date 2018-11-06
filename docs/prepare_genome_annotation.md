@@ -9,7 +9,7 @@
 ### Sequence
 #### download from gencode v27
 
-- [ ]located in folder: sequence/
+- [ ]to do located in folder: sequence/
 
 ```
 wget wget ftp://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_27/GRCh38.p10.genome.fa.gz
@@ -24,7 +24,7 @@ cut -f1,2 GRCh38.p10.genome.fa.fai > hg38.chrom.sizes
 
 ### Index 
 #### build by bowtie2 and STAR
-- [ ]located in folder: 
+- [ ]to do located in folder: 
 
 * using bowtie2
 
