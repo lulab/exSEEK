@@ -12,7 +12,8 @@
   * Line plot of length distribution
   
   ![](../assets/length.png)
-  * 
+  
+  * 3D bar plot of length distribution
   
   ![](../assets/3d_distribution.png)
   
