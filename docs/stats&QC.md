@@ -2,23 +2,31 @@
 
 ## Basic Analysis    
 
-**Count the proportion of different RNA type and show them in a pie chart**
+* **Count the proportion of different RNA type and show them in a pie chart**
 
+  
 ![](../assets/pie.png)
 
-**Counting the length distribution of mapped reads of different RNA types**
+* **Count the length distribution of mapped reads of different RNA types**
 
-![](../assets/length.png)
+  * Line plot of length distribution
+  
+  ![](../assets/length.png)
+  * 
+  
+  ![](../assets/3d_distribution.png)
+  
 
-**Counts of different RNA types in different samples**
+
+* **Counts of different RNA types in different samples**
 
 ![](../assets/boxplot_rnatype.png)
 
-**Counts of specific RNA types in different samples**, use lncRNA as example
+* **Counts of specific RNA types in different samples**, use lncRNA as example
 
 ![](../assets/countsoflnc.png)
 
-**Analyze the proportion of different RNAs in each sample**
+* **Analyze the proportion of different RNAs in each sample**
 
 ![](../assets/stackbarhccorigin.png) 
 
