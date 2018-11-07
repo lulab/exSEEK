@@ -1,5 +1,4 @@
 #! /usr/bin/env python
-from __future__ import print_function
 import argparse, sys, os, errno
 import logging
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] [%(levelname)s] %(name)s: %(message)s')
@@ -77,10 +76,17 @@ def evaluate(args):
     del X_neg
     X_raw = X
     n_samples, n_features = X.shape
+    sample_ids = X.index.values
 
     if not os.path.isdir(args.output_dir):
         logger.info('create outout directory: ' + args.output_dir)
         os.makedirs(args.output_dir)
+
+    logger.info('save sample ids')
+    X.index.to_series().to_csv(os.path.join(args.output_dir, 'samples.txt'),
+        sep='\t', header=False, index=False)
+    logger.info('save sample classes')
+    np.savetxt(os.path.join(args.output_dir, 'classes.txt'), y, fmt='%d')
 
     if args.use_log:
         logger.info('apply log2 to feature matrix')
@@ -121,7 +127,7 @@ def evaluate(args):
     #with open(args.model_file, 'rb') as f:
     #    model = pickle.load(f)
     
-    def get_splitter(splitter, n_splits=5, n_repeats=5):
+    def get_splitter(splitter, n_splits=5, n_repeats=5, test_size=0.2):
         if splitter == 'kfold':
             return KFold(n_splits=n_splits)
         elif splitter == 'stratified_kfold':
@@ -129,9 +135,9 @@ def evaluate(args):
         elif splitter == 'repeated_stratified_kfold':
             return RepeatedStratifiedKFold(n_splits=n_splits, n_repeats=n_repeats)
         elif splitter == 'shuffle_split':
-            return ShuffleSplit(n_splits=args.n_splits, test_size=args.test_size)
+            return ShuffleSplit(n_splits=n_splits, test_size=test_size)
         elif splitter == 'stratified_shuffle_split':
-            return StratifiedShuffleSplit(n_splits=args.n_splits, test_size=args.test_size)
+            return StratifiedShuffleSplit(n_splits=n_splits, test_size=test_size)
         elif splitter == 'leave_one_out':
             return LeaveOneOut()
         else:
@@ -237,6 +243,7 @@ def evaluate(args):
             if i_split < splitter.get_n_splits(X):
                 feature_selection_matrix[i_split, features] = True
         else:
+            # no feature selection
             features = np.arange(n_features, dtype=np.int64)
         
         estimator.fit(X[train_index][:, features], y[train_index], sample_weight=sample_weight)
@@ -286,8 +293,6 @@ def evaluate(args):
         
     logger.info('save metrics')
     metrics.to_csv(os.path.join(args.output_dir, 'metrics.{}.txt'.format(args.splitter)), sep='\t', header=True, index=False)
-
-    
 
 @command_handler
 def robust_select(args):

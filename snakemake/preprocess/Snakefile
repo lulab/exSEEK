@@ -1,0 +1,235 @@
+shell.prefix('set -x;')
+configfile: 'snakemake/config.json'
+
+rna_types = config['rna_types']
+
+
+def get_all_inputs(wildcards):
+    available_inputs = dict(
+    )
+    enabled_inputs = list(available_inputs.keys())
+    inputs = []
+    for key, l in available_inputs.items():
+        if key in enabled_inputs:
+            inputs += l
+    return inputs
+
+rule all:
+    input:
+        get_all_inputs
+
+rule tbam_to_tbed:
+    input:
+        'data/{dataset}/tbam/{sample_id}/{rna_type}.bam'
+    output:
+        'output/{dataset}/tbed/{sample_id}/{rna_type}.bed.gz'
+    threads: 2
+    shell:
+        '''bedtools bamtobed -i {input} \
+            | awk 'BEGIN{{OFS="\t"}}{{print $1,$2,$3,"R",$5,$6}}' \
+            | bedtools sort | pigz -c -p {threads} > {output}
+        '''
+
+rule transcript_counts_rna_type:
+    input:
+        'output/{dataset}/tbam/{sample_id}/{rna_type}.bam'
+    output:
+        'output/{dataset}/transcript_counts_rna_type/{sample_id}/{rna_type}.txt'
+    shell:
+        '''bin/preprocess.py transcript_counts -i {input.bam} -o {output}
+        '''
+
+rule transcript_counts_merge:
+    input:
+        lambda wildcards: expand('output/{dataset}/transcript_counts_rna_type/{sample_id}/{rna_type}.txt',
+            dataset=wildcards.dataset, sample_id=wildcards.sample_id, rna_type=rna_types)
+    output:
+        'output/{dataset}/transcript_counts/{sample_id}.txt'
+    shell:
+        '''cat {input} > {output}
+        '''
+
+rule transcript_counts_matrix:
+    input:
+        counts=expand('output/{dataset}/transcript_counts/{sample_id}.txt',
+            dataset=wildcards.dataset, sample_id=sample_ids),
+        transcript_table='data/annotation/transcript_table/all.txt'
+    output:
+        'output/{dataset}/count_matrix/{dataset}.txt'
+    run:
+        import pandas as pd
+        import numpy as np
+        import re
+        from functools import reduce
+
+        transcript_table = pd.read_table(input.transcript_table, sep='\t')
+        lengths = (transcript_table.loc[:, 'end'] - transcript_table.loc[:, 'start']).astype('str')
+        feature_labels = transcript_table.loc[:, 'transcript_id'] + '|' +  transcript_table.loc[:, 'transcript_name'] 
+        feature_labels.index = transcript_table.loc[:, 'transcript_id']
+        feature_labels = feature_labels[~feature_labels.index.duplicated()]
+
+        pat = re.compile(r'^output/(?<dataset>[^/])/transcript_counts/(?P<sample_id>[^\.]+).txt$')
+        counts_list = []
+        sample_ids = []
+        for input_file in input.counts:
+            sample_id = pat.match(input_file).groupdict()['sample_id']
+            counts_list.append(pd.read_table(input_file, header=None, index_col=0).iloc[:, 0])
+            sample_ids.append(sample_id)
+        transcript_ids = reduce(np.union1d, [a.index.values for a in counts_list])
+        m = pd.DataFrame(np.zeros((len(transcript_ids), len(sample_ids)), dtype=np.int64), 
+            index=transcript_ids, columns=sample_ids)
+        for i in range(len(sample_ids)):
+            m.loc[counts_list[i].index.values, sample_ids[i]] = counts_list[i].values
+        m.index = feature_labels[m.index.values].values
+        m.index.name = 'transcript'
+        m.to_csv(output[0], sep='\t', index=True, header=True)
+
+rule merge_tbed:
+    input:
+        expand('data/annotation/tbed/{rna_type}.bed', rna_type=rna_types)
+    output:
+        'data/annotation/tbed/all.bed'
+    shell:
+        '''cat {input} | bedtools sort {output}
+        '''
+
+rule merge_bed12:
+    input:
+        expand('data/annotation/bed12/{rna_type}.bed', rna_type=rna_types)
+    output:
+        'data/annotation/bed12/all.bed'
+    shell:
+        '''cat {input} | bedtools sort {output}
+        '''
+
+rule chrom_sizes_transcripts:
+    input:
+        expand('data/annotation/tbed/{rna_type}.bed', rna_type=rna_types)
+    output:
+        'data/chrom_sizes/transcripts.txt'
+    shell:
+        '''cat {input} | awk 'BEGIN{{OFS="\t"}}{{print $1,$3}}' | sort -k1,1 -k2,2n > {output}
+        '''
+
+rule transcript_cov_bedgraph:
+    input:
+        tbed=lambda wildcards: expand('output/tbed/{sample_id}/{rna_type}.bed.gz',
+            sample_id=wildcards.sample_id, rna_type=rna_types),
+        chrom_sizes='data/chrom_sizes/all'
+    output:
+        'output/transcript_cov/{sample_id}.bedGraph'
+    shell:
+        '''pigz -d -c {input.tbed} \
+            | bedtools genomecov -bg -i - -g {input.chrom_sizes} \
+            | bedtools sort > {output}
+        '''
+
+rule transcript_cov_bigwig:
+    input:
+        bedgraph='output/transcript_cov/{sample_id}.bedGraph',
+        chrom_sizes='data/chrom_sizes/all'
+    output:
+        'output/transcript_cov/{sample_id}.bigWig'
+    shell:
+        '''bedGraphToBigWig {input.bedgraph} {input.chrom_sizes} {output}
+        '''
+
+rule gtf_to_transcript_table:
+    input:
+        'data/annotation/gtf/{rna_type}.gtf'
+    output:
+        'data/annotation/transcript_table/{rna_type}.txt'
+    params:
+        feature=lambda wildcards: {True: "exon", False: "transcript"}[wildcards.rna_type in ('tRNA', 'tucpRNA', 'piRNA')]
+    shell:
+        '''bin/preprocess.py gtf_to_transcript_table --feature {params.feature} \
+            --gene-type {wildcards.rna_type} \
+            --transcript-type {wildcards.rna_type} \
+            -i {input} -o {output}
+        '''
+    
+rule merge_transcript_table:
+    input:
+        expand('data/annotation/transcript_table/{rna_type}.txt', rna_type=rna_types)
+    output:
+        'data/annotation/transcript_table/all.txt'
+    run:
+        import pandas as pd
+        table = pd.concat([pd.read_table(filename, sep='\t') for filename in input], axis=0)
+        table = table.sort_values(['chrom', 'start'])
+        table.to_csv(output[0], sep='\t', index=False)
+    
+rule featurecounts_gbam_rna_type:
+    input:
+        bam='data/gbam/{sample_id}/{rna_type}.bam',
+        gtf='data/annotation/gtf/{rna_type}.gtf'
+    output:
+        'output/featurecounts_gbam_rna_type/{sample_id}/{rna_type}.txt'
+    params:
+        stranded='1',
+        paired_end=lambda wildcards: {True: '-p -B -C', False: ''}[is_paired_end[sample_to_dataset[wildcards.sample_id]]]
+    shell:
+        '''featureCounts {params.paired_end} -t exon -g transcript_id -s {params.stranded} -a {input.gtf} -o {output} {input.bam}
+        '''
+
+rule featurecounts_gbam_merge:
+    input:
+        lambda wildcards: expand('output/featurecounts_gbam_rna_type/{sample_id}/{rna_type}.txt',
+            sample_id=wildcards.sample_id, rna_type=rna_types)
+    output:
+        'output/featurecounts_gbam/{sample_id}.txt'
+    run:
+        import pandas as pd
+        import re
+
+        pat = re.compile(r'^output/featurecounts_gbam_rna_type/(?P<sample_id>[^/]+)/(?P<rna_type>[^\.]+).txt$')
+        counts = []
+        for input_file in input:
+            d = pat.match(input_file).groupdict()
+            df = pd.read_table(input_file, comment='#', sep='\t')
+            df = df.iloc[:, [0, 6]].copy()
+            df.columns = ['transcript_id', 'count']
+            counts.append(df)
+        counts = pd.concat(counts, axis=0)
+        counts.to_csv(output[0], sep='\t', header=False, index=False)
+
+
+rule featurecounts_gbam_matrix_all:
+    input:
+        counts=expand('output/featurecounts_gbam/{sample_id}.txt',
+            sample_id=sample_ids),
+        transcript_table='data/annotation/transcript_table/all.txt'
+    output:
+        'output/count_matrix_all/{dataset}.txt'
+    wildcard_constraints:
+        dataset='(transcripts_exrna)|(GSE71008)|(exoRBase)|(PNAS2018)|(PNAS2018_Plasma)|(bioRxiv2018_Plasma)'
+    shell:
+        r'''{{
+            printf 'transcript_id\t'
+            printf '{input.counts}' | tr ' ' '\n' | sed 's#output/featurecounts_gbam/\([^\.]\+\)\.txt#\1#' | tr '\n' '\t'
+            printf '\n'
+            paste {input.counts} | awk 'BEGIN{{OFS="\t";FS="\t"}}{{printf $1;for(i=2;i<=NF;i+=2){{printf "\t" $i}} printf "\n"}}'
+        }} > {output}
+        '''
+
+rule transcript_counts_matrix:
+    input:
+        matrix='output/count_matrix_all/{dataset}.txt',
+        transcript_table='data/annotation/transcript_table/all.txt'
+    output:
+        'output/count_matrix/{dataset}.txt'
+    run:
+        import pandas as pd
+        import re
+        from collections import OrderedDict
+
+        transcript_table = pd.read_table(input.transcript_table, sep='\t')
+        lengths = (transcript_table.loc[:, 'end'] - transcript_table.loc[:, 'start']).astype('str')
+        feature_labels = transcript_table.loc[:, 'transcript_id'] + '|' +  transcript_table.loc[:, 'transcript_name'] + '|' + lengths
+        feature_labels.index = transcript_table.loc[:, 'transcript_id']
+        feature_labels = feature_labels[~feature_labels.index.duplicated()]
+        m = pd.read_table(input.matrix, sep='\t', index_col=0)
+        m.index = feature_labels[m.index.values].values
+        m = m[m.sum(axis=1) > 0]
+        m.index.name = 'transcript'
+        m.to_csv(output[0], sep='\t', index=True, header=True)

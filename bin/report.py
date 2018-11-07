@@ -406,6 +406,9 @@ if __name__ == '__main__':
         help='output transcript counts file')
     
     args = main_parser.parse_args()
+    if not args.command:
+        main_parser.print_help()
+        sys.exit(1)
     logger = logging.getLogger('report.' + args.command)
 
     command_handlers.get(args.command)(args)

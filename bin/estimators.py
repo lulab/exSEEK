@@ -22,8 +22,6 @@ import json
 from scipy.cluster import hierarchy
 from scipy.spatial.distance import pdist, squareform
 from tqdm import tqdm
-from scipy.stats import ttest_ind
-from statsmodels.sandbox.stats.multicomp import multipletests
 import logging
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] [%(levelname)s] %(name)s: %(message)s')
 
@@ -226,26 +224,6 @@ class RobustEstimator(BaseEstimator, ClassifierMixin):
     def score(self, X):
         return self.estimator_.score(X)
 
-class TTestEstimator(BaseEstimator, ClassifierMixin):
-    def __init__(self, fdr_alpha=0.01, fdr_method='fdr_bh'):
-        self.fdr_alpha = fdr_alpha
-        self.fdr_method = fdr_method
-        
-    def fit(self, X, y, sample_weight=None):
-
-        t_stats = np.zeros(X.shape[1])
-        t_pvals = np.zeros(X.shape[1])
-        for i in range(X.shape[1]):
-            t_stats[i], t_pvals[i] = ttest_ind(X.iloc[y == 0, i], X.iloc[y == 1, i])
-        t_rejects, t_qvals, alphacSidak, alphacBonf = multipletests(t_pvals, alpha=self.fdr_alpha, method=self.fdr_method)
-        t_orders = np.argsort(t_qvals[t_rejects])
-        t_features = np.nonzero(t_rejects)[0][t_orders]
-
-        self.features_ = t_features
-        self.qvalues_ = t_qvals
-        self.statistics_ = t_stats
-        self.feature_importances_ = -np.log10(t_qvals)
-
 def define_step(inputs=None, outputs=None):
     inputs = inputs if inputs is not None else ()
     outputs = outputs if outputs is not None else ()
@@ -307,6 +285,7 @@ class FeatureSelection(object):
             self.logger.info('create output directory: ' + self.output_dir)
             os.makedirs(self.output_dir)
     
+    @define_step(inputs=['matrix_file'], outputs=['X', 'sample_classes'])
     def read_data(self):
         self.X = pd.read_table(self.matrix_file, index_col=0)
         if self.transpose:
@@ -318,6 +297,7 @@ class FeatureSelection(object):
             names=['sample_id', 'sample_class'], index_col=0)
         self.sample_classes = self.sample_classes.iloc[:, 0]
     
+    @define_step(inputs=['X'], outputs=['feature_names', 'n_features'])
     def filter_features(self):
         if self.remove_zero_features is not None:
             self.X = self.X.loc[:, np.isclose(m, 0).sum(axis=0) >= (m.shape[0]*self.remove_zero_features)]
@@ -330,6 +310,8 @@ class FeatureSelection(object):
         self.logger.info('{} features after filtering'.format(self.n_features))
         self.logger.info('features: {} ...'.format(str(self.feature_names[:3])))
     
+    @define_step(inputs=['X', 'positive_class', 'negative_class'],
+        outputs=['X', 'y', 'n_samples', 'sample_ids', 'X_raw'])
     def select_samples(self):
         if (self.positive_class is not None) and (self.negative_class is not None):
             self.positive_class = self.positive_class.split(',')
@@ -354,6 +336,7 @@ class FeatureSelection(object):
         self.n_samples = self.X.shape
         self.sample_ids = self.X.index.values
 
+    @define_stoe(inputs=['X', 'use_log', 'scaler'], outputs=['X'])
     def scale_features(self):
         if self.use_log:
             self.logger.info('apply log2 to feature matrix')
@@ -370,6 +353,8 @@ class FeatureSelection(object):
         self.logger.info('scale features using {}'.format(self.scaler))
         self.X = scaler.fit_transform(self.X)
 
+    @define_step(inputs=['X', 'method', 'resample_method'], 
+        outputs=['estimator', 'robust_estimator', 'compute_sample_weight'])
     def train_model(self):
         if np.any(np.isnan(self.X)):
             self.logger.info('nan values found in features')
@@ -431,16 +416,19 @@ class FeatureSelection(object):
         plt.savefig(os.path.join(self.output_dir, 'roc_curve.pdf'))
         plt.close()
 
+    @define_step(inputs=['estimator'])
     def save_model(self):
         self.logger.info('save model')
         with open(os.path.join(self.output_dir, 'model.pkl'), 'wb') as f:
             pickle.dump(self.estimator, f)
     
+    @define_step(outputs=['estimator'])
     def load_model(self):
         self.logger.info('load model')
         with open(os.path.join(self.output_dir, 'model.pkl'), 'rb') as f:
             self.estimator = pickle.load(f)
     
+    @define_step(inputs=['estimator'])
     def save_params(self):
         self.logger.info('save model parameters')
         with open(os.path.join(self.output_dir, 'params.json'), 'w') as f:
@@ -473,7 +461,8 @@ class FeatureSelection(object):
         metrics.index.name = 'feature'
         metrics.to_csv(os.path.join(self.output_dir, 'single_feature_metrics.txt'),
             sep='\t', index=True, header=True)
-    
+
+    @define_step(inputs=['estimator'])
     def plot_feature_importance(self):
         self.logger.info('plot feature importance')
         features = pd.read_table(os.path.join(self.output_dir, 'features.txt'),
