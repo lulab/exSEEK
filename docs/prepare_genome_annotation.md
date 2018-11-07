@@ -8,11 +8,18 @@
 
 ### Sequence
 #### download from gencode v27
-
-- [ ]to do located in folder: sequence/
+- [ ]located in folder: 
+#### located in folder: sequence/
 
 ```
+mkdir sequence
+cd sequence
 wget wget ftp://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_27/GRCh38.p10.genome.fa.gz
+```
+#### Decompression
+
+```
+gzip -d GRCh38.p10.genome.fa.gz 
 ```
 
 #### parse genome
@@ -24,7 +31,8 @@ cut -f1,2 GRCh38.p10.genome.fa.fai > hg38.chrom.sizes
 
 ### Index 
 #### build by bowtie2 and STAR
-- [ ]to do located in folder: 
+- [ ]located in folder: 
+#### located in folder: index/
 
 * using bowtie2
 
@@ -37,8 +45,9 @@ bowtie2-build ../sequence/GRCh38.p10.genome.fa GRCh38.p10
 * using STAR
 
 ```
-mkdir STAR_hg38_index
-STAR --runMode genomeGenerate --runThreadN 15 --genomeDir STAR_hg38_index/ --genomeFastaFiles GRCh38.p10.genome.fa
+mkdir ../STAR_hg38_index
+cd ../STAR_hg38_index
+STAR --runMode genomeGenerate --runThreadN 15 --genomeDir . --genomeFastaFiles ../sequence/GRCh38.p10.genome.fa
 ```
 
 
@@ -76,6 +85,10 @@ wget ftp://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_27/gencode.
 wget ftp://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_27/gencode.v27.tRNAs.gtf.gz
 wget ftp://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_27/gencode.v27.tRNAs.gff3.gz
 ```
+#### Decompression
+```
+gzip -d *
+```
 
 #### parse annotations
 ```
@@ -110,21 +123,30 @@ wget http://mitranscriptome.org/download/mitranscriptome.gtf.tar.gz
 wget http://www.noncode.org/datadownload/NONCODEv5_human_hg38_lncRNA.gtf.gz
 wget https://media.nature.com/original/nature-assets/ncomms/2017/170213/ncomms14421/extref/ncomms14421-s3.txt
 ```
-
+#### Decompression
+```
+tar zxvf mitranscriptome.gtf.tar.gz
+gzip -d mitranscriptome.v2.gtf.gz
+```
 #### parse and convert 
 ```
 wget http://hgdownload.soe.ucsc.edu/goldenPath/hg19/liftOver/hg19ToHg38.over.chain.gz
-
+gzip -d hg19ToHg38.over.chain.gz 
+cd mitranscriptome.gtf
+gzip -d mitranscriptome.v2.gtf.gz
 gtfToGenePred -genePredExt mitranscriptome.v2.gtf mitranscriptome.v2.gp
-liftOver -genePred mitranscriptome.v2.gp hg19ToHg38.over.chain mitranscriptome.v2.hg38.gp unmapped.gtf
+liftOver -genePred mitranscriptome.v2.gp ../hg19ToHg38.over.chain mitranscriptome.v2.hg38.gp unmapped.gtf
 genePredToGtf -utr -source=mitranscriptome file mitranscriptome.v2.hg38.gp mitranscriptome.v2.hg38.gtf
 gffread -E mitranscriptome.v2.hg38.gtf -o- > mitranscriptome.v2.hg38.gff
+mv ../mitranscriptome.gtf ../mitranscriptome
+cd ..
 
 # filter out lncRNA
+cd mitranscriptome.gtf
 zcat mitranscriptome.v2.gtf.gz | grep -e 'tcat \"lncrna\"' > lncRNA.mitranscriptome.v2.gtf
 # liftOver hg19 to hg38
 gtfToGenePred -genePredExt lncRNA.mitranscriptome.v2.gtf lncRNA.mitranscriptome.v2.gp
-liftOver -genePred lncRNA.mitranscriptome.v2.gp hg19ToHg38.over.chain lncRNA.mitranscriptome.v2.hg38.gp unmapped.gtf
+liftOver -genePred lncRNA.mitranscriptome.v2.gp ../hg19ToHg38.over.chain lncRNA.mitranscriptome.v2.hg38.gp unmapped.gtf
 genePredToGtf -utr -source=mitranscriptome file lncRNA.mitranscriptome.v2.hg38.gp lncRNA.mitranscriptome.v2.hg38.gtf
 gffread -E lncRNA.mitranscriptome.v2.hg38.gtf -o- > lncRNA.mitranscriptome.v2.hg38.gff
 
@@ -132,14 +154,21 @@ gffread -E lncRNA.mitranscriptome.v2.hg38.gtf -o- > lncRNA.mitranscriptome.v2.hg
 zcat mitranscriptome.v2.gtf.gz | grep -e 'tcat \"tucp\"' | awk '$7!="."' > tucp.mitranscriptome.v2.gtf
 # liftOver hg19 to hg38
 gtfToGenePred -genePredExt tucp.mitranscriptome.v2.gtf tucp.mitranscriptome.v2.gp
-liftOver -genePred tucp.mitranscriptome.v2.gp hg19ToHg38.over.chain tucp.mitranscriptome.v2.hg38.gp unmapped.gtf
+liftOver -genePred tucp.mitranscriptome.v2.gp ../hg19ToHg38.over.chain tucp.mitranscriptome.v2.hg38.gp unmapped.gtf
 genePredToGtf -utr -source=mitranscriptome file tucp.mitranscriptome.v2.hg38.gp tucp.mitranscriptome.v2.hg38.gtf
 gffread -E tucp.mitranscriptome.v2.hg38.gtf -o- > tucp.mitranscriptome.v2.hg38.gff
 
+cd ..
 gtfToGenePred -genePredExt ncomms14421-s3.txt lncRNA.lulab_ncomms14421.gp
 liftOver -genePred lncRNA.lulab_ncomms14421.gp hg19ToHg38.over.chain lncRNA.lulab_ncomms14421.hg38.gp unmapped.gtf
 genePredToGtf -utr -source=lulab_ncomms14421 file lncRNA.lulab_ncomms14421.hg38.gp lncRNA.lulab_ncomms14421.hg38.gtf
 gffread -E lncRNA.lulab_ncomms14421.hg38.gtf -o- > lncRNA.lulab_ncomms14421.hg38.gff
+
+cd mitranscriptome.gtf
+mv * ..
+cd mitranscriptome
+mv * ..
+rm -rf mitranscriptome mitranscriptome.gtf mitranscriptome.gtf.tar.gz
 
 rm -rf *.gp unmapped.gtf
 
@@ -151,7 +180,23 @@ mv NONCODEv5_human_hg38_lncRNA.gtf lncRNA.NONCODEv5.hg38.gtf
 gffcompare -o merged_lncRNA -s ../sequence/GRCh38.p10.genome.fa lncRNA.NONCODEv5.hg38.gtf  lncRNA.mitranscriptome.v2.hg38.gtf  lncRNA.gencode27.gtf lncRNA.lulab_ncomms14421.hg38.gtf
 gffread -E merged_lncRNA.combined.gtf -o- > merged_lncRNA.combined.gff
 ```
+#### mkdir gtf gff
+```
+cd ..
+mkdir gtf gff
+mv gencode/*.gtf gtf
+mv gencode/*.gff gff
+```
 
+#### establish indexes
+```
+if [ "$1" = "0" ]; then
+	for i in ${RNAs[@]} ; do
+ 		echo "start $i.gtf:"
+		rsem-prepare-reference --gtf $gtf/$i.gtf --bowtie2 $hg38 RNA_index/$i
+		echo "$i finished."
+	done
+```
 #### cut lncRNA into bins
 #### convert combined gtf to combined bed
 
