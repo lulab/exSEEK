@@ -20,15 +20,16 @@ eg:
         |-- trim       
         |-- QC2        
     |-- 02.mapping     
-      |-- 1.no_rRNA
-          |-- fastq    #Save *.no_rRNA.fq
-          |-- sam      #Save *.<rRNA>.sam
-          |-- rsem_bam #Convert .sam to .bam file      |-- 2.no_miRNA   
-      |-- ...
-      |-- 12.no_hg38other
-          |-- fastq    
-          |-- sam      
-          |-- bam      #The tools used for converting .sam to .bam file are different, so the folder is renamed to bam by rsem_bam
+        |-- no_rRNA
+            |-- fastq    #Save *.no_rRNA.fq
+            |-- sam      #Save *.<rRNA>.sam
+            |-- rsem_bam #Convert .sam to .bam file      
+        |-- no_miRNA   
+        |-- ...
+        |-- no_hg38other
+            |-- fastq    
+            |-- sam      
+            |-- bam      #The tools used for converting .sam to .bam file are different, so the folder is renamed to bam by rsem_bam
     |-- 03.tags        #The folder where the files of expression matrices constructed by homer , this tutorial does not need to establish this folder
         |-- Sample_N1
             |-- miRNA
@@ -56,14 +57,14 @@ eg:
 
 ### Capture Data
 
-Download genomic data `hg38`, genomic annotation data `/gtf`, index files `/RNA_index` and raw data `(fastq files)` from `/BioII/chenxupeng/student/` to your own account.
+retrieve genomic data `hg38`, genomic annotation data `/gtf`, index files `/RNA_index` and raw data `(fastq files)` from previous step to your own account.
 
 | data | path |
 | :--- | :--- |
-| `hg38` | `/BioII/chenxupeng/student/data/hg38_index/GRCh38.p10.genome.fa` |
-| `gtf` | `/BioII/chenxupeng/student/data/gtf` |
-| `RNA index` | `/BioII/chenxupeng/student/data/RNA_index/` |
-| `raw data` | `/BioII/chenxupeng/student/data/raw_data/*.fastq` |
+| `hg38` | `sequence/GRCh38.p10.genome.fa` |
+| `gtf` | `gtf/` |
+| `RNA index` | `RNA_index/` |
+| `raw data` | `prepare yourself` |
 
 It is recommended to use the `ln` or `cp` command.
 
@@ -77,7 +78,7 @@ There are two main purposes for this step, one is to control the quality of the 
 
 | data type | path |
 | :--- | :--- |
-| `raw data` | `/BioII/chenxupeng/student/data/raw_data/*.fastq` |
+| `raw data` | `prepare yourself` |
 
 **Software/Parameters:**
 
@@ -99,7 +100,7 @@ QC files
 
 | data type | **path** |
 | :--- | :--- |
-| `raw data` | `/BioII/chenxupeng/student/data/raw_data/*.fastq` |
+| `raw data` | `prepare yourself` |
 
 **Software/Parameters:**
 
@@ -157,7 +158,7 @@ rsem-tbam2gbam <bt2-idx> <sam> genome_bam_output
 
 **Output:**
 
-`.fastq` file `*.no_rRNA.fq` without rRNA reads, located in folder `.../fastq` , see Data Structure
+`.fastq` file `*.rRNA.unAligned.fastq` without rRNA reads, located in folder `.../fastq` , see Data Structure
 
 `*.<rRNA>.sam` files as outputs of mapping to rRNA index, located in folder `.../sam`
 
@@ -167,12 +168,12 @@ with `*.<rRNA>.rsem.clean.bam` files，located in folder `.../rsem_bam`
 
 The purpose of this step is to acquire the `.sam` files by comparing reads to the indexes of various RNA types (such as miRNA, piRNA, Y RNA and srp RNA, etc.). The mapping process is similar to the process of cleaning rRNA reads.
 
-However, the index in operation 2.2.3 is rRNA, just 1) ** replace indexes with other types of indexes**, 2) **treat `*.no_<some type of RNA >.fq` which is outputs of the previous step as inputs of the next step**., then repeat 1) 2) until all indexes are used so that we finish sequential mapping.
+However, the index in operation 2.2.3 is rRNA, just 1) ** replace indexes with other types of indexes**, 2) **treat `*.<some type of RNA>.unAligned.fastq` which is outputs of the previous step as inputs of the next step**., then repeat 1) 2) until all indexes are used so that we finish sequential mapping.
 
 
 **Input:**
 
-`*.no_<some type of RNA>.fastq`
+`*.<some type of RNA>.unAligned.fastq` \(`*.rRNA.unAligned.fastq` in first step\)
 
 **Software/Parameters:**
 
@@ -186,7 +187,7 @@ bowtie2 -p 4 [options] -x <bt2-idx> --un <address of unmapped reads> $input_file
 | :--- |
 | `-x` `<path to index>/<some type of RNA>` |
 | `*.<RNA --un by the previous step>.fq`   as `$input_file` |
-| `-un<path to output>/*.no_<some type of RNA>.fq` |
+| `-un<path to output>/*.<some type of RNA>.unAligned.fastq` |
 | `-S` `<path to .sam file>/<some type of RNA>.sam` |
 
 For those `.sam` files as outputs of mapping to the rRNA index, you can use `rsem-tbam2gbam` command to convert them to `.bam` files.
