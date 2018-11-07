@@ -1,0 +1,18 @@
+{
+    "version": "2.0.0",
+    "type": "shell",
+    "presentation": {
+        "reveal": "silent"
+    },
+	"tasks": [
+        {
+			"label": "build",
+            "command": "docker build -t dongzhuoer/exseek docker",	
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },		
+            "problemMatcher": [],
+        }
+	]
+}

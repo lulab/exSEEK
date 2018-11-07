@@ -36,5 +36,22 @@ RUN R -e "devtools::install_github('hemberg-lab/scRNA.seq.funcs')"
 RUN R -e "devtools::install_github('Vivianstats/scImpute')"
 RUN R -e "BiocInstaller::biocLite(c('SingleCellExperiment', 'scater', 'scran', 'SCnorm', 'EDASeq', 'RUVSeq', 'sva'))"
 
+RUN apt update && apt -y install wget && rm -r /var/lib/apt/lists/
+# install Java
+RUN apt update && apt -y install openjdk-8-jre && rm -r /var/lib/apt/lists/
+# install conda
+RUN wget -q https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh \
+ && bash Miniconda3-latest-Linux-x86_64.sh -b -p /opt/miniconda3 \
+ && rm Miniconda3-latest-Linux-x86_64.sh
+RUN /opt/miniconda3/bin/conda install -y -q numpy scipy scikit-learn pandas matplotlib seaborn tqdm  h5py
+ENV PATH "/opt/miniconda3/bin:${PATH}"
 
- 
+# install system packages (to do: move wget here)
+RUN apt update && apt -y install gzip pigz && rm -r /var/lib/apt/lists/
+
+# install Bioconda packages
+RUN apt update && apt -y install bedtools samtools rna-star subread subread rsem bamtools cutadapt picard && rm -r /var/lib/apt/lists/
+
+# install snakemake
+RUN /opt/miniconda3/bin/conda install -y -q -c bioconda -c conda-forge snakemake
+
