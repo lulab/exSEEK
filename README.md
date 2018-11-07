@@ -3,4 +3,4 @@
 
 ## Workflow
 
-![workflow](assets/workflow.png)
+![workflow](assets/wholepipe.png)
