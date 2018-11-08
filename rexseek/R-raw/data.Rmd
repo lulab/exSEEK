@@ -1,0 +1,32 @@
+---
+title: processing raw data to package data
+---
+
+```{r include=FALSE}
+assertthat::assert_that(
+    knitr::current_input() %>% paste0('R-raw/', .) %>% file.exists(),
+    msg = 'Please set knitr root directory to project directory! You may try running `rmarkdown::render("data-raw/data.Rmd")` at project directory or clicking `Knit` button on the top of this document in RStudio.'
+)
+```
+
+```{r clean, include=FALSE}
+dir('data', full.names = T) %>% file.remove()
+rm(list = ls(envir = globalenv(), all = T))
+```
+
+Process you raw data here.
+
+```{r}
+
+```
+
+
+```{r rebuild, include=FALSE}
+system('R CMD INSTALL --no-multiarch --with-keep.source .')
+devtools::reload();
+devtools::test();
+```
+
+
+
+

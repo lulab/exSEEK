@@ -52,7 +52,7 @@ matrix_path = 'scirep_sequential_qc.txt'
 classinfo_path = 'scirep_classes.txt'
 
 
-mat_raw <- matrix_path %>% readr::read_tsv() %T>% print(n_extra = 0)
+df_raw <- matrix_path %>% readr::read_tsv() %T>% print(n_extra = 0)
 info <- classinfo_path %>% readr::read_csv() %T>% print
 ```
 
@@ -60,14 +60,17 @@ info <- classinfo_path %>% readr::read_csv() %T>% print
 thres_count = 2
 thres_sample_nums = 5
 
-mat <- mat_raw[rowSums(mat_raw > thres_count) > thres_sample_nums, ] %T>% print(n_extra = 0)
+df <- df_raw[rowSums(df_raw > thres_count) > thres_sample_nums, ] %T>% print(n_extra = 0)
+```
+
+```{r to-matrix}
+mat <- df %>% as.data.frame() %>% 
+    tibble::column_to_rownames('transcript') %>% as.matrix()
 ```
 
 ```{r make-SingleCellExperiment}
 reads <- SingleCellExperiment::SingleCellExperiment(
-    assays = mat %>% as.data.frame() %>% tibble::column_to_rownames('transcript') %>% 
-        as.matrix() %>% list(counts = .), 
-    colData = info
+    assays =  list(counts = mat), colData = info
 ) %T>% print
 ```
 
@@ -84,7 +87,7 @@ reads %>% scater::plotTSNE(
 ```
 
 
-```{r imputation}
+```{r imputation, eval=F}
 impute_tmpdir <- tempdir();
 impute_infile <- paste0(impute_tmpdir, '/pre_counts.csv');
 impute_outdir <- paste0(impute_tmpdir, '/output')
@@ -108,31 +111,24 @@ dir(impute_outdir)
 
 
 ```{r SCnorm}
-Conditions = rep(1, dim(m)[2])
-DataNorm <- SCnorm::SCnorm(Data = mat, Conditions = Conditions, PrintProgressPlots = TRUE, NCores = 4)
-NormalizedData <- results(DataNorm)
+NormalizedData <- SCnorm::SCnorm(mat, rep(1, ncol(mat)), T, NCores = 8) %>% 
+    SCnorm::results()
 ```
 
 
 
 ```{r TMM}
-reads_tmm <- scater::normaliseExprs(reads, method = "TMM")
-
 ## normalize the object using the saved size factors
-reads_tmm <- scater::normalize(reads_tmm)
+reads_tmm <- scater::normaliseExprs(reads, "TMM") %>% 
+    scater::normalize()
 ```
 
 
 
-
 ```{r RLE}
-reads_rle <- scater::normaliseExprs(reads, method = "RLE")
-
 ## normalize the object using the saved size factors
-reads_rle <- scater::normalize(reads_rle)
-savename = 'data/matrix_processing/normalization/scirep_rle.txt'
-write.table(normcounts(reads_rle), file=savename, sep='\t', quote=FALSE, 
-            row.names=TRUE, col.names=TRUE)
+reads_rle <- scater::normaliseExprs(reads, "RLE") %>%
+    scater::normalize()
 ```
 
 

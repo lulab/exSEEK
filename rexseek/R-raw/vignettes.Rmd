@@ -1,0 +1,41 @@
+---
+title: build package vignettes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(include = F)
+```
+
+```{r}
+assertthat::assert_that(
+    knitr::current_input() %>% paste0('R-raw/', .) %>% file.exists(),
+    msg = 'Please set knitr root directory to project directory! You may try running `rmarkdown::render("data-raw/data.Rmd")` at project directory or clicking `Knit` button on the top of this document in RStudio.'
+)
+```
+
+
+```{r}
+rmd_vignettes <- dir('vignettes', 'Rmd$', full = T);
+
+if (length(rmd_vignettes) > 0L) {
+	for (rmd_vignette in dir('vignettes', 'Rmd$', full = T)) {
+		callr::r_vanilla(
+			function(input_file){rmarkdown::render(input_file)}, 
+			list(rmd_vignette), .libPaths(), show = T
+		)
+	}
+	
+	dir('vignettes', 'html$') %>% {file.copy(paste0('vignettes/', .), paste0('inst/doc/', .), T)}
+}
+```
+
+Here, we only build the vignettes and haven't edited any source code, thus testing is not needed.
+
+```{r install}
+system('R CMD INSTALL --no-multiarch --with-keep.source .')
+devtools::reload()  # needed to view installed vignettes
+```
+
+
+
+

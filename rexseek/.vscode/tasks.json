@@ -1,0 +1,50 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "presentation": {
+        "reveal": "silent"
+    },
+    "type": "shell",
+    "tasks": [
+        {
+            "label": "document",
+            "command": "R --slave -e 'devtools::document()'",
+            "problemMatcher": []
+        },
+        {
+            "label": "data",
+            "command": "R -e \"rmarkdown::render('R-raw/data.Rmd')\"",
+            "problemMatcher": []
+        },
+        {
+            "label": "vignettes",
+            "command": "R -e \"rmarkdown::render('R-raw/vignettes.Rmd')\"",
+            "problemMatcher": []
+        },
+        {
+            "label": "test",
+            "command": "R --slave -e 'devtools::test()'",
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
+            "dependsOn": [
+                "document"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "build",
+            "command": "R CMD INSTALL --no-multiarch --with-keep.source .",
+            "dependsOn": [
+                "test"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": []
+        }
+    ]
+}
