@@ -52,7 +52,7 @@ matrix_path = 'scirep_sequential_qc.txt'
 classinfo_path = 'scirep_classes.txt'
 
 
-df_raw <- matrix_path %>% readr::read_tsv() %T>% print(n_extra = 0)
+mat <- matrix_path %>% rexseek::read_mat()
 info <- classinfo_path %>% readr::read_csv() %T>% print
 ```
 
