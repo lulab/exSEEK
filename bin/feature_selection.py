@@ -9,6 +9,65 @@ def command_handler(f):
     return f
 
 @command_handler
+def preprocess_matrix(args):
+    import numpy as np
+    import pandas as pd
+
+    logger.info('read feature matrix: ' + args.matrix)
+    m = pd.read_table(args.matrix, index_col=0, sep='\t')
+    if args.transpose:
+        logger.info('transpose feature matrix')
+        m = m.T
+    logger.info('{} samples, {} features'.format(m.shape[0], m.shape[1]))
+    if args.remove_zero_features is not None:
+        logger.info('remove features with zero fraction below {}'.format(args.remove_zero_features))
+        m = m.loc[:, np.isclose(m, 0).sum(axis=0) < (m.shape[0]*args.remove_zero_features)]
+    if args.top_features_by_median is not None:
+        nonzero_samples = (m > 0).sum(axis=0)
+        counts_geomean = np.exp(np.sum(np.log(np.maximum(m, 1)), axis=0)/nonzero_samples)
+        m = m.loc[:, counts_geomean.sort_values(ascending=False)[:args.top_features_by_median].index.values]
+    feature_names = m.columns.values
+    logger.info('{} samples, {} features'.format(m.shape[0], m.shape[1]))
+    logger.info('sample: {} ...'.format(str(m.index.values[:3])))
+    logger.info('features: {} ...'.format(str(m.columns.values[:3])))
+
+    logger.info('read sample classes: ' + args.sample_classes)
+    sample_classes = pd.read_table(args.sample_classes, header=None, 
+        names=['sample_id', 'sample_class'], index_col=0, sep='\t')
+    sample_classes = sample_classes.iloc[:, 0]
+    sample_classes = sample_classes.loc[m.index.values]
+    logger.info('sample_classes: {}'.format(sample_classes.shape[0]))
+
+    n_samples, n_features = X.shape
+    sample_ids = X.index.values
+
+    if not os.path.isdir(args.output_dir):
+        logger.info('create outout directory: ' + args.output_dir)
+        os.makedirs(args.output_dir)
+
+    if args.use_log:
+        logger.info('apply log2 to feature matrix')
+        X = np.log2(X + 0.001)
+
+    if args.scaler == 'zscore':
+        logger.info('scale features using z-score normalization')
+        X = StandardScaler().fit_transform(X)
+    elif args.scaler == 'robust':
+        logger.info('scale features using robust normalization')
+        X = RobustScaler().fit_transform(X)
+    elif args.scaler == 'min_max':
+        logger.info('scale features using min-max normalization')
+        X = MinMaxScaler().fit_transform(X)
+    elif args.scaler == 'max_abs':
+        logger.info('scale features using max-abs normalization')
+        X = MaxAbsScaler().fit_transform(X)
+    
+    X = pd.DataFrame(X, index=sample_ids, columns=feature_names)
+    X.columns.name = 'sample'
+    X = X.T
+    X.to_csv(os.path.join(args.output_dir, 'matrix.txt'), sep='\t', header=True, index=True)
+
+@command_handler
 def evaluate(args):
     import numpy as np
     import pandas as pd
@@ -29,17 +88,6 @@ def evaluate(args):
 
     logger.info('read feature matrix: ' + args.matrix)
     m = pd.read_table(args.matrix, index_col=0, sep='\t')
-    if args.transpose:
-        logger.info('transpose feature matrix')
-        m = m.T
-    logger.info('{} samples, {} features'.format(m.shape[0], m.shape[1]))
-    if args.remove_zero_features is not None:
-        logger.info('remove features with zero fraction below {}'.format(args.remove_zero_features))
-        m = m.loc[:, np.isclose(m, 0).sum(axis=0) < (m.shape[0]*args.remove_zero_features)]
-    if args.top_features_by_median is not None:
-        nonzero_samples = (m > 0).sum(axis=0)
-        counts_geomean = np.exp(np.sum(np.log(np.maximum(m, 1)), axis=0)/nonzero_samples)
-        m = m.loc[:, counts_geomean.sort_values(ascending=False)[:args.top_features_by_median].index.values]
     feature_names = m.columns.values
     logger.info('{} samples, {} features'.format(m.shape[0], m.shape[1]))
     logger.info('sample: {} ...'.format(str(m.index.values[:3])))
@@ -78,6 +126,12 @@ def evaluate(args):
     n_samples, n_features = X.shape
     sample_ids = X.index.values
 
+    logger.info('save sample ids')
+    X.index.to_series().to_csv(os.path.join(args.output_dir, 'samples.txt'),
+        sep='\t', header=False, index=False)
+    logger.info('save sample classes')
+    np.savetxt(os.path.join(args.output_dir, 'classes.txt'), y, fmt='%d')
+
     if not os.path.isdir(args.output_dir):
         logger.info('create outout directory: ' + args.output_dir)
         os.makedirs(args.output_dir)
@@ -87,23 +141,6 @@ def evaluate(args):
         sep='\t', header=False, index=False)
     logger.info('save sample classes')
     np.savetxt(os.path.join(args.output_dir, 'classes.txt'), y, fmt='%d')
-
-    if args.use_log:
-        logger.info('apply log2 to feature matrix')
-        X = np.log2(X + 0.001)
-
-    if args.scaler == 'zscore':
-        logger.info('scale features using z-score normalization')
-        X = StandardScaler().fit_transform(X)
-    elif args.scaler == 'robust':
-        logger.info('scale features using robust normalization')
-        X = RobustScaler().fit_transform(X)
-    elif args.scaler == 'min_max':
-        logger.info('scale features using min-max normalization')
-        X = MinMaxScaler().fit_transform(X)
-    elif args.scaler == 'max_abs':
-        logger.info('scale features using max-abs normalization')
-        X = MaxAbsScaler().fit_transform(X)
 
     # check NaN values
     if np.any(np.isnan(X)):
@@ -122,10 +159,6 @@ def evaluate(args):
         grid_search = {'C': [1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1, 1e2, 1e3, 1e4, 1e5]}
     else:
         raise ValueError('unknown feature selection method: {}'.format(args.method))
-    
-    #logger.info('load model: ' + args.model_file)
-    #with open(args.model_file, 'rb') as f:
-    #    model = pickle.load(f)
     
     def get_splitter(splitter, n_splits=5, n_repeats=5, test_size=0.2):
         if splitter == 'kfold':
@@ -236,6 +269,7 @@ def evaluate(args):
                         rfe_scores = np.zeros((splitter.get_n_splits(X), rfe_n_steps))
                     rfe_scores[i_split] = rfe.scores_
                 estimator = rfe.estimator_
+            # no feature selection
             else:
                 # train the model
                 estimator.fit(X[train_index], y[train_index], sample_weight=sample_weight)
@@ -292,358 +326,38 @@ def evaluate(args):
         f.create_dataset('predicted_labels', data=predicted_labels)
         
     logger.info('save metrics')
-    metrics.to_csv(os.path.join(args.output_dir, 'metrics.{}.txt'.format(args.splitter)), sep='\t', header=True, index=False)
-
-@command_handler
-def robust_select(args):
-    import numpy as np
-    import pandas as pd
-    import matplotlib
-    matplotlib.use('Agg')
-    import matplotlib.pyplot as plt
-    from matplotlib.backends.backend_pdf import PdfPages
-    import seaborn as sns
-    sns.set()
-    from sklearn.linear_model import LogisticRegression
-    from sklearn.ensemble import RandomForestClassifier
-    from sklearn.svm import LinearSVC
-    from sklearn.metrics import roc_auc_score, accuracy_score
-    from sklearn.preprocessing import StandardScaler, RobustScaler, MinMaxScaler, MaxAbsScaler
-    from sklearn.utils.class_weight import compute_sample_weight
-    from sklearn.model_selection import GridSearchCV
-    import os
-    from tqdm import tqdm
-    import pickle
-    import json
-    from scipy.cluster import hierarchy
-    from scipy.spatial.distance import pdist, squareform
-    from estimators import RobustEstimator, TTestEstimator
-
-    logger.info('read feature matrix: ' + args.matrix)
-    m = pd.read_table(args.matrix, index_col=0)
-    if args.transpose:
-        logger.info('transpose feature matrix')
-        m = m.T
-    if args.remove_zero_features is not None:
-        m = m.loc[:, np.isclose(m, 0).sum(axis=0) >= (m.shape[0]*args.remove_zero_features)]
-    if args.top_features_by_median is not None:
-        nonzero_samples = (m > 0).sum(axis=0)
-        counts_geomean = np.exp(np.sum(np.log(np.maximum(m, 1)), axis=0)/nonzero_samples)
-        m = m.loc[:, counts_geomean.sort_values(ascending=False)[:args.top_features_by_median].index.values]
-    feature_names = m.columns.values
-    logger.info('{} samples, {} features'.format(m.shape[0], m.shape[1]))
-    logger.info('sample: {} ...'.format(str(m.index.values[:3])))
-    logger.info('features: {} ...'.format(str(m.columns.values[:3])))
-
-    logger.info('read sample classes: ' + args.sample_classes)
-    sample_classes = pd.read_table(args.sample_classes, header=None, 
-        names=['sample_id', 'sample_class'], index_col=0)
-    sample_classes = sample_classes.iloc[:, 0]
-    sample_classes = sample_classes.loc[m.index.values]
-    print('sample_classes: {}'.format(sample_classes.shape[0]))
-
-    # select samples
-    if (args.positive_class is not None) and (args.negative_class is not None):
-        positive_class = args.positive_class
-        negative_class = args.negative_class
-    else:
-        unique_classes = np.unique(sample_classes.values)
-        if len(unique_classes) != 2:
-            raise ValueError('expect 2 classes but {} classes found'.format(len(unique_classes)))
-        positive_class, negative_class = unique_classes
-    logger.info('positive class: {}, negative class: {}'.format(positive_class, negative_class))
-    X_pos = m.loc[sample_classes[sample_classes == positive_class].index.values]
-    X_neg = m.loc[sample_classes[sample_classes == negative_class].index.values]
-    logger.info('number of positive samples: {}, negative samples: {}, class ratio: {}'.format(
-        X_pos.shape[0], X_neg.shape[0], float(X_pos.shape[0])/X_neg.shape[0]))
-    X = pd.concat([X_pos, X_neg], axis=0)
-    y = np.zeros(X.shape[0], dtype=np.int32)
-    y[X_pos.shape[0]:] = 1
-    del X_pos
-    del X_neg
-    X_raw = X
-
-    if not os.path.isdir(args.output_dir):
-        logger.info('create outout directory: ' + args.output_dir)
-        os.makedirs(args.output_dir)
-
-    if args.use_log:
-        logger.info('apply log2 to feature matrix')
-        X = np.log2(X + 1)
-
-    if args.scaler == 'zscore':
-        logger.info('scale features using z-score normalization')
-        X = StandardScaler().fit_transform(X)
-    elif args.scaler == 'robust':
-        logger.info('scale features using robust normalization')
-        X = RobustScaler().fit_transform(X)
-    elif args.scaler == 'min_max':
-        logger.info('scale features using min-max normalization')
-        X = MinMaxScaler().fit_transform(X)
-    elif args.scaler == 'max_abs':
-        logger.info('scale features using max-abs normalization')
-        X = MaxAbsScaler().fit_transform(X)
-
-    if np.any(np.isnan(X)):
-        logger.info('nan values found in features')
-    estimator = None
-    grid_search = None
-    logger.info('use {} to select features'.format(args.method))
-    if args.method == 'r_test':
-        estimator = TTestEstimator()
-    elif args.method == 'logistic_regression':
-        estimator = LogisticRegression()
-        grid_search = {'C': [1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1, 1e2, 1e3, 1e4, 1e5]}
-    elif args.method == 'random_forest':
-        estimator = RandomForestClassifier()
-        grid_search = {'max_depth': list(range(2, 10))}
-    elif args.method == 'linear_svm':
-        estimator = LinearSVC()
-        grid_search = {'C': [1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1, 1e2, 1e3, 1e4, 1e5]}
-    else:
-        raise ValueError('unknown feature selection method: {}'.format(args.method))
-
-    resampler_args = {}
-    if args.resample_method == 'jackknife':
-        resampler_args = {'max_runs': args.jackknife_max_runs,
-            'remove': args.jackknife_remove
-        }
-    elif args.resample_method == 'bootstrap':
-        resampler_args = {'max_runs': args.bootstrap_max_runs}
-
-    robust_estimator = RobustEstimator(estimator, n_select=args.n_select, 
-        grid_search=grid_search, resample_method='bootstrap',
-        rfe=args.rfe, **resampler_args)
-
-    sample_weight = None
-    if args.compute_sample_weight:
-        sample_weight = compute_sample_weight('balanced', y)
-    robust_estimator.fit(X, y, sample_weight=sample_weight)
-
-    logger.info('save model')
-    with open(os.path.join(args.output_dir, 'model.pkl'), 'wb') as f:
-        pickle.dump(robust_estimator.estimator_, f)
-    
-    logger.info('save model parameters')
-    with open(os.path.join(args.output_dir, 'params.json'), 'w') as f:
-        json.dump(robust_estimator.estimator_.get_params(), f, indent=2)
-
-    logger.info('plot histogram for feature recurrence')
-    fig, ax = plt.subplots(figsize=(8, 3))
-    ax.hist(robust_estimator.feature_recurrence_, bins=30)
-    ax.set_xlabel('Occurence')
-    ax.set_ylabel('Counts')
-    plt.tight_layout()
-    plt.savefig(os.path.join(args.output_dir, 'feature_recurrence_hist.pdf'))
-    plt.close()
-
-    """
-    logger.info('plot heatmap of raw features')
-    sns.clustermap(np.log2(X_raw + 1), cmap='vlag', figsize=(16, 20))
-    plt.savefig(os.path.join(args.output_dir, 'heatmap_raw.pdf'))
-    plt.close()
-
-    logger.info('plot heatmap scaled features')
-    sns.clustermap(pd.DataFrame(X, index=X_raw.index, columns=X_raw.columns), cmap='vlag', figsize=(16, 20))
-    plt.savefig(os.path.join(args.output_dir, 'heatmap_scaled.pdf'))
-    plt.close()
-    """
-
-    logger.info('plot recurrence of robust features')
-    df = pd.DataFrame({'Feature': feature_names[robust_estimator.features_],
-                   'Feature recurrence': robust_estimator.feature_recurrence_[robust_estimator.features_]})
-    fig, ax = plt.subplots(figsize=(14, 10))
-    sns.barplot('Feature recurrence', 'Feature', color='gray',
-            data=df, ax=ax)
-    plt.tight_layout()
-    plt.savefig(os.path.join(args.output_dir, 'feature_recurrence_barplot.pdf'))
-    plt.close()
-
-    logger.info('plot heatmap of feature recurrence')
-    fig, ax = plt.subplots(figsize=(14, 14))
-    cmap = sns.light_palette((127/360.0, 40/100.0, 49/100.0), n_colors=2, input='hls', as_cmap=True)
-    logger.info('number of features: {}'.format(len(robust_estimator.features_)))
-    df = pd.DataFrame(robust_estimator.feature_selection_matrix_,
-        index=np.arange(1, robust_estimator.feature_selection_matrix_.shape[0] + 1), 
-        columns=feature_names[robust_estimator.features_]).T
-    sns.heatmap(df, linewidth=0.1, cmap=cmap, ax=ax, cbar=False)
-    ax.set_xlabel('Run')
-    ax.set_ylabel('Feature')
-    plt.tight_layout()
-    plt.savefig(os.path.join(args.output_dir, 'feature_recurrence_heatmap.pdf'))
-    plt.close()
-
-    logger.info('save feature selection matrix')
-    data = pd.DataFrame(robust_estimator.feature_selection_matrix_,
-        index=np.arange(1, robust_estimator.feature_selection_matrix_.shape[0] + 1),
-        columns=feature_names[robust_estimator.features_]).T
-    data.index.name = 'run'
-    data.columns.name = 'peak'
-    data.to_csv(os.path.join(args.output_dir, 'feature_selection_matrix.txt'), sep='\t', header=True, index=True)
-
-    logger.info('plot feature importances of refitted model')
-    fig, ax = plt.subplots(figsize=(12, 10))
-    df = pd.DataFrame({'feature': feature_names[robust_estimator.features_],
-                    'feature_importance': robust_estimator.feature_importances_})
-    sns.barplot('feature_importance', 'feature', color='gray',
-            data=df, ax=ax)
-    plt.savefig(os.path.join(args.output_dir, 'feature_importances_refitted.pdf'))
-    plt.close()
-
-    logger.info('plot heatmap of selected features (scaled)')
-    df = pd.DataFrame(X, index=X_raw.index, columns=feature_names)
-    df = df.iloc[:, robust_estimator.features_].T
-    sns.clustermap(df, cmap='vlag', figsize=(15, 12), row_cluster=True)
-    plt.subplots_adjust(right=0.8, bottom=0.2)
-    plt.savefig(os.path.join(args.output_dir, 'heatmap_selected_features_scaled.pdf'))
-    plt.close()
-
-    logger.info('plot correlation between selected features (scaled)')
-    df = pd.DataFrame(X, index=X_raw.index, columns=feature_names)
-    df = df.iloc[:, robust_estimator.features_].T
-    distmat = np.nan_to_num(1 - squareform(pdist(df.values, metric='correlation')))
-    distmat = pd.DataFrame(distmat, index=df.index, columns=df.index)
-    sns.clustermap(distmat, cmap='vlag', figsize=(15, 15), row_cluster=True)
-    plt.subplots_adjust(right=0.8, bottom=0.2)
-    plt.savefig(os.path.join(args.output_dir, 'heatmap_selected_feature_correlation.pdf'))
-    plt.close()
-
-    logger.info('plot correlation between samples (scaled)')
-    df = pd.DataFrame(X, index=X_raw.index, columns=feature_names)
-    df = df.iloc[:, robust_estimator.features_]
-    distmat = np.nan_to_num(1 - squareform(pdist(df.values, metric='correlation')))
-    distmat = pd.DataFrame(distmat, index=df.index, columns=df.index)
-    sns.clustermap(distmat, cmap='vlag', figsize=(15, 15), row_cluster=True)
-    plt.subplots_adjust(right=0.8, bottom=0.2)
-    plt.savefig(os.path.join(args.output_dir, 'heatmap_sample_correlation.pdf'))
-    plt.close()
-
-    logger.info('plot heatmap of selected features (raw)')
-    df = X_raw.iloc[:, robust_estimator.features_].T
-    g = sns.clustermap(np.log2(df + 1), cmap='vlag', figsize=(15, 12), row_cluster=True)
-    plt.subplots_adjust(right=0.8, bottom=0.2)
-    plt.savefig(os.path.join(args.output_dir, 'heatmap_selected_features_raw.pdf'))
-    plt.close()
-
-    logger.info('save feature importance matrix')
-    data = pd.DataFrame(robust_estimator.feature_importances_matrix_, columns=feature_names)
-    data.to_csv(os.path.join(args.output_dir, 'feature_importance_matrix.txt'), sep='\t', index=False, header=True, na_rep='nan')
-
-    logger.info('save feature recurrence matrix')
-    data = pd.Series(robust_estimator.feature_recurrence_, index=feature_names)
-    data.index.name = 'peak'
-    data.to_csv(os.path.join(args.output_dir, 'feature_recurrence.txt'), sep='\t', index=True, header=False, na_rep='nan')
-
-    logger.info('save feature importances estimates (mean and std)')
-    data = pd.DataFrame({'feature_importances_mean': robust_estimator.feature_importances_mean_,
-         'feature_importances_std': robust_estimator.feature_importances_std_},
-         index=feature_names)
-    data.index.name = 'peak'
-    data.to_csv(os.path.join(args.output_dir, 'feature_importances_estimate.txt'), sep='\t', index=True, header=True, na_rep='nan')
-
-    logger.info('save selected features')
-    data = pd.Series(robust_estimator.features_, index=feature_names[robust_estimator.features_])
-    data.to_csv(os.path.join(args.output_dir, 'features.txt'), header=False, index=True, sep='\t')
-
-    logger.info('save selected feature importances')
-    data = pd.Series(robust_estimator.feature_importances_, index=feature_names[robust_estimator.features_])
-    data.to_csv(os.path.join(args.output_dir, 'feature_importances.txt'), header=False, index=True, sep='\t')
-
-@command_handler
-def preprocess(args):
-    from estimators import FeatureSelection
-
-    fs = FeatureSelection(**vars(args))
-    fs.read_data()
-    fs.filter_features()
-    fs.select_samples()
-    fs.scale_features()
-    fs.save_matrix()
-    fs.single_feature_metrics()
-    fs.plot_feature_importance()
-    fs.load_model()
-    fs.evaluate_model()
+    metrics.to_csv(os.path.join(args.output_dir, 'metrics.txt'), sep='\t', header=True, index=False)
 
 if __name__ == '__main__':
     main_parser = argparse.ArgumentParser(description='Feature selection module')
     subparsers = main_parser.add_subparsers(dest='command')
 
-    parser = subparsers.add_parser('robust_select')
+    parser = subparsers.add_parser('preprocess_features')
     parser.add_argument('--matrix', '-i', type=str, required=True,
         help='input feature matrix (rows are samples and columns are features')
     parser.add_argument('--sample-classes', type=str, required=True,
         help='input file containing sample classes with 2 columns: sample_id, sample_class')
-    parser.add_argument('--remove-zero-features', type=float, 
-        help='remove features that have fraction of zero values above this value')
-    parser.add_argument('--top-features-by-median', type=int,
-        help='select this number of features with highest median values across samples')
-    parser.add_argument('--transpose', action='store_true', default=False,
-        help='transpose the feature matrix')
-    parser.add_argument('--positive-class', type=str,
-        help='sample class to use as positive class')
-    parser.add_argument('--negative-class', type=str,
-        help='sample class to use as negative class')
     parser.add_argument('--use-log', action='store_true',
         help='apply log2 to feature matrix')
-    parser.add_argument('--scaler', type=str, default='zscore',
-        choices=('zscore', 'robust', 'max_abs', 'min_max', 'none'),
-        help='method for scaling features')
-    parser.add_argument('--method', type=str, default='logistic_regression',
-        choices=('t_test', 'logistic_regression', 'random_forest', 'linear_svm'),
-        help='feature selection method')
-    parser.add_argument('--n-select', type=int,
-        help='number of features to select')
-    parser.add_argument('--output-dir', '-o', type=str, required=True,
-        help='output directory')
-    parser.add_argument('--compute-sample-weight', action='store_true',
-        help='compute sample weight to balance classes')
-    parser.add_argument('--rfe', action='store_true', default=False,
-        help='use RFE to select features')
-    parser.add_argument('--resample-method', type=str, default='jackknife',
-        choices=('jackknife', 'bootstrap'), help='resampling method')
-    parser.add_argument('--jackknife-max-runs', type=int, default=100)
-    parser.add_argument('--jackknife-remove', type=int, default=0.2)
-    parser.add_argument('--bootstrap-max-runs', type=int, default=100)
-
-    parser = subparsers.add_parser('preprocess')
-    parser.add_argument('--matrix', '-i', type=str, required=True,
-        help='input feature matrix (rows are samples and columns are features')
-    parser.add_argument('--sample-classes', type=str, required=True,
-        help='input file containing sample classes with 2 columns: sample_id, sample_class')
-    parser.add_argument('--remove-zero-features', type=float, 
-        help='remove features that have fraction of zero values above this value')
-    parser.add_argument('--top-features-by-median', type=int,
-        help='select this number of features with highest median values across samples')
     parser.add_argument('--transpose', action='store_true', default=False,
         help='transpose the feature matrix')
-    parser.add_argument('--positive-class', type=str,
-        help='comma-separated list of sample classes to use as positive class')
-    parser.add_argument('--negative-class', type=str,
-        help='comma-separates list of sample classes to use as negative class')
-    parser.add_argument('--use-log', action='store_true',
-        help='apply log2 to feature matrix')
     parser.add_argument('--scaler', type=str, default='zscore',
         choices=('zscore', 'robust', 'max_abs', 'min_max', 'none'),
         help='method for scaling features')
     parser.add_argument('--output-dir', '-o', type=str, required=True,
         help='output directory')
-
+    parser.add_argument('--remove-zero-features', type=float, 
+        help='remove features that have fraction of zero values above this value')
+    
     parser = subparsers.add_parser('evaluate')
     parser.add_argument('--matrix', '-i', type=str, required=True,
         help='input feature matrix (rows are samples and columns are features')
     parser.add_argument('--sample-classes', type=str, required=True,
         help='input file containing sample classes with 2 columns: sample_id, sample_class')
-    parser.add_argument('--transpose', action='store_true', default=False,
-        help='transpose the feature matrix')
     parser.add_argument('--positive-class', type=str,
         help='comma-separated list of sample classes to use as positive class')
     parser.add_argument('--negative-class', type=str,
         help='comma-separates list of sample classes to use as negative class')
-    parser.add_argument('--use-log', action='store_true',
-        help='apply log2 to feature matrix')
-    parser.add_argument('--scaler', type=str, default='zscore',
-        choices=('zscore', 'robust', 'max_abs', 'min_max', 'none'),
-        help='method for scaling features')
     parser.add_argument('--method', type=str, default='logistic_regression',
         choices=('logistic_regression', 'random_forest', 'linear_svm'),
         help='feature selection method')
@@ -675,8 +389,6 @@ if __name__ == '__main__':
         help='number of resampling runs for robust feature selections')
     parser.add_argument('--robust-jackknife-remove', type=float, default=1,
         help='number/fraction of samples to remove during each resampling run for robust feature selection')
-    parser.add_argument('--top-features-by-median', type=int,
-        help='select this number of features with highest median values across samples')
     parser.add_argument('--remove-zero-features', type=float, 
         help='remove features that have fraction of zero values above this value')
 
