@@ -48,24 +48,19 @@ filename, savename, use which operation, pipeline
 
 
 ```{r read-data}
-matrix_path = 'scirep_sequential_qc.txt'
-classinfo_path = 'scirep_classes.txt'
+matrix_path = 'inst/extdata/scirep_sequential_qc.txt'
+classinfo_path = 'inst/extdata/scirep_classes.txt'
 
 
-mat <- matrix_path %>% rexseek::read_mat()
-info <- classinfo_path %>% readr::read_csv() %T>% print
+mat_raw <- matrix_path %>% rexseek::read_mat()
+info <- classinfo_path %>% readr::read_csv(T, 'cc') %T>% print
 ```
 
 ```{r filter-low-value}
-thres_count = 2
-thres_sample_nums = 5
-
-df <- df_raw[rowSums(df_raw > thres_count) > thres_sample_nums, ] %T>% print(n_extra = 0)
+mat <- mat_raw %>% rexseek::filter_low()
 ```
 
 ```{r to-matrix}
-mat <- df %>% as.data.frame() %>% 
-    tibble::column_to_rownames('transcript') %>% as.matrix()
 ```
 
 ```{r make-SingleCellExperiment}
@@ -76,14 +71,15 @@ reads <- SingleCellExperiment::SingleCellExperiment(
 
 
 ```{r plotHighestExprs}
-reads %>% scater::calculateQCMetrics() %>% scater::plotHighestExprs(n = 20)
+reads %>% rexseek::plot_highest_exprs()
+```
+
+```{r plotPCA}
+reads %>% rexseek::plot_PCA()
 ```
 
 ```{r plotTSNE}
-reads %>% scater::plotTSNE(
-    shape_by = "label", colour_by = "label", 
-    run_args = list(exprs_values = "counts")
-)
+reads %>% rexseek::plot_TSNE()
 ```
 
 
@@ -110,9 +106,11 @@ dir(impute_outdir)
 
 
 
-```{r SCnorm}
-NormalizedData <- SCnorm::SCnorm(mat, rep(1, ncol(mat)), T, NCores = 8) %>% 
-    SCnorm::results()
+```{r SCnorm, eval=T}
+reads_SCnorm_norm <- SCnorm::SCnorm(mat, rep(1, ncol(mat)), T, NCores = 8);
+reads_SCnorm <- reads_SCnorm_norm %>% SCnorm::results()
+
+identical(SingleCellExperiment::counts(reads_SCnorm_norm), mat)
 ```
 
 
@@ -121,6 +119,10 @@ NormalizedData <- SCnorm::SCnorm(mat, rep(1, ncol(mat)), T, NCores = 8) %>%
 ## normalize the object using the saved size factors
 reads_tmm <- scater::normaliseExprs(reads, "TMM") %>% 
     scater::normalize()
+
+readr::write_rds(reads_tmm, 'data-raw/reads_tmm.rds')
+
+identical(SingleCellExperiment::counts(reads_tmm), mat)
 ```
 
 
@@ -129,6 +131,8 @@ reads_tmm <- scater::normaliseExprs(reads, "TMM") %>%
 ## normalize the object using the saved size factors
 reads_rle <- scater::normaliseExprs(reads, "RLE") %>%
     scater::normalize()
+
+identical(SingleCellExperiment::counts(reads_rle), mat)
 ```
 
 

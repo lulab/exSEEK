@@ -4,10 +4,12 @@
 \alias{read_mat}
 \title{read count matrix}
 \usage{
-read_mat(path)
+read_mat(path, ...)
 }
 \arguments{
-\item{path}{}
+\item{path}{string.}
+
+\item{...}{other arguments passsed on to \code{\link[readr:read_tsv]{readr::read_tsv()}}}
 }
 \value{
 integer matrix
