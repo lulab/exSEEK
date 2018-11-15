@@ -1,5 +1,8 @@
 # zhuoer's part of the exSeek project
 
+# goal
+
+[exceRpt](https://github.com/gersteinlab/exceRpt)
 
 # useful command
 
