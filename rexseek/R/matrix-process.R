@@ -20,13 +20,13 @@ read_mat <- function(path, ...) {
 #' Title
 #'
 #' @param mat integer matrix.
-#' @param thres_count
-#' @param thres_sample_nums
+#' @param thres_count integer scalar.
+#' @param thres_sample_nums integer scalar.
 #'
-#' @return
+#' @return scater::calculateQCMetrics()
 #' @export
 #'
-#' @examples
+#' @examples NULL
 filter_low <- function(mat, thres_count = 2, thres_sample_nums = 5) {
 	low_per_row <- rowSums(mat > thres_count)
 	keeped_row <- low_per_row > thres_sample_nums
@@ -35,7 +35,8 @@ filter_low <- function(mat, thres_count = 2, thres_sample_nums = 5) {
 
 #' @export
 plot_highest_exprs <- function(sce) {
-	sce %>% scater::calculateQCMetrics() %>% scater::plotHighestExprs(n = 20)
+	sce %>% {suppressMessages(scater::calculateQCMetrics(.))} %>%
+		scater::plotHighestExprs(n = 20)
 }
 
 #' @export
@@ -53,3 +54,8 @@ plot_TSNE <- function(sce) {
 	    run_args = list(exprs_values = "counts")
 	)
 }
+
+
+
+
+
