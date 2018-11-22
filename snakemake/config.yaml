@@ -1,0 +1,53 @@
+rna_types: [rRNA, lncRNA, miRNA, mRNA, piRNA, snoRNA, snRNA, srpRNA, tRNA, tucpRNA, Y_RNA]
+threads: 4
+sample_id_file: metadata/sample_ids.scirep_small.txt
+pvalues": ["01", "05"]
+distribution: ZeroTruncatedNegativeBinomial
+bin_size: 20
+cov_threshold: 0.2
+normalize_methods: [cpm]
+scalers: [robust]
+classifiers: [random_forest]
+n_selects: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30, 40, 50]
+resample_methods: [bootstrap]
+select_methods: [robust]
+splitters: [stratified_shuffle_split]
+
+compare_classes:
+  scirep:
+    Normal-CRC: ["Healthy Control", "Colorectal Cancer"]
+    exoRBase:
+      "Normal-HCC": ["Healthy", "HCC"]
+      "Normal-CRC": ["Healthy", "CRC"]
+      "Normal-PAAD": ["Healthy", "PAAD"]
+    
+# file paths
+annotation_dir: genome/hg38
+genome_dir: genome/hg38
+output_dir: output/scirep
+temp_dir: tmp
+
+# general parameters
+threads_compress: 1
+
+# mapping parameters
+aligner: bowtie2
+data_dir: data/scirep
+adaptor: AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC
+adaptor1: AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC
+adaptor2: AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT
+min_read_length: 16
+max_read_length: 100
+min_base_quality: 30
+min_base_quality_5p: 30
+min_base_quality_3p: 30
+quality_base: 33
+strandness: "forward"
+min_mapping_quality: 10
+use_longest_transcript: true
+star_sjdboverhang: 100
+threads_mapping: 4
+paired_end: false
+tools_dir: ./tools
+python2: /apps/anaconda2/bin/python
+python3: /apps/anaconda3/bin/python

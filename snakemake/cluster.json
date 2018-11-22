@@ -1,0 +1,11 @@
+{
+    "__default__":
+    {
+        "queue": "Z-LU",
+        "name": "call_peak.{rule}.{wildcards}",
+        "stderr": "logs/cluster/{rule}/{wildcards}.stderr",
+        "stdout": "logs/cluster/{rule}/{wildcards}.stdout",
+        "threads": "{threads}",
+        "resources": "span[hosts=1]"
+    }
+}

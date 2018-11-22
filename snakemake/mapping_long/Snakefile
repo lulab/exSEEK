@@ -1,0 +1,84 @@
+shell.prefix('set -x;')
+
+with open(config['sample_id_file'], 'r') as f:
+    sample_ids = f.read().split()
+# check validity of sample_ids
+for sample_id in sample_ids:
+    if '.' in sample_id:
+        raise ValueError('sample IDs cannot contain ".": {}'.format(sample_id))
+# check validity of rna_types
+for rna_type in rna_types:
+    if '.' in rna_type:
+        raise ValueError('RNA type cannot contain ".": {}'.format(sample_id))
+
+data_dir = config['data_dir']
+output_dir = config['output_dir']
+
+rule cutadapt_paired:
+    input:
+        fastq1='{data_dir}/{sample_id}_1.fastq',
+        fastq2='{data_dir}/{sample_id}_2.fastq'
+    output:
+        fastq1='{output_dir}/cutadapt/{sample_id}.fastq',
+        fastq2='{output_dir}/cutadapt/{sample_id}.fastq'
+    threads:
+        config['threads']
+    params:
+        quality_5p=config['min_base_quality_5p'],
+        quality_3p=config['min_base_quality_3p'],
+        adaptor1=config['adaptor1'],
+        adaptor2=config['adaptor2],
+        miniL=config['min_read_length'],
+        quality_base=config['quality_base']
+    log:
+        '{output_dir}/log/cutadapt/{sample_id}'
+    shell:
+        '''cutadapt -j {threads} -q {params.quality_5p}.{params.quality_3p} \
+            -a {params.adaptor1} -A {params.adaptor2} \
+            --trim-n -m {params.miniL} \
+            -o {output.fastq1} -p {output.fastq2} \
+            {input.fastq1} {input.fastq2}
+        '''
+
+rule map_star_paired:
+    input:
+        fastq1='{data_dir}/{sample_id}_1.fastq',
+        fastq2='{data_dir}/{sample_id}_2.fastq',
+        index=genome_dir + '/long_index/star'
+    output:
+        bam='{output_dir}/mapping/{sample_id}.bam',
+        star_bam='{output_dir}/star_long/{sample_id}/Aligned.out.bam'
+    params:
+        output_prefix='{output_dir}/star_long/{sample_id}/'
+    threads:
+        mapping_threads
+    shell:
+        '''STAR --genomeDir {input.index} \
+            --readFilesIn {input.fastq1} {input.fastq2} \
+            --runThreadN {threads} \
+            --outputFileNamePrefix {params.output_prefix} \
+            --outputSAMtype BAM Unsorted
+        ln -f {output.star_bam} {output.bam}
+        '''
+    
+rule remove_duplicates:
+    input:
+        bam='{output_dir}/mapping/{sample_id}.bam'
+    output:
+        bam='{output_dir}/remove_duplicates/{sample_id}.bam',
+        metrics='{output_dir}/remove_duplicates/{sample_id}.metrics'
+    shell:
+        '''picard MarkDuplicates REMOVE_DUPLICATES=true \
+            I={input.bam} \
+            O={output.bam} \
+            M={output.metrics}
+        '''
+
+rule generate_gbam:
+    input:
+        '{output_dir}/remove_duplicates/{sample_id}.bam'
+    output:
+        '{output_dir}/gbam/{sample_id}.bam'
+    shell:
+        '''ln -f {input} {output}
+        '''

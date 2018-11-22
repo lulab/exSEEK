@@ -1,0 +1,425 @@
+shell.prefix('set -x;')
+
+from collections import OrderedDict
+
+with open(config['sample_id_file'], 'r') as f:
+    sample_ids = f.read().split()
+# check validity of sample_ids
+for sample_id in sample_ids:
+    if '.' in sample_id:
+        raise ValueError('sample IDs cannot contain ".": {}'.format(sample_id))
+# check validity of rna_types
+for rna_type in config['rna_types']:
+    if '.' in rna_type:
+        raise ValueError('RNA type cannot contain ".": {}'.format(sample_id))
+
+data_dir = config['data_dir']
+output_dir = config['output_dir']
+rna_types = config['rna_types']
+adaptor = config['adaptor']
+min_read_length = config['min_read_length']
+genome_dir = config['genome_dir']
+max_read_length = config['max_read_length']
+min_base_quality = config['min_base_quality']
+temp_dir = config['temp_dir']
+
+def get_all_inputs(wildcards):
+    available_inputs = dict(
+        tbam_to_gbam=expand('{output_dir}/gbam/{sample_id}/{rna_type}.bam', 
+            output_dir=output_dir, sample_id=sample_ids, rna_type=rna_types),
+        bam=expand('{output_dir}/tbam/{sample_id}/{rna_type}.bam',
+            output_dir=output_dir, sample_id=sample_ids, rna_type=rna_types + ['other', 'circRNA']),
+        fastqc=expand('{output_dir}/fastqc/{sample_id}_fastqc.zip',
+            output_dir=output_dir, sample_id=sample_ids),
+        summarize_fastqc=expand('{output_dir}/summary/fastqc.txt',
+            output_dir=output_dir),
+        summarize_fastqc_html=expand('{output_dir}/summary/fastqc.html',
+            output_dir=output_dir),
+        summarize_read_counts=expand('{output_dir}/summary/read_counts.txt',
+            output_dir=output_dir),
+        collect_alignment_summary_metrics=expand('{output_dir}/alignment_summary_metrics/{sample_id}/{rna_type}',
+            output_dir=output_dir, sample_id=sample_ids, rna_type=rna_types + ['other']),
+        mapped_read_length=expand('{output_dir}/stats/mapped_read_length_by_sample/{sample_id}',
+            output_dir=output_dir, sample_id=sample_ids)
+    )
+    enabled_inputs = list(available_inputs.keys())
+    inputs = []
+    for key, l in available_inputs.items():
+        if key in enabled_inputs:
+            inputs += l
+    return inputs
+
+rule all:
+    input:
+        get_all_inputs
+
+# mapping statistics
+rule read_counts_raw:
+    input:
+        data_dir + '/fastq/{sample_id}.fastq'
+    output:
+        '{output_dir}/stats/read_counts_raw/{sample_id}'
+    shell:
+        '''wc -l < {input} | awk '{{print int($0/4)}}' > {output}
+        '''
+
+rule read_counts_mapped:
+    input:
+        lambda wildcards: '{output_dir}/{bam_type}/{sample_id}/{rna_type}.bam'.format(
+            output_dir=wildcards.output_dir, 
+            bam_type='gbam' if wildcards.rna_type == 'other' else 'tbam',
+            sample_id=wildcards.sample_id, rna_type=wildcards.rna_type
+        )
+    output:
+        '{output_dir}/stats/read_counts_mapped/{sample_id}/{rna_type}'
+    wildcard_constraints:
+        rna_type='(?!promoter$)(?!enhancer$)(?!intron$).*'
+    shell:
+        '''bamtools count -in {input} > {output}
+        '''
+
+rule read_counts_unmapped:
+    input:
+        '{output_dir}/unmapped/{sample_id}/{rna_type}.fa.gz'
+    output:
+        '{output_dir}/stats/read_counts_unmapped/{sample_id}/{rna_type}'
+    threads:
+        config['threads_compress']
+    shell:
+        '''pigz -p {threads} -d -c {input} | wc -l | awk '{{print int($0/2)}}' > {output}
+        '''
+
+rule summarize_read_counts:
+    input:
+        raw=lambda wildcards: expand('{output_dir}/stats/read_counts_raw/{sample_id}',
+            output_dir=wildcards.output_dir, sample_id=sample_ids),
+        mapped=lambda wildcards: expand('{output_dir}/stats/read_counts_mapped/{sample_id}/{rna_type}',
+            output_dir=wildcards.output_dir, sample_id=sample_ids, 
+            rna_type=rna_types + ['other', 'promoter', 'enhancer', 'intron', 'circRNA']),
+        unmapped=lambda wildcards: expand('{output_dir}/stats/read_counts_unmapped/{sample_id}/{rna_type}',
+            output_dir=wildcards.output_dir, sample_id=sample_ids, rna_type=rna_types + ['clean', 'other', 'circRNA'])
+    output:
+        '{output_dir}/summary/read_counts.txt'
+    run:
+        import pandas as pd
+        import os
+        from collections import OrderedDict
+    
+        records = OrderedDict()
+        for filename in input.raw:
+            sample_id = os.path.basename(filename)
+            records[sample_id] = {}
+            with open(filename, 'r') as f:
+                records[sample_id]['raw'] = int(f.read().strip())
+        for filename in input.mapped:
+            sample_id, rna_type = filename.split(os.path.sep)[-2:]
+            with open(filename, 'r') as f:
+                records[sample_id][rna_type + '.mapped'] = int(f.read().strip())
+        for filename in input.unmapped:
+            sample_id, rna_type = filename.split(os.path.sep)[-2:]
+            with open(filename, 'r') as f:
+                records[sample_id][rna_type + '.unmapped'] = int(f.read().strip())
+        records = pd.DataFrame.from_records(records)
+        records.columns.name = 'sample_id'
+        records.columns.name = 'item'
+        records.index.name = 'reads_type'
+        records.to_csv(output[0], sep='\t', header=True, index=True)
+
+rule mapped_read_length:
+    input:
+        '{output_dir}/tbam/{sample_id}/{rna_type}.bam'
+    output:
+        '{output_dir}/stats/mapped_read_length/{sample_id}/{rna_type}'
+    shell:
+        '''bin/statistics.py read_length_hist --max-length 600 -i {input} -o {output}
+        '''
+
+rule merge_mapped_read_length:
+    input:
+        lambda wildcards: expand('{output_dir}/stats/mapped_read_length/{sample_id}/{rna_type}',
+            output_dir=wildcards.output_dir, sample_id=wildcards.sample_id, rna_type=rna_types)
+    output:
+        '{output_dir}/stats/mapped_read_length_by_sample/{sample_id}'
+    run:
+        import pandas as pd
+        from collections import OrderedDict
+
+        table = OrderedDict()
+        for filename in input:
+            rna_type = os.path.basename(filename)
+            df = pd.read_table(filename, index_col=0)
+            table[rna_type] = df['query']
+        table = pd.DataFrame(table)
+        table.to_csv(output[0], sep='\t', header=True, index=True)
+
+rule fastqc:
+    input:
+        data_dir + '/fastq/{sample_id}.fastq'
+    output:
+        html='{output_dir}/fastqc/{sample_id}_fastqc.html',
+        zip='{output_dir}/fastqc/{sample_id}_fastqc.zip'
+    params:
+        output_prefix='{output_dir}/fastqc/',
+        temp_dir=config['temp_dir']
+    log:
+        '{output_dir}/log/fastqc/{sample_id}'
+    shell:
+        '''fastqc -q -o {params.output_prefix} -d {params.temp_dir} {input}
+        '''
+
+def parse_fastqc_data(fp):
+    section = None
+    qc_status = OrderedDict()
+    basic_statistics = OrderedDict()
+    for line in fp:
+        line = str(line, encoding='utf-8')
+        line = line.strip()
+        if line.startswith('>>'):
+            if line == '>>END_MODULE':
+                continue
+            section, status = line[2:].split('\t')
+            qc_status[section] = status
+        else:
+            if section == 'Basic Statistics':
+                key, val = line.split('\t')
+                basic_statistics[key] = val
+    for key, val in qc_status.items():
+        basic_statistics[key] = val
+    return basic_statistics
+        
+rule summarize_fastqc:
+    input:
+        zip=lambda wildcards: expand('{output_dir}/fastqc/{sample_id}_fastqc.zip',
+            output_dir=wildcards.output_dir, sample_id=sample_ids)
+    output:
+        '{output_dir}/summary/fastqc.txt'
+    run:
+        import pandas as pd
+        from zipfile import ZipFile
+        import os
+        from collections import OrderedDict
+
+        summary = OrderedDict()
+        columns = None
+        for filename in input.zip:
+            sample_id = os.path.splitext(os.path.basename(filename))[0][:-7]
+            with ZipFile(filename, 'r') as zf:
+                with zf.open(sample_id + '_fastqc/fastqc_data.txt', 'r') as f:
+                    summary[sample_id] = parse_fastqc_data(f)
+                    if columns is None:
+                        columns = list(summary[sample_id].keys())
+        summary = pd.DataFrame.from_records(summary)
+        summary = summary.T
+        summary = summary.reindex(columns=columns)
+        summary.index.name = 'sample_id'
+        summary.to_csv(output[0], sep='\t', index=True, header=True) 
+
+rule summarize_fastqc_ipynb:
+    input:
+        '{output_dir}/summary/fastqc.txt'
+    output:
+        ipynb='{output_dir}/summary/fastqc.ipynb'
+    run:
+        import nbformat
+        from nbformat.v4 import new_notebook, new_code_cell, new_markdown_cell
+        nb = new_notebook()
+        nb['cells'].append(new_code_cell(r"""import pandas as pd
+import numpy as np"""))
+
+        nb['cells'].append(new_code_cell(r"""summary = pd.read_table('fastqc.txt', sep='\t')"""))
+        nb['cells'].append(new_code_cell(r"""summary.set_index('sample_id', inplace=True, drop=False)
+qc_status = summary.iloc[:, 9:].copy()
+sample_ids = qc_status.index.values
+sections = qc_status.columns.values
+def style_func(val):
+    status, row, col = val.split('|')
+    row, col = int(row), int(col)
+    color = {'pass': 'green', 'fail': 'red', 'warn': 'orange'}[status]
+    return '<a href="../fastqc/{sample_id}_fastqc.html#M{section}" style="color: {color}">{status}</a>'.format(
+        sample_id=sample_ids[row], color=color, status=status, section=col)
+
+pd.DataFrame(qc_status.values \
+             + '|' + np.arange(qc_status.shape[0]).astype('str')[:, np.newaxis] \
+             + '|' + np.arange(qc_status.shape[1]).astype('str')[np.newaxis, :],
+             index=qc_status.index, columns=qc_status.columns) \
+    .style.format(style_func)"""))
+        nb['metadata']['kernel_spec'] = {
+            'display_name': 'Python 3',
+            'language': 'python', 
+            'name': 'python3'
+        }
+        nb['metadata']['laugnage_info'] = {
+            'codemirror_mode': {
+                'name': 'ipython',
+                'version': 3
+            },
+            'name': 'python', 
+            'file_extension': '.py', 
+            'mimetype': 'text/x-python',
+            'nbconvert_exporter': 'python',
+            'version': '3.6'
+        }
+        nbformat.write(nb, output.ipynb)
+
+rule summarize_fastqc_html:
+    input:
+        '{output_dir}/summary/fastqc.ipynb'
+    output:
+        '{output_dir}/summary/fastqc.html'
+    shell:
+        '''jupyter nbconvert --execute --to html \
+            --HTMLExporter.exclude_code_cell=False \
+            --HTMLExporter.exclude_input_prompt=True \
+            --HTMLExporter.exclude_output_prompt=True \
+            {input}
+        '''
+
+rule cutadapt:
+    input:
+        data_dir + '/fastq/{sample_id}.fastq'
+    output:
+        trimmed='{output_dir}/cutadapt/{sample_id}.fastq',
+        too_short='{output_dir}/too_short/{sample_id}.fastq'
+    params:
+        adaptor=config['adaptor'],
+        min_read_length=config['min_read_length']
+    log:
+        '{output_dir}/log/cutadapt/{sample_id}'
+    threads:
+        config['threads_compress']
+    shell:
+        '''cutadapt -a {params.adaptor} -m {params.min_read_length} --trim-n -q {min_base_quality} \
+            --too-short-output >(pigz -c -p {threads} > {output.too_short}) -o {output.trimmed} {input}
+        '''
+
+rule fastq_to_fasta:
+    input:
+        '{output_dir}/cutadapt/{sample_id}.fastq'
+    output:
+        '{output_dir}/unmapped/{sample_id}/clean.fa.gz'
+    threads:
+        config['threads_compress']
+    shell:
+        '''fastq_to_fasta -r -i {input} | pigz -p {threads} -c > {output}
+        '''
+
+rule tbam_to_gbam:
+    input:
+        bam='{output_dir}/tbam/{sample_id}/{rna_type}.bam',
+        index=genome_dir + '/rsem_index/{aligner}/{{rna_type}}.transcripts.fa'.format(aligner=config['aligner'])
+    output:
+        '{output_dir}/gbam/{sample_id}/{rna_type}.bam'
+    params:
+        index=genome_dir + '/rsem_index/{aligner}/{{rna_type}}'.format(aligner=config['aligner'])
+    shell:
+        '''rsem-tbam2gbam {params.index} {input.bam} {output}
+        '''
+
+rule sort_gbam:
+    input:
+        '{output_dir}/tbam/{sample_id}.{rna_type}.bam'
+    output:
+        bam='{output_dir}/gbam_sorted/{sample_id}.{rna_type}.bam',
+        bai='{output_dir}/gbam_sorted/{sample_id}.{rna_type}.bam.bai'
+    shell:
+        '''samtools sort {input} > {output.bam}
+        samtools index {output.bam}
+        '''
+
+rule gbam_to_bedgraph:
+    input:
+        '{output_dir}/gbam_sorted/{sample_id}.{rna_type}.bam'
+    output:
+        '{output_dir}/gbedgraph/{sample_id}.{rna_type}.bedGraph'
+    shell:
+        '''bedtools genomecov -ibam {input} -bg -split > {output}
+        '''
+
+rule gbedgraph_to_bigwig:
+    input:
+        bedgraph='{output_dir}/gbedgraph/{sample_id}.{rna_type}.bedGraph',
+        chrom_sizes=genome_dir + '/chrom_sizes/genome'
+    output:
+        '{output_dir}/gbigwig/{sample_id}.{rna_type}.bigWig'
+    shell:
+        '''bedGraphToBigWig {input.bedgraph} {input.chrom_sizes} {output}
+        '''
+
+rule sort_tbam:
+    input:
+        '{output_dir}/tbam/{sample_id}/{rna_type}.bam'
+    output:
+        '{output_dir}/tbam_sorted/{sample_id}/{rna_type}.bam'
+    params:
+        temp_dir=config['temp_dir']
+    shell:
+        '''samtools sort -T {params.temp_dir} -o {output} {input}
+        '''
+
+rule collect_alignment_summary_metrics:
+    input:
+        '{output_dir}/tbam_sorted/{sample_id}/{rna_type}.bam'
+    output:
+        '{output_dir}/alignment_summary_metrics/{sample_id}/{rna_type}'
+    shell:
+        '''picard CollectAlignmentSummaryMetrics I={input} O={output}
+        '''
+
+rule count_reads_intron:
+    input:
+        bam='{output_dir}/gbam/{sample_id}/other.bam',
+        bed=genome_dir + '/bed/long_RNA.intron.bed'
+    output:
+        '{output_dir}/stats/read_counts_mapped/{sample_id}/intron'
+    shell:
+        '''bedtools intersect -wa -s -a {input.bam} -b {input.bed} | wc -l > {output}
+        '''
+
+rule count_reads_promoter:
+    input:
+        bam='{output_dir}/gbam/{sample_id}/other.bam',
+        bed=genome_dir + '/bed/promoter.merged.bed'
+    output:
+        '{output_dir}/stats/read_counts_mapped/{sample_id}/promoter'
+    shell:
+        '''bedtools intersect -wa -a {input.bam} -b {input.bed} | wc -l > {output}
+        '''
+
+rule count_reads_enhancer:
+    input:
+        bam='{output_dir}/gbam/{sample_id}/other.bam',
+        bed=genome_dir + '/bed/enhancer.merged.bed'
+    output:
+        '{output_dir}/stats/read_counts_mapped/{sample_id}/enhancer'
+    shell:
+        '''bedtools intersect -wa -a {input.bam} -b {input.bed} | wc -l > {output}
+        '''
+
+rule map_circRNA:
+    input:
+        reads='{output_dir}/unmapped/{sample_id}/other.fa.gz',
+        index=genome_dir + '/index/bowtie2/circRNA.1.bt2'
+    output:
+        unmapped='{output_dir}/unmapped/{sample_id}/circRNA.fa.gz',
+        unmapped_aligner='{output_dir}/unmapped/{sample_id}/circRNA.aligner.fa.gz',
+        bam='{output_dir}/tbam/{sample_id}/circRNA.bam',
+        bam_filtered = '{output_dir}/tbam/{sample_id}/circRNA.filtered.bam'
+    params:
+        index=genome_dir + '/index/bowtie2/circRNA'
+    threads: 
+        config['threads_mapping']
+    shell:
+        '''pigz -d -c {input.reads} \
+        | bowtie2 -f -p {threads} --norc --sensitive --no-unal \
+            --un-gz {output.unmapped_aligner} -x {params.index} - -S - \
+        | bin/preprocess.py filter_circrna_reads --filtered-file >(samtools view -b -o {output.bam_filtered}) \
+        | samtools view -b -o {output.bam}
+
+        {{
+            pigz -d -c {output.unmapped_aligner}
+            samtools fasta {output.bam_filtered}
+        }} | pigz -c > {output.unmapped}
+        '''
+    
+include: 'sequential_mapping'
+

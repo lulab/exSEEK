@@ -1,0 +1,143 @@
+include: '../common'
+
+count_methods = ['featurecounts', 'htseq', 'transcript']
+# remove rRNA and spikein
+rna_types = list(filter(lambda x: x not in ('rRNA', 'spikein'), rna_types))
+
+def get_all_inputs(wildcards):
+    available_inputs = dict(
+        counts_by_biotype=expand('{output_dir}/counts_by_biotype/{count_method}/{sample_id}/{rna_type}',
+            output_dir=output_dir, count_method=count_methods, sample_id=sample_ids, rna_type=rna_types),
+        count_matrix=expand('{output_dir}/count_matrix/{count_method}.txt',
+            output_dir=output_dir, count_method=count_methods)
+    )
+    enabled_inputs = list(available_inputs.keys())
+    inputs = []
+    for key, l in available_inputs.items():
+        if key in enabled_inputs:
+            inputs += l
+    return inputs
+
+rule all:
+    input:
+        get_all_inputs
+
+rule featurecounts_gbam:
+    input:
+        bam='{output_dir}/gbam/{sample_id}/{rna_type}.bam',
+        gtf=genome_dir + '/gtf_by_biotype/{rna_type}.gtf'
+    output:
+        counts='{output_dir}/counts_by_biotype/featurecounts/{sample_id}/{rna_type}',
+        summary='{output_dir}/counts_by_biotype/featurecounts/{sample_id}/{rna_type}.summary'
+    params:
+        strandness={'forward': 1, 'reverse': 2}.get(config['strandness'], 0),
+        paired_end={True: '-p', False: ''}[config['paired_end']],
+        min_mapping_quality=config['min_mapping_quality']
+    log:
+        '{output_dir}/log/featurecounts_gbam/{sample_id}/{rna_type}'
+    shell:
+        '''featureCounts -t exon -g gene_id -s {params.strandness} -Q {params.min_mapping_quality} \
+            {params.paired_end} -a {input.gtf} -o {output.counts} {input.bam}
+        '''
+
+rule merge_featurecounts_by_biotype:
+    input:
+        lambda wildcards: expand('{output_dir}/counts_by_biotype/featurecounts/{sample_id}/{rna_type}',
+            output_dir=wildcards.output_dir, sample_id=wildcards.sample_id, rna_type=rna_types)
+    output:
+        '{output_dir}/counts/featurecounts/{sample_id}'
+    shell:
+        '''cat {input} | awk 'BEGIN{{OFS="\t";FS="\t"}}!($0 ~ /^#/)&& !($0 ~/^Geneid/) {{print $1,$NF}}' > {output}
+        '''
+
+rule count_matrix:
+    input:
+        counts=lambda wildcards: expand('{output_dir}/counts/{count_method}/{sample_id}',
+            output_dir=wildcards.output_dir, count_method=wildcards.count_method, sample_id=sample_ids),
+        transcript_table=expand(genome_dir + '/transcript_table/{rna_type}.txt', rna_type=rna_types)
+    output:
+        '{output_dir}/count_matrix/{count_method}.txt'
+    params:
+        feature_type=lambda wildcards: {'featurecounts': 'gene_id', 'htseq': 'gene_id', 'transcript': 'transcript_id'}[wildcards.count_method]
+    run:
+        import pandas as pd
+        import os
+        from collections import OrderedDict
+        import numpy as np
+
+        counts = OrderedDict()
+        gene_ids = np.zeros(0, dtype='str')
+        for filename in input.counts:
+            sample_id = os.path.basename(filename)
+            counts[sample_id] = pd.read_table(filename, sep='\t', header=None, index_col=0,
+                names=['feature', 'count'], dtype={'feature': 'str', 'count': 'int'}).iloc[:, 0]
+            counts[sample_id].index = counts[sample_id].index.astype('str')
+            counts[sample_id] = counts[sample_id][counts[sample_id] > 0]
+            gene_ids = np.union1d(gene_ids, counts[sample_id].index.values)
+        # annotate features
+        transcript_table = []
+        for filename in input.transcript_table:
+            transcript_table.append(pd.read_table(filename, sep='\t', dtype='str'))
+        transcript_table = pd.concat(transcript_table, axis=0)
+        transcript_table = transcript_table.drop_duplicates(params.feature_type, keep='first')
+        transcript_table.set_index(params.feature_type, inplace=True, drop=False)
+        #print(transcript_table.head())
+        feature_names = transcript_table.loc[gene_ids, 'gene_id'] + '|' + transcript_table.loc[gene_ids, 'gene_type'] + '|' + transcript_table.loc[gene_ids, 'gene_name']
+        #print('len(feature_names) = {}'.format(len(feature_names)))
+        #print('len(gene_ids) = {}'.format(len(gene_ids)))
+        # create matrix
+        matrix = pd.DataFrame(np.zeros((len(gene_ids), len(counts)), dtype=np.int32), 
+            index=gene_ids, columns=list(counts.keys()))
+        for sample_id in sample_ids:
+            matrix.loc[counts[sample_id].index.values, sample_id] = counts[sample_id].values
+        matrix.index = feature_names.values
+        matrix.index.name = 'feature'
+        
+        matrix.to_csv(output[0], sep='\t', header=True, index=True, na_rep='NA')
+
+rule htseq_gbam:
+    input:
+        bam='{output_dir}/gbam/{sample_id}/{rna_type}.bam',
+        gtf=genome_dir + '/gtf_by_biotype/{rna_type}.gtf'
+    output:
+        counts='{output_dir}/counts_by_biotype/htseq/{sample_id}/{rna_type}'
+    params:
+        strandness={'forward': 'yes', 'reverse': 'reverse'}.get(config['strandness'], 'no'),
+        min_mapping_quality=config['min_mapping_quality']
+    shell:
+        '''htseq-count -t exon -i gene_id -f bam -m intersection-strict -a {params.min_mapping_quality} \
+            -s {params.strandness} {input.bam} {input.gtf} > {output.counts}
+        '''
+
+rule merge_htseq_by_biotype:
+    input:
+        lambda wildcards: expand('{output_dir}/counts_by_biotype/htseq/{sample_id}/{rna_type}',
+            output_dir=wildcards.output_dir, sample_id=wildcards.sample_id, rna_type=rna_types)
+    output:
+        '{output_dir}/counts/htseq/{sample_id}'
+    shell:
+        '''
+        cat {input} | grep -v '^__' > {output}
+        '''
+
+rule transcript_tbam:
+    input:
+        bam='{output_dir}/tbam/{sample_id}/{rna_type}.bam'
+    output:
+        '{output_dir}/counts_by_biotype/transcript/{sample_id}/{rna_type}'
+    params:
+        min_mapping_quality=config['min_mapping_quality'],
+        strandness=config['strandness']
+    shell:
+        '''bin/count_reads.py count_transcript -i {input.bam} -s {params.strandness} -q {params.min_mapping_quality} -o {output}
+        '''
+
+rule merge_transcript_by_biotype:
+    input:
+        lambda wildcards: expand('{output_dir}/counts_by_biotype/transcript/{sample_id}/{rna_type}',
+            output_dir=wildcards.output_dir, sample_id=wildcards.sample_id, rna_type=rna_types)
+    output:
+        '{output_dir}/counts/transcript/{sample_id}'
+    shell:
+        '''cat {input} > {output}
+        '''

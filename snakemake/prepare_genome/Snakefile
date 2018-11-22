@@ -1,0 +1,259 @@
+shell.prefix('set -x;')
+
+genome_dir = config['genome_dir']
+rna_types = config['rna_types']
+aligner = config['aligner']
+use_longest_transcript = config['use_longest_transcript']
+star_sjdboverhang = config['star_sjdboverhang']
+
+def get_rsem_index(aligner):
+    if aligner == 'star':
+        return '{genome_dir}/rsem_index/{aligner}/{rna_type}/rsem.transcripts.fa'
+    elif aligner == 'bowtie2':
+        return '{genome_dir}/rsem_index/{aligner}/{rna_type}.transcripts.fa'
+    else:
+        raise ValueError('unknown aligner: {}'.format(aligner))
+    
+def get_all_inputs(wildcards):
+    available_inputs = dict(
+        fasta_index=expand('{genome_dir}/fasta/genome.fa.fai', genome_dir=genome_dir),
+        extract_gtf=expand('{genome_dir}/gtf_by_biotype/{rna_type}.gtf',
+            genome_dir=genome_dir, rna_type=rna_types),
+        gtf_to_transcript_table=expand('{genome_dir}/transcript_table/{rna_type}.txt',
+            genome_dir=genome_dir, rna_type=rna_types),
+        gtf_to_bed=expand('{genome_dir}/bed_by_biotype/{rna_type}.bed',
+            genome_dir=genome_dir, rna_type=rna_types),
+        gtf_longest_transcript=expand('{genome_dir}/gtf_longest_transcript/{rna_type}.gtf',
+            genome_dir=genome_dir, rna_type=rna_types),
+        rsem_index=expand(get_rsem_index(aligner),
+            genome_dir=genome_dir, aligner=aligner, rna_type=rna_types),
+        genome_index_bowtie2=expand('{genome_dir}/genome_index/bowtie2/genome.1.bt2',
+            genome_dir=genome_dir),
+        genome_index_star=expand('{genome_dir}/genome_index/star/SA',
+            genome_dir=genome_dir),
+        long_index_star=expand('{genome_dir}/long_index/star/Genome', genome_dir=genome_dir),
+        circrna_index_bowtie2=expand('{genome_dir}/index/bowtie2/circRNA.1.bt2',
+            genome_dir=genome_dir)
+    )
+    available_inputs['rsem_index']
+    del available_inputs['long_index_star']
+    enabled_inputs = list(available_inputs.keys())
+    inputs = []
+    for key, l in available_inputs.items():
+        if key in enabled_inputs:
+            inputs += l
+    return inputs
+
+rule all:
+    input:
+        get_all_inputs
+
+rule fasta_index:
+    input:
+        '{genome_dir}/fasta/genome.fa'
+    output:
+        '{genome_dir}/fasta/genome.fa.fai'
+    shell:
+        '''samtools faidx {input}
+        '''
+
+rule chrom_sizes:
+    input:
+        '{genome_dir}/fasta/{rna_type}.fa.fai'
+    output:
+        '{genome_dir}/chrom_sizes/{rna_type}'
+    shell:
+        '''cut -f1,2 {input} > {output}
+        '''
+
+rule circrna_index_bowtie2:
+    input:
+        '{genome_dir}/fasta/circbase.junctions.fa'
+    output:
+        bt2_1='{genome_dir}/index/bowtie2/circRNA.1.bt2',
+        bt2rev_1='{genome_dir}/index/bowtie2/circRNA.rev.1.bt2'
+    params:
+        output_prefix='{genome_dir}/index/bowtie2/circRNA'
+    threads:
+        config['threads']
+    shell:
+        '''bowtie2-build --threads {threads} {input} {params.output_prefix}
+        '''
+
+rule genome_index_bowtie2:
+    input:
+        '{genome_dir}/fasta/genome.fa'
+    output:
+        bt2_1='{genome_dir}/genome_index/bowtie2/genome.1.bt2',
+        bt2rev_1='{genome_dir}/genome_index/bowtie2/genome.rev.1.bt2'
+    params:
+        output_prefix='{genome_dir}/genome_index/bowtie2/genome'
+    threads:
+        config['threads']
+    shell:
+        '''bowtie2-build --threads {threads} {input} {params.output_prefix}
+        '''
+
+rule genome_index_star:
+    input:
+        '{genome_dir}/fasta/genome.fa'
+    output:
+        SA='{genome_dir}/genome_index/star/SA',
+        Genome='{genome_dir}/genome_index/star/Genome'
+    params:
+        output_prefix='{genome_dir}/genome_index/star/'
+    threads:
+        config['threads']
+    shell:
+        '''STAR --runMode genomeGenerate --runThreadN {threads} \
+            --genomeDir {params.output_prefix} --genomeFastaFiles {input} \
+            --outFileNamePrefix {params.output_prefix}
+        '''
+
+rule long_index_star:
+    input:
+        fasta='{genome_dir}/fasta/genome.fa',
+        gtf='{genome_dir}/gtf/long_RNA.gtf'
+    output:
+        SA='{genome_dir}/long_index/star/SA',
+        Genome='{genome_dir}/long_index/star/Genome'
+    params:
+        output_prefix='{genome_dir}/long_index/star/'
+    threads:
+        config['threads']
+    shell:
+        '''STAR --runMode genomeGenerate --runThreadN {threads} \
+            --genomeDir {params.output_prefix} --genomeFastaFiles {input.fasta} \
+            --sjdbGTFfile {input.gtf} --sjdbOverhang {star_sjdboverhang} \
+            --outFileNamePrefix {params.output_prefix}
+        '''
+
+rule rsem_index_bowtie2:
+    input:
+        fasta='{genome_dir}/fasta/genome.fa',
+        gtf=lambda wildcards: expand('{genome_dir}/{gtf}/{rna_type}.gtf',
+            genome_dir=wildcards.genome_dir, 
+            gtf={True: 'gtf_longest_transcript', False: 'gtf_by_biotype'}[use_longest_transcript],
+            rna_type=wildcards.rna_type)
+    output:
+        chrlist='{genome_dir}/rsem_index/{aligner}/{rna_type}.chrlist',
+        grp='{genome_dir}/rsem_index/{aligner}/{rna_type}.grp',
+        idx_fa='{genome_dir}/rsem_index/{aligner}/{rna_type}.idx.fa',
+        transcripts_fa='{genome_dir}/rsem_index/{aligner}/{rna_type}.transcripts.fa',
+        bt2_1='{genome_dir}/rsem_index/{aligner}/{rna_type}.1.bt2',
+        bt2_2='{genome_dir}/rsem_index/{aligner}/{rna_type}.2.bt2',
+        bt2_3='{genome_dir}/rsem_index/{aligner}/{rna_type}.3.bt2',
+        bt2_4='{genome_dir}/rsem_index/{aligner}/{rna_type}.4.bt2',
+        bt2_rev_1='{genome_dir}/rsem_index/{aligner}/{rna_type}.rev.1.bt2',
+        bt2_rev_2='{genome_dir}/rsem_index/{aligner}/{rna_type}.rev.2.bt2'
+    params:
+        output_prefix='{genome_dir}/rsem_index/{aligner}/{rna_type}'
+    wildcard_constraints:
+        aligner='bowtie2'
+    shell:
+        '''rsem-prepare-reference --gtf {input.gtf} --bowtie2 {input.fasta} {params.output_prefix}
+        '''
+
+rule rsem_index_star:
+    input:
+        fasta='{genome_dir}/fasta/genome.fa',
+        gtf=lambda wildcards: expand('{genome_dir}/{gtf}/{rna_type}.gtf',
+            genome_dir=wildcards.genome_dir, 
+            gtf={True: 'gtf_longest_transcript', False: 'gtf_by_biotype'}[use_longest_transcript],
+            rna_type=wildcards.rna_type)
+    output:
+        fa='{genome_dir}/rsem_index/{aligner}/{rna_type}/rsem.fa',
+        chrlist='{genome_dir}/rsem_index/{aligner}/{rna_type}/rsem.chrlist',
+        grp='{genome_dir}/rsem_index/{aligner}/{rna_type}/rsem.grp',
+        idx_fa='{genome_dir}/rsem_index/{aligner}/{rna_type}/rsem.idx.fa',
+        transcripts_fa='{genome_dir}/rsem_index/{aligner}/{rna_type}/rsem.transcripts.fa',
+        SA='{genome_dir}/rsem_index/{aligner}/{rna_type}/SA',
+        Genome='{genome_dir}/rsem_index/{aligner}/{rna_type}/Genome'
+    params:
+        output_prefix='{genome_dir}/rsem_index/{aligner}/{rna_type}/rsem'
+    wildcard_constraints:
+        aligner='star'
+    shell:
+        '''rsem-prepare-reference --gtf {input.gtf} --star {input.fasta} {params.output_prefix}
+        '''
+
+rule crossmap_mitranscriptome:
+    input:
+        gtf='{genome_dir}/source/mitranscriptome.v2.gtf',
+        chain='{genome_dir}/source/hg19ToHg38.over.chain.gz'
+    output:
+        '{genome_dir}/gtf/mitranscriptome.gtf'
+    shell:
+        '''CrossMap.py gff {input.chain} {input.gtf} > {output}
+        '''
+
+rule extract_mitranscriptome:
+    input:
+        '{genome_dir}/gtf/mitranscriptome.gtf'
+    output:
+        lncRNA='{genome_dir}/gtf/mitranscriptome_lncRNA.gtf',
+        tucpRNA='{genome_dir}/gtf/mitranscriptome_tucp.gtf'
+    shell:
+        '''grep 'tcat "lncrna"' {input} > {output.lncRNA}
+        grep 'tcat "tucp"' {input} > {output.tucpRNA}
+        '''
+
+
+rule gtf_by_biotype:
+    input:
+        main='{genome_dir}/gtf/gencode.gtf',
+        tRNA='{genome_dir}/gtf/gencode_tRNA.gtf',
+        lncRNA='{genome_dir}/gtf/merged_lncRNA.gtf',
+        tucpRNA='{genome_dir}/gtf/mitranscriptome_tucp.gtf',
+        piRNA='{genome_dir}/gtf/piRNABank.gtf'
+    output:
+        '{genome_dir}/gtf_by_biotype/{rna_type}.gtf'
+    shell:
+        '''if [ "{wildcards.rna_type}" = "mRNA" ];then
+            grep 'gene_type "protein_coding"' {input.main} | grep -v Selenocysteine > {output}
+        elif [ "{wildcards.rna_type}" = "Y_RNA" ];then
+            grep 'gene_name "Y_RNA"' {input.main} > {output}
+        elif [ "{wildcards.rna_type}" = "srpRNA" ];then
+            grep 'gene_name "RN7SL' {input.main} > {output}
+        elif [ "{wildcards.rna_type}" = "tRNA" ];then 
+            cp {input.tRNA} {output}
+        elif [ "{wildcards.rna_type}" = "lncRNA" ];then
+            cp {input.lncRNA} {output}
+        elif [ "{wildcards.rna_type}" = "tucpRNA" ];then
+            cp {input.tucpRNA} {output}
+        elif [ "{wildcards.rna_type}" = "piRNA" ];then
+            cp {input.piRNA} {output}
+        else
+            grep 'gene_type "{wildcards.rna_type}"' {input.main} > {output}
+        fi
+        '''
+
+rule gtf_to_transcript_table:
+    input:
+        '{genome_dir}/gtf_by_biotype/{rna_type}.gtf'
+    output:
+        '{genome_dir}/transcript_table/{rna_type}.txt'
+    shell:
+        '''bin/preprocess.py gtf_to_transcript_table --feature exon \
+            --gene-type {wildcards.rna_type} \
+            --transcript-type {wildcards.rna_type} \
+            -i {input} -o {output}
+        '''
+
+rule gtf_to_bed:
+    input:
+        '{genome_dir}/gtf_by_biotype/{rna_type}.gtf'
+    output:
+        '{genome_dir}/bed_by_biotype/{rna_type}.bed'
+    shell:
+        '''gffread -E --bed -o {output} {input}
+        '''
+
+rule gtf_longest_transcript:
+    input:
+        '{genome_dir}/gtf_by_biotype/{rna_type}.gtf'
+    output:
+        '{genome_dir}/gtf_longest_transcript/{rna_type}.gtf'
+    shell:
+        '''bin/preprocess.py extract_longest_transcript -i {input} -o {output}
+        '''
