@@ -1,6 +1,7 @@
 **Software**
 
 * Python 3.6 (miniconda)
+* Python 2.7 (miniconda)
 * Java 8
 * R 3.4
 
@@ -28,6 +29,14 @@ List of all available Bioconda packages: (https://bioconda.github.io/recipes.htm
 * bamtools
 * cutadapt
 * picard
+* gffread
+* gffcompare
+* ucsc-bedtogenepred
+* ucsc-genepredtogtf
+* ucsc-bedgraphtobigwig
+* htseq
+* fastx_toolkit
+* biopython
 
 **Ubuntu packages**
 * gzip
@@ -43,3 +52,6 @@ List of all available Bioconda packages: (https://bioconda.github.io/recipes.htm
 * RUVSeq
 * sva
 * scRNA.seq.funcs
+
+**Other packages**
+* [find_circ 1.2](https://github.com/marvin-jens/find_circ) (depends on Python 2.7)
