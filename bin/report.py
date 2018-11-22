@@ -394,16 +394,23 @@ def _evaluate_preprocess_methods(input_dirs, preprocess_methods, title=None):
 def evaluate_preprocessing_methods(args):
     _evaluate_preprocess_methods(args.input_dirs, args.precessing_methods)
 
+@command_handler
+def fastqc_summary(args):
+    from nbformat.v4 import new_notebook, new_code_cell, new_markdown_cell
+    
+    fastqc_dir = os.path.join(args.input_dir)
+    logger.info('read fastq directory: ' + args.input_dir)
+    
 if __name__ == '__main__':
     main_parser = argparse.ArgumentParser(description='Preprocessing module')
     subparsers = main_parser.add_subparsers(dest='command')
 
-    parser = subparsers.add_parser('transcript_counts', 
-        help='count reads that belongs to a transcript')
-    parser.add_argument('--input-file', '-i', type=str, required=True,
-        help='input transcript BAM file')
-    parser.add_argument('--output-file', '-o', type=str, default='-',
-        help='output transcript counts file')
+    parser = subparsers.add_parser('fastqc_summary', 
+        help='create an HTML summary report for fastqc result')
+    parser.add_argument('--input-dir', '-i', type=str, required=True,
+        help='output directory of fastqc')
+    parser.add_argument('--output-prefix', '-o', type=str, default='-',
+        help='prefix of output files')
     
     args = main_parser.parse_args()
     if not args.command:
