@@ -1,6 +1,5 @@
 shell.prefix('set -x; set -e;')
 
-# scalers = ['zscore', 'robust', 'min_max', 'max_abs']
 scalers = ['robust']
 #classifiers = ['random_forest', 'logistic_regression']
 classifiers = ['random_forest']
@@ -13,106 +12,26 @@ n_selects = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 compute_sample_weights = [1]
 #resample_methods = ['jackknife', 'bootstrap']
 resample_methods = ['bootstrap']
-datasets = {
-    'qpcr': [
-        'median.qpcr.spike-in',
-        'median.qpcr.miR1228',
-        'llsImpute.qpcr.miR1228',
-        'llsImpute.qpcr.spike-in',
-        'median.qpcr.spike-in_12genes',
-        'median.qpcr.miR1228_12genes',
-        'llsImpute.qpcr.miR1228_12genes',
-        'llsImpute.qpcr.spike-in_12genes'
-    ],
-    'hcc': [
-        'piranha_peaks',
-        'piranha_peaks_iterative',
-        'transcripts_exrna',
-        'hccpeakiter_removed',
-        'hccfull_ref_normalization',
-        'hccpeak_ref_normalization',
-        'hccpeakiter_ref_normalization',
-        'hccfull_removed',
-        'hccpeak_removed',
-        'rle.piranha_peaks_iterative_43',
-        'rle.transcripts_exrna_43',
-        'scnorm.piranha_peaks_iterative',
-        'scnorm.transcripts_exrna',
-        'tmm.piranha_peaks_iterative_43',
-        'tmm.transcripts_exrna_43',
-        'reference.piranha_peaks_iterative_43',
-        'reference.transcripts_exrna_43',
-        'reversed.logged.combat.piranha_peaks_iterative_43_variance',
-        'reversed.logged.combat.transcripts_exrna_43_variance',
-        'reversed.logged.ruvs.piranha_peaks_iterative_43_variance',
-        'reversed.logged.ruvs.transcripts_exrna_43_variance'
-    ],
-    'GSE71008': [
-        'GSE71008',
-        'scirep_ref_normalization',
-        'scirep_removed',
-        'rle.scirep_sequential_qc',
-        'tmm.scirep_sequential_qc',
-        'reference.scirep_sequential_qc',
-        'scnorm.GSE71008',
-        'cpm.scirep_sequential_qc',
-        'reversed.logged.combat.batch_1.scirep_sequential_qc_variance',
-        'reversed.logged.combat.batch_2.scirep_sequential_qc_variance',
-        'reversed.logged.combat.batch_3.scirep_sequential_qc_variance',
-        'reversed.logged.ruvs.scirep_sequential_qc_variance'
-    ],
-    'exoRBase': [
-        'exoRBase',
-        'exoRBase_remapped',
-        'rle.exoRBase',
-        'scnorm.exoRBase',
-        'tmm.exoRBase',
-        'reversed.logged.ruvs.exoRBase_variance',
-        'nolabel.logged.ruvs.exoRBase_variance',
-        'exoRBase_dedup'
-    ]
-}
 
 groups = {}
 for group in datasets.keys():
     for dataset in datasets[group]:
         groups[dataset] = group
 
-select_methods = ['robust']
-#select_methods = ['ranking', 'rfe']
-#splitters = ['leave_one_out', 'shuffle_split']
-splitters = ['stratified_shuffle_split']
-
-compare_classes = {
-    'hcc': {
-        'Normal-stage_A': ['Normal', 'stage_A'],
-        'Normal-HCC': ['Normal', 'stage_A,stage_B,stage_C']
-    },
-    'GSE71008': {
-        'Normal-CRC': ['Healthy Control', 'Colorectal Cancer']
-    },
-    'exoRBase': {
-        'Normal-HCC': ['Healthy', 'HCC'],
-        'Normal-CRC': ['Healthy', 'CRC'],
-        'Normal-PAAD': ['Healthy', 'PAAD']
-    },
-    'qpcr': {
-        'Normal-HCC': ['Normal', 'HCC']
-    }
-}
+resample_methods = config['resample_methods']
+splitters = config['splitters']
+compare_classes = config['compare_classes']
+n_selects = config['n_selects']
+classifiers = config['classifiers']
+scalers = config['scalers']
 
 from functools import reduce
 
 def get_all_inputs(wildcards):
-    available_inputs = dict(
-        select_robust=expand('output/feature_selection/select_robust/{dataset}/{scaler}.{classifier}.{n_select}.{compute_sample_weight}.{resample_method}',
-            scaler=scalers, classifier=classifiers, n_select=n_selects, compute_sample_weight=compute_sample_weights,
-            resample_method=resample_methods, dataset=datasets)
-    )
     available_inputs['evaluate'] = []
     for group in datasets.keys():
         for dataset in datasets[group]:
-            available_inputs['evaluate'] += expand('output/feature_selection/evaluate/{dataset}/{compare_classes}/{classifier}.{n_select}.{select_method}.{splitter}',
+            available_inputs['evaluate'] += expand('output/{dataset}/feature_selection/{preprocess_method}/{compare_classes}/{classifier}.{n_select}.{select_method}.{splitter}',
                 dataset=dataset, classifier=classifiers, select_method=select_methods, 
                 compare_classes=compare_classes[group], n_select=n_selects,
                 splitter=splitters)
@@ -129,40 +48,18 @@ rule all:
     input:
         get_all_inputs
 
-rule select_robust:
-    input:
-        matrix='output/cpm_matrix/{dataset}.txt',
-        sample_classes='metadata/sample_classes.txt'
-    output:
-        directory('output/feature_selection/select_robust/{dataset}/{scaler}.{classifier}.{n_select}.{compute_sample_weight}.{resample_method}')
-    params:
-        compute_sample_weight=lambda wildcards: {'1': '--compute-sample-weight', '0': ''}[wildcards.compute_sample_weight],
-        rfe=lambda wildcards: {True: '--rfe', False: ''}[wildcards.classifier.endswith('_rfe')],
-        classifier=lambda wildcards: wildcards.classifier.rstrip('_rfe'),
-        top_features_by_median=lambda wildcards: {True: '--top-features-by-median 5000', False: ''}[wildcards.dataset == 'transcripts_exrna']
-    shell:
-        '''bin/feature_selection.py  robust_select -i {input.matrix} \
-            --transpose --use-log --sample-classes {input.sample_classes} \
-            --positive-class HCC --negative-class Normal \
-            --scaler {wildcards.scaler} --method {params.classifier} --n-select {wildcards.n_select} \
-            --resample-method {wildcards.resample_method} \
-            {params.top_features_by_median} \
-            {params.compute_sample_weight} \
-            -o {output}
-        '''
 
 rule evaluate:
     input:
         matrix='output/cpm_matrix/{dataset}.txt',
         sample_classes=lambda wildcards: 'metadata/sample_classes.{group}.txt'.format(group=groups[wildcards.dataset])
     output:
-        directory('output/feature_selection/evaluate/{dataset}/{compare_classes}/{classifier}.{n_select}.{select_method}.{splitter}')
+        directory('output/feature_selection/{dataset}/{compare_classes}/{classifier}.{n_select}.{select_method}.{splitter}')
     params:
         rfe=lambda wildcards: {True: '--rfe --rfe-resample-method jackknife --rfe-max-runs 50'},
         select_method=lambda wildcards: {'rfe': '--rfe --rfe-step 0.1',
             'ranking': '',
             'robust': '--robust-select --robust-max-runs 50 --robust-resample-method jackknife --robust-jackknife-remove 0.1' }[wildcards.select_method],
-        #top_features_by_median=lambda wildcards: {True: '--top-features-by-median 5000', False: ''}[wildcards.dataset == 'transcripts_exrna'],
         positive_class=lambda wildcards: compare_classes[groups[wildcards.dataset]][wildcards.compare_classes][1],
         negative_class=lambda wildcards: compare_classes[groups[wildcards.dataset]][wildcards.compare_classes][0],
         n_splits=lambda wildcards: {'shuffle_split': 50, 'stratified_shuffle_split': 50}.get(wildcards.splitter, 5),

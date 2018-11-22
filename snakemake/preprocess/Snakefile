@@ -3,7 +3,6 @@ configfile: 'snakemake/config.json'
 
 rna_types = config['rna_types']
 
-
 def get_all_inputs(wildcards):
     available_inputs = dict(
     )
@@ -17,6 +16,7 @@ def get_all_inputs(wildcards):
 rule all:
     input:
         get_all_inputs
+
 
 rule tbam_to_tbed:
     input:
