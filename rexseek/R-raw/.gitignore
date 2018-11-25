@@ -1,9 +1,0 @@
-# R markdown output files
-*.html
-
-# R markdown default cache directories
-*_cache/
-
-# Temporary files created by R markdown
-*.utf8.md
-*.knit.md
