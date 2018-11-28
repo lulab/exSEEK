@@ -1,3 +1,7 @@
+# Genome and Annotations
+
+Path: `/BioII/lulab_b/shared/genomes/hg38/`
+
 ## Annotation summary table
 
 | Type | Number of genes  | Source |
