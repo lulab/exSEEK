@@ -222,11 +222,12 @@ cat $(for track in $tracks;do echo genome/hg38/bed/enhancer.${track}.bed;done) \
 ```
 
 ### Repeats
-UCSC GenomeBrowser -> Tools -> Table Browser:
-assembly: GRCh38/hg38
-group: repeats
-track: RepeatMasker
-table: rmsk
+UCSC GenomeBrowser -> Tools -> Table Browser
+
+* assembly: GRCh38/hg38
+* group: repeats
+* track: RepeatMasker
+* table: rmsk
 
 Dowload to: genome/hg38/source/rmsk.bed.gz
 ```bash
