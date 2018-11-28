@@ -1,8 +1,35 @@
 ## Human
+
+**Annotation**
+
+[rRNA, lncRNA, miRNA, mRNA, piRNA, snoRNA, 
+  snRNA, srpRNA, tRNA, tucpRNA, Y_RNA]
+
+| Type | Source |
+| ---- | ------ |
+| miRNA | GENCODE V27 |
+| piRNA | piRNABank | 
+| lncRNA | GENCODE V27 and mitranscriptome |
+| rRNA | GENCODE V27 |
+| mRNA | GENCODE V27 |
+| snoRNA | GENCODE V27 |
+| snRNA | GENCODE V27 |
+| srpRNA | GENCODE V27 |
+| tRNA | GENCODE V27 |
+| tucpRNA | GENCODE V27 |
+| Y_RNA | GENCODE V27 |
+| circRNA | circBase |
+| promoter | ChromHMM tracks from 9 cell lines from UCSC Genome Browser |
+| enhancer | ChromHMM tracks from 9 cell lines from UCSC Genome Browser |
+
+
 ```bash
 [ -d "genome/hg38/source" ] || mkdir -p "genome/hg38/source"
-# Genome assembly from GENCODE
-wget -P genome/hg38/source ftp://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_27/GRCh38.p10.genome.fa.gz
+# Genome assembly hg38 from UCSC
+wget -P genome/hg38/source http://hgdownload.soe.ucsc.edu/goldenPath/hg38/bigZips/hg38.fa.gz
+gzip -d -c genome/hg38/source/hg38.fa.gz > genome/hg38/fasta/genome.fa
+samtools faidx genome/hg38/fasta/genome.fa
+
 # GENCODE annotations
 wget -P genome/hg38/source ftp://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_27/gencode.v27.annotation.gtf.gz
 #wget -P genome/hg38/source ftp://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_27/gencode.v27.annotation.gff3.gz
@@ -135,7 +162,15 @@ cat $(for track in $tracks;do echo genome/hg38/bed/enhancer.${track}.bed;done) \
     | bedtools sort | bedtools merge -d 1 \
     | awk 'BEGIN{OFS="\t";FS="\t"}{print $1,$2,$3,"enhancer",0,"."}' > genome/hg38/bed/enhancer.merged.bed
 
+# Repeats
+UCSC GenomeBrowser -> Tools -> Table Browser:
+assembly: GRCh38/hg38
+group: repeats
+track: RepeatMasker
+table: rmsk
+
 # circRNA database (circBase)
 wget -O genome/hg38/source/circbase.hg19.fa.gz http://www.circbase.org/download/human_hg19_circRNAs_putative_spliced_sequence.fa.gz
 zcat genome/hg38/source/circbase.hg19.fa.gz | bin/preprocess.py extract_circrna_junction -s 50 -o genome/hg38/fasta/circbase.junction.fa
+samtools faidx genome/hg38/fasta/circbase.junction.fa
 ```
