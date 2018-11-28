@@ -19,6 +19,7 @@
 | tucpRNA | GENCODE V27 |
 | Y_RNA | GENCODE V27 |
 | circRNA | circBase |
+| repeats | UCSC Genome Browser (rmsk) |
 | promoter | ChromHMM tracks from 9 cell lines from UCSC Genome Browser |
 | enhancer | ChromHMM tracks from 9 cell lines from UCSC Genome Browser |
 
