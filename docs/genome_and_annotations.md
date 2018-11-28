@@ -25,29 +25,34 @@
 | ---- | ------ |
 | `fasta/genome.fa` | genome sequence |
 | `fasta/circbase.junction.fa` | junction sequence in circBase |
-| `gtf_by_biotype/${rna_type}.gtf` | separate GTF files for rna types |
+| `gtf_by_biotype/${rna_type}.gtf` | separate GTF files for each RNA type |
 | `gtf/gencode.gtf` | GENCODE GTF file |
 | `gtf/mitranscriptome.gtf` | Mitranscriptome GTF file |
 | `gtf/long_RNA.gtf` | GTF file of Long RNA (GENCODE + Mitranscriptome - miRNA) |
 | `gtf/piRNABank.gtf` | piRNA GTF file from piRNABank |
 | `gtf/gencode_tRNA.gtf` | GTF file of tRNA from GENCODE |
 | `transcript_table/all.txt` | Table of transcript information (gene_id, transcript_id) |
-| 
+| `rsem_index/bowtie2/${rna_type}` | RSEM index files for each RNA type |
+| `rsem_index/bowtie2/${rna_type}.transcripts.fa` | Sequence for each RNA type |
+| `gtf_longest_transcript/${rna_type}.gtf` | GTF files for the longest isoforms from GENCODE and Mitranscriptome |
+| `bed/*.bed` | Transcript in BED12 format extracted from GTF files in `gtf/*.gtf |
+| `index/bowtie2/circRNA` | Bowtie2 index for cirRNA |
+| `long_index/star/` | STAR index including splicing junctions of long RNA |
 
 
 ## Generate the genome and annotation files
 
-###Create genome directory
+### Create genome directory
 ```bash
 [ -d "genome/hg38/source" ] || mkdir -p "genome/hg38/source"
 ```
 
-###Download chain files for CrossMap
+### Download chain files for CrossMap
 ```bash
 wget -O genome/hg38/source/hg18ToHg38.over.chain.gz http://hgdownload.soe.ucsc.edu/goldenPath/hg18/liftOver/hg18ToHg38.over.chain.gz
 wget -O genome/hg38/source/NCBI36_to_GRCh38.chain.gz https://sourceforge.net/projects/crossmap/files/Ensembl_chain_files/homo_sapiens%28human%29/NCBI36_to_GRCh38.chain.gz
 ```
-###Genome assembly (UCSC hg38)
+### Genome assembly (UCSC hg38)
 ```bash
 wget -P genome/hg38/source http://hgdownload.soe.ucsc.edu/goldenPath/hg38/bigZips/hg38.fa.gz
 gzip -d -c genome/hg38/source/hg38.fa.gz > genome/hg38/fasta/genome.fa
@@ -55,7 +60,7 @@ samtools faidx genome/hg38/fasta/genome.fa
 ```
 
 
-###ENCODE annotations
+### ENCODE annotations
 ```bash
 wget -P genome/hg38/source ftp://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_27/gencode.v27.annotation.gtf.gz
 #wget -P genome/hg38/source ftp://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_27/gencode.v27.annotation.gff3.gz
@@ -71,7 +76,7 @@ zcat genome/hg38/source/gencode.v27.tRNAs.gtf.gz \
 wget -P genome/hg38/source http://hgdownload.soe.ucsc.edu/goldenPath/hg19/liftOver/hg19ToHg38.over.chain.gz
 ```
 
-###Mitranscriptome
+### Mitranscriptome
 ```bash
 wget -P genome/hg38/source http://mitranscriptome.org/download/mitranscriptome.gtf.tar.gz
 tar -C genome/hg38/source --strip-components=1 -zxf genome/hg38/source/mitranscriptome.gtf.tar.gz mitranscriptome.gtf/mitranscriptome.v2.gtf.gz
