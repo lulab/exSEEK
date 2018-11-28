@@ -1,9 +1,4 @@
-## Human
-
-**Annotation**
-
-[rRNA, lncRNA, miRNA, mRNA, piRNA, snoRNA, 
-  snRNA, srpRNA, tRNA, tucpRNA, Y_RNA]
+## Annotation summary table
 
 | Type | Source |
 | ---- | ------ |
@@ -24,14 +19,44 @@
 | enhancer | ChromHMM tracks from 9 cell lines from UCSC Genome Browser |
 
 
+## Genome and annotation files
+
+| File | Description |
+| ---- | ------ |
+| `fasta/genome.fa` | genome sequence |
+| `fasta/circbase.junction.fa` | junction sequence in circBase |
+| `gtf_by_biotype/${rna_type}.gtf` | separate GTF files for rna types |
+| `gtf/gencode.gtf` | GENCODE GTF file |
+| `gtf/mitranscriptome.gtf` | Mitranscriptome GTF file |
+| `gtf/long_RNA.gtf` | GTF file of Long RNA (GENCODE + Mitranscriptome - miRNA) |
+| `gtf/piRNABank.gtf` | piRNA GTF file from piRNABank |
+| `gtf/gencode_tRNA.gtf` | GTF file of tRNA from GENCODE |
+| `transcript_table/all.txt` | Table of transcript information (gene_id, transcript_id) |
+| 
+
+
+## Generate the genome and annotation files
+
+###Create genome directory
 ```bash
 [ -d "genome/hg38/source" ] || mkdir -p "genome/hg38/source"
-# Genome assembly hg38 from UCSC
+```
+
+###Download chain files for CrossMap
+```bash
+wget -O genome/hg38/source/hg18ToHg38.over.chain.gz http://hgdownload.soe.ucsc.edu/goldenPath/hg18/liftOver/hg18ToHg38.over.chain.gz
+wget -O genome/hg38/source/NCBI36_to_GRCh38.chain.gz https://sourceforge.net/projects/crossmap/files/Ensembl_chain_files/homo_sapiens%28human%29/NCBI36_to_GRCh38.chain.gz
+```
+###Genome assembly (UCSC hg38)
+```bash
 wget -P genome/hg38/source http://hgdownload.soe.ucsc.edu/goldenPath/hg38/bigZips/hg38.fa.gz
 gzip -d -c genome/hg38/source/hg38.fa.gz > genome/hg38/fasta/genome.fa
 samtools faidx genome/hg38/fasta/genome.fa
+```
 
-# GENCODE annotations
+
+###ENCODE annotations
+```bash
 wget -P genome/hg38/source ftp://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_27/gencode.v27.annotation.gtf.gz
 #wget -P genome/hg38/source ftp://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_27/gencode.v27.annotation.gff3.gz
 wget -P genome/hg38/source ftp://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_27/gencode.v27.long_noncoding_RNAs.gtf.gz
@@ -44,58 +69,80 @@ zcat genome/hg38/source/gencode.v27.tRNAs.gtf.gz \
     | awk 'BEGIN{FS="\t";OFS="\t"}{print $1,$2,"exon",$4,$5,$6,$7,$8,$9}' > genome/hg38/gtf/gencode_tRNA.gtf
 # Chain file for converting hg19 to hg38
 wget -P genome/hg38/source http://hgdownload.soe.ucsc.edu/goldenPath/hg19/liftOver/hg19ToHg38.over.chain.gz
+```
 
-# MiTranscriptome (hg19 to hg38)
+###Mitranscriptome
+```bash
 wget -P genome/hg38/source http://mitranscriptome.org/download/mitranscriptome.gtf.tar.gz
 tar -C genome/hg38/source --strip-components=1 -zxf genome/hg38/source/mitranscriptome.gtf.tar.gz mitranscriptome.gtf/mitranscriptome.v2.gtf.gz
+# convert from hg19 to hg38
 zcat genome/hg38/source/mitranscriptome.v2.gtf.gz \
     | CrossMap.py gff genome/hg38/source/hg19ToHg38.over.chain.gz /dev/stdin genome/hg38/source/mitranscriptome.v2.hg38.gtf
+# remove invalid transcripts
 bin/preprocess.py fix_gtf -i genome/hg38/source/mitranscriptome.v2.hg38.gtf -o genome/hg38/gtf/mitranscriptome.gtf
+```
 
-# NONCODE
-wget -P genome/hg38/source http://www.noncode.org/datadownload/NONCODEv5_human_hg38_lncRNA.gtf.gz
-zcat genome/hg38/source/NONCODEv5_human_hg38_lncRNA.gtf.gz \
-    | awk 'BEGIN{FS="\t";OFS="\t"}$7 != "." {print $1,"NONCODE",$3,$4,$5,$6,$7,$8,$9}' > genome/hg38/gtf/noncode.gtf
-# HCC (Nature communications 2017)
-wget -P genome/hg38/source https://media.nature.com/original/nature-assets/ncomms/2017/170213/ncomms14421/extref/ncomms14421-s3.txt
-awk 'BEGIN{FS="\t";OFS="\t"}{print $1,"ncomms2017",$3,$4,$5,$6,$7,$8,$9}' genome/hg38/source/ncomms14421-s3.txt > genome/hg38/source/ncomms2017.gtf
-CrossMap.py gff genome/hg38/source/hg19ToHg38.over.chain.gz genome/hg38/source/ncomms2017.gtf genome/hg38/source/ncomms2017.hg38.gtf
-ln genome/hg38/source/ncomms2017.hg38.gtf genome/hg38/gtf/ncomms2017.gtf
-
+Extract lncRNA and TUCP RNA to separate GTF files:
+```bash
 grep 'tcat "lncrna"' genome/hg38/gtf/mitranscriptome.gtf > genome/hg38/gtf/mitranscriptome_lncRNA.gtf
 # add exon feature
 grep 'tcat "tucp"' genome/hg38/gtf/mitranscriptome.gtf \
     | awk 'BEGIN{OFS="\t";FS="\t"}{print;print $1,$2,"exon",$4,$5,$6,$7,$8,$9}' > genome/hg38/gtf/mitranscriptome_tucp.gtf
 cp genome/hg38/gtf/mitranscriptome_tucp.gtf genome/hg38/gtf_by_biotype/tucpRNA.gtf
+```
 
-# Merge lncRNA
+### NONCODE
+```bash
+wget -P genome/hg38/source http://www.noncode.org/datadownload/NONCODEv5_human_hg38_lncRNA.gtf.gz
+zcat genome/hg38/source/NONCODEv5_human_hg38_lncRNA.gtf.gz \
+    | awk 'BEGIN{FS="\t";OFS="\t"}$7 != "." {print $1,"NONCODE",$3,$4,$5,$6,$7,$8,$9}' > genome/hg38/gtf/noncode.gtf
+```
+
+### lncRNAs identified in HCC (Nature communications 2017)
+```bash
+wget -P genome/hg38/source https://media.nature.com/original/nature-assets/ncomms/2017/170213/ncomms14421/extref/ncomms14421-s3.txt
+awk 'BEGIN{FS="\t";OFS="\t"}{print $1,"ncomms2017",$3,$4,$5,$6,$7,$8,$9}' genome/hg38/source/ncomms14421-s3.txt > genome/hg38/source/ncomms2017.gtf
+CrossMap.py gff genome/hg38/source/hg19ToHg38.over.chain.gz genome/hg38/source/ncomms2017.gtf genome/hg38/source/ncomms2017.hg38.gtf
+ln genome/hg38/source/ncomms2017.hg38.gtf genome/hg38/gtf/ncomms2017.gtf
+```
+
+
+### Merge lncRNA (GENCODE and Mitranscriptome)
+```bash
 cat genome/hg38/gtf/gencode_lncRNA.gtf \
     genome/hg38/gtf/mitranscriptome_lncRNA.gtf \
     > genome/hg38/gtf/merged_lncRNA.gtf
 cp genome/hg38/gtf/merged_lncRNA.gtf genome/hg38/gtf_by_biotype/lncRNA.gtf
-# piRBase (v1.0)
+```
+
+### piRBase (v1.0)
+```bash
 wget -O genome/hg38/source/piRBase-hsa-v1.0.bed.gz http://www.regulatoryrna.org/database/piRNA/download/archive/v1.0/bed/piR_hg19_v1.0.bed.gz
 zcat genome/hg38/source/piRBase-hsa-v1.0.bed.gz \
     | CrossMap.py bed genome/hg38/source/hg19ToHg38.over.chain.gz /dev/stdin genome/hg38/source/piRBase-hsa-v1.0.hg38.bed
 bedToGenePred genome/hg38/source/piRBase-hsa-v1.0.hg38.bed genome/hg38/source/piRBase-hsa-v1.0.hg38.genePred
 genePredToGtf -source=piRBase file genome/hg38/source/piRBase-hsa-v1.0.hg38.genePred genome/hg38/source/piRBase-hsa-v1.0.hg38.gtf
 ln genome/hg38/source/piRBase-hsa-v1.0.hg38.gtf genome/hg38/gtf/piRBase.gtf
-# piRBase (v2.0)
+```
+
+### piRBase (v2.0)
+```bash
 wget -O genome/hg38/source/piRBase-hsa-v2.0.bed.gz http://www.regulatoryrna.org/database/piRNA/download/archive/v2.0/bed/hsa.bed.gz
 zcat genome/hg38/source/piRBase-hsa-v2.0.bed.gz | bedtools sort > source/piRBase-hsa-v2.0.bed
 bedToGenePred source/piRBase-hsa-v2.0.bed source/piRBase-hsa-v2.0.genePred
 genePredToGtf -source=piRBase file source/piRBase-hsa-v2.0.genePred source/piRBase-hsa-v2.0.gtf
-# Long RNA
-# merge GENCODE with other lncRNA databases and then remove miRNA
-#gffcompare -s genome/hg38/fasta/genome.fa -o genome/hg38/source/long_RNA \
-#    genome/hg38/gtf/gencode.gtf \
-#    genome/hg38/gtf/mitranscriptome_lncRNA.gtf
+```
+
+### Long RNA (GENCODE + Mitranscriptome - miRNA)
+```bash
 cat genome/hg38/gtf/gencode.gtf \
     genome/hg38/gtf/mitranscriptome_lncRNA.gtf \
     | grep -v 'gene_type "miRNA' \
     > genome/hg38/gtf/long_RNA.gtf
+```
 
-# piRNABank (NCBI36)
+### piRNABank (NCBI36)
+```bash
 wget -O genome/hg38/source/ http://pirnabank.ibab.ac.in/downloads/all/human_all.zip
 unzip genome/hg38/source/human_all.zip -d genome/hg38/source/
 mv genome/hg38/source/human_pir.txt genome/hg38/source/piRNABank.human.txt
@@ -114,8 +161,6 @@ bedToGenePred genome/hg38/source/piRNABank.human.bed genome/hg38/source/piRNABan
 genePredToGtf -source=piRNABank file genome/hg38/source/piRNABank.human.genePred stdout \
     | awk '$3=="exon"' > genome/hg38/source/piRNABank.human.gtf
 
-wget -O genome/hg38/source/hg18ToHg38.over.chain.gz http://hgdownload.soe.ucsc.edu/goldenPath/hg18/liftOver/hg18ToHg38.over.chain.gz
-wget -O genome/hg38/source/NCBI36_to_GRCh38.chain.gz https://sourceforge.net/projects/crossmap/files/Ensembl_chain_files/homo_sapiens%28human%29/NCBI36_to_GRCh38.chain.gz
 CrossMap.py gff genome/hg38/source/hg18ToHg38.over.chain.gz genome/hg38/source/piRNABank.human.gtf \
     genome/hg38/source/piRNABank.human.hg38.gtf
 cp genome/hg38/source/piRNABank.human.hg38.gtf genome/hg38/gtf/piRNABank.gtf
@@ -123,18 +168,24 @@ cp genome/hg38/gtf/piRNABank.gtf genome/hg38/gtf_by_biotype/piRNA.gtf
 gffread --bed -o genome/hg38/source/piRNABank.human.hg38.bed genome/hg38/source/piRNABank.human.hg38.gtf
 bedtools getfasta -s -name -fi genome/hg38/fasta/genome.fa -bed genome/hg38/source/piRNABank.human.hg38.bed -split \
     > genome/hg38/source/piRNABank.human.hg38.fa
+```
 
-# miRBase
+### miRBase
+```bash
 wget -O genome/hg38/source/miRBase.hsa.gff3 ftp://mirbase.org/pub/mirbase/CURRENT/genomes/hsa.gff3
+```
 
-# Intron
+### Intron
+```bash
 bin/preprocess.py extract_gene -i genome/hg38/gtf/long_RNA.gtf | bedtools sort > genome/hg38/bed/long_RNA.gene.bed
 awk 'BEGIN{OFS="\t";FS="\t"} !/^#/{match($9,/gene_id "([^"]+)"/,a);print $1,$4-1,$5,a[1],0,$7}' genome/hg38/gtf/long_RNA.gtf \
     | bedtools sort > genome/hg38/bed/long_RNA.exon.bed
 bedtools subtract -sorted -s -a genome/hg38/bed/long_RNA.gene.bed -b genome/hg38/bed/long_RNA.exon.bed \
     | bedtools sort > genome/hg38/bed/long_RNA.intron.bed
+```
 
-# Promoter/enhancer from ChromHMM (hg19)
+### Promoter/enhancer from ChromHMM (hg19)
+```bash
 wget -P genome/hg38/source http://hgdownload.soe.ucsc.edu/goldenPath/hg19/encodeDCC/wgEncodeBroadHmm/wgEncodeBroadHmmGm12878HMM.bed.gz
 wget -P genome/hg38/source http://hgdownload.soe.ucsc.edu/goldenPath/hg19/encodeDCC/wgEncodeBroadHmm/wgEncodeBroadHmmH1hescHMM.bed.gz
 wget -P genome/hg38/source http://hgdownload.soe.ucsc.edu/goldenPath/hg19/encodeDCC/wgEncodeBroadHmm/wgEncodeBroadHmmHepg2HMM.bed.gz
@@ -143,7 +194,8 @@ wget -P genome/hg38/source http://hgdownload.soe.ucsc.edu/goldenPath/hg19/encode
 wget -P genome/hg38/source http://hgdownload.soe.ucsc.edu/goldenPath/hg19/encodeDCC/wgEncodeBroadHmm/wgEncodeBroadHmmHuvecHMM.bed.gz
 wget -P genome/hg38/source http://hgdownload.soe.ucsc.edu/goldenPath/hg19/encodeDCC/wgEncodeBroadHmm/wgEncodeBroadHmmK562HMM.bed.gz
 wget -P genome/hg38/source http://hgdownload.soe.ucsc.edu/goldenPath/hg19/encodeDCC/wgEncodeBroadHmm/wgEncodeBroadHmmNhekHMM.bed.gz
-wget -P genome/hg38/source http://hgdownload.soe.ucsc.edu/goldenPath/hg19/encodeDCC/wgEncodeBroadHmm/wgEncodeBroadHmmNhlfHMM.bed.gz
+wget -P genome/hg38/source http://hgdownload.soe.ucsc.edu/goldenPath/hg19/encodeDCC/wgEncodeBroadHmm/wgEncodeBroadHmmNhlfHMM.bed.g`
+
 # hg19 => hg38
 tracks="wgEncodeBroadHmmGm12878HMM wgEncodeBroadHmmH1hescHMM wgEncodeBroadHmmHepg2HMM
     wgEncodeBroadHmmHmecHMM wgEncodeBroadHmmHsmmHMM wgEncodeBroadHmmHuvecHMM
@@ -162,15 +214,22 @@ cat $(for track in $tracks;do echo genome/hg38/bed/promoter.${track}.bed;done) \
 cat $(for track in $tracks;do echo genome/hg38/bed/enhancer.${track}.bed;done) \
     | bedtools sort | bedtools merge -d 1 \
     | awk 'BEGIN{OFS="\t";FS="\t"}{print $1,$2,$3,"enhancer",0,"."}' > genome/hg38/bed/enhancer.merged.bed
+```
 
-# Repeats
+### Repeats
 UCSC GenomeBrowser -> Tools -> Table Browser:
 assembly: GRCh38/hg38
 group: repeats
 track: RepeatMasker
 table: rmsk
 
-# circRNA database (circBase)
+Dowload to: genome/hg38/source/rmsk.bed.gz
+```bash
+gunzip -c genome/hg38/source/rmsk.bed.gz > genome/hg38/bed/rmsk.bed
+```
+
+### circRNA database (circBase)
+```bash
 wget -O genome/hg38/source/circbase.hg19.fa.gz http://www.circbase.org/download/human_hg19_circRNAs_putative_spliced_sequence.fa.gz
 zcat genome/hg38/source/circbase.hg19.fa.gz | bin/preprocess.py extract_circrna_junction -s 50 -o genome/hg38/fasta/circbase.junction.fa
 samtools faidx genome/hg38/fasta/circbase.junction.fa
