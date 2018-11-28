@@ -1,22 +1,22 @@
 ## Annotation summary table
 
-| Type | Source |
-| ---- | ------ |
-| miRNA | GENCODE V27 |
-| piRNA | piRNABank | 
-| lncRNA | GENCODE V27 and mitranscriptome |
-| rRNA | GENCODE V27 |
-| mRNA | GENCODE V27 |
-| snoRNA | GENCODE V27 |
-| snRNA | GENCODE V27 |
-| srpRNA | GENCODE V27 |
-| tRNA | GENCODE V27 |
-| tucpRNA | GENCODE V27 |
-| Y_RNA | GENCODE V27 |
-| circRNA | circBase |
-| repeats | UCSC Genome Browser (rmsk) |
-| promoter | ChromHMM tracks from 9 cell lines from UCSC Genome Browser |
-| enhancer | ChromHMM tracks from 9 cell lines from UCSC Genome Browser |
+| Type | Number of genes  | Source |
+| ---- | ---- | ------ |
+| miRNA | 1881 | GENCODE V27 (precursor) |
+| piRNA | 23431 | piRNABank | 
+| lncRNA | 15778 | GENCODE V27 and mitranscriptome |
+| rRNA | 544 | GENCODE V27 |
+| mRNA | 19836 | GENCODE V27 |
+| snoRNA | 943 | GENCODE V27 |
+| snRNA | 1900 | GENCODE V27 |
+| srpRNA | 680 | GENCODE V27 |
+| tRNA | 649 | GENCODE V27 |
+| tucpRNA | 3734 | GENCODE V27 |
+| Y_RNA | 756 | GENCODE V27 |
+| circRNA | 140527 | circBase |
+| repeats | - | UCSC Genome Browser (rmsk) |
+| promoter | - | ChromHMM tracks from 9 cell lines from UCSC Genome Browser |
+| enhancer | - | ChromHMM tracks from 9 cell lines from UCSC Genome Browser |
 
 
 ## Genome and annotation files
