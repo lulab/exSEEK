@@ -9,7 +9,15 @@
 
 Install required software packages according to [requirements](docs/requirements.md)
 
+Download the scripts:
+
+```bash
+git clone https://github.com/lulab/exSeek-dev.git
+```
+
 ## Prepare genome and annotations
+
+**Processed files**: `/BioII/lulab_b/shared/genomes/hg38`
 
 ### Download and process genome sequences
 
@@ -27,14 +35,14 @@ snakemake --snakefile snakemake/prepare_genome.snakemake \
 | File name | Description |
 | ------ | ----------- |
 | `${input_dir}/fastq/${sample_id}.fastq` | Read files (single-end sequencing) |
-| `${input_dir}/fastq/${sample_id}_1.fastq`, `${input_dir}/fastq/${sample_id}_1.fastq` | Read files (paired-end sequencing) |
+| `${input_dir}/fastq/${sample_id}_1.fastq`, `${input_dir}/fastq/${sample_id}_2.fastq` | Read files (paired-end sequencing) |
 | `${input_dir}/sample_ids.txt` | A text file with one sample ID per line. |
 
 ## Configuration
 
 All parameters are specified in a configuration file in [YAML](https://en.wikipedia.org/wiki/YAML) format.
 
-An example configuration file is `snakemake/config.yaml`.
+An example configuration file is (snakemake/config.yaml).
 
 The parameter values in the configuration file can also be overrided through the `--config` option in [snakemake](https://snakemake.readthedocs.io/en/stable/executable.html).
 
@@ -62,6 +70,49 @@ The following parameters should be changed:
 | --dryrun | Do not execute |
 | -k | Do not stop when an independent job fails |
 
+## Submit jobs to a computer cluster using snakemake
+
+Please refer the [link](https://snakemake.readthedocs.io/en/stable/snakefiles/configuration.html#cluster-configuration) for descriptions of cluster configuration file.
+
+### IBM LSF
+
+**Configuration file**: `snakemake/cluster.yaml`
+
+Here is an example configuration:
+
+```yaml
+__default__:
+  queue: Z-LU
+  name: {rule}.{wildcards}
+  stderr: logs/cluster/{rule}/{wildcards}.stderr
+  stdout: logs/cluster/{rule}/{wildcards}.stdout
+  threads: {threads}
+  resources: span[hosts=1]
+```
+
+**Commonly used parameters**
+
+| Parameter | Description |
+| ------ | ----------- |
+| `__default__` | Rule name (`__default__` for default configuration) | 
+| `queueq | Queue name |
+| `name` | Job name |
+| `stderr` | Log file for standard error |
+| `stdout` | Log file for standard output |
+| `threads` | Number of parallel threads for a job |
+| `resources` | Resource requirements. `span[hosts=1]` prevents parallel jobs from being submitted to different nodes |
+
+**Run snakemake**
+```bash
+snakemake --snakefile snakemake/${snakefile} \
+    --configfile snakemake/config.yaml \
+    --cluster 'bsub -q {cluster.queue} -J {cluster.name} -e {cluster.stderr} \
+-o {cluster.stdout} -R {cluster.resources} -n {cluster.threads}' \
+    --cluster-config snakemake/cluster.yaml \
+    --rerun-incomplete -k -j40
+```
+**Note**: replace `${snakefile}` with a Snakefile.
+
 ## Mapping (small RNA-seq)
 
 ### Generate snakemake rules for sequential mapping
@@ -81,16 +132,16 @@ snakemake --snakefile snakemake/mapping_small.snakemake \
 | File name | Descrpition |
 | --------- | ----------- |
 | `snakemake/sequential_mapping.snakemake` | Snakefile for sequential mapping. Required by snakemake/mapping_small.snakemake |
-| `output/${dataset}/cutadapt/${sample_id}.fastq` | Reads with adaptor trimmed |
-| `output/${dataset}/tbam/${sample_id}/${rna_type}.bam` | BAM files in transcript coordinates |
-| `output/${dataset}/gbam/${sample_id}/${rna_type}.bam` | BAM files in genome coordinates |
-| `output/${dataset}/unmapped/${sample_id}/${rna_type}.fa.gz` | Unmapped reads in each step |
-| `output/${dataset}/fastqc/${sample_id}_fastqc.html` | FastQC report file |
-| `output/${dataset}/summary/fastqc.html` | Summary report for FastQC (HTML) |
-| `output/${dataset}/summary/fastqc.txt`  | Summary table for FastQC |
-| `output/${dataset}/summary/fastqc.ipynb` | Summary report for FastQC (Jupyter notebook) |
-| `output/${dataset}/summary/read_counts.txt` | Summary table for read counts |
-| `output/${dataset}/stats/mapped_read_length_by_sample/${sample_id}` | Length distribution of mapped reads |
+| `${output_dir}/cutadapt/${sample_id}.fastq` | Reads with adaptor trimmed |
+| `${output_dir}/tbam/${sample_id}/${rna_type}.bam` | BAM files in transcript coordinates |
+| `${output_dir}/gbam/${sample_id}/${rna_type}.bam` | BAM files in genome coordinates |
+| `${output_dir}/unmapped/${sample_id}/${rna_type}.fa.gz` | Unmapped reads in each step |
+| `${output_dir}/fastqc/${sample_id}_fastqc.html` | FastQC report file |
+| `${output_dir}/summary/fastqc.html` | Summary report for FastQC (HTML) |
+| `${output_dir}/summary/fastqc.txt`  | Summary table for FastQC |
+| `${output_dir}/summary/fastqc.ipynb` | Summary report for FastQC (Jupyter notebook) |
+| `${output_dir}/summary/read_counts.txt` | Summary table for read counts |
+| `${output_dir}/stats/mapped_read_length_by_sample/${sample_id}` | Length distribution of mapped reads |
 
 
 ## Generate expression matrix

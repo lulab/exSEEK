@@ -34,8 +34,8 @@
 | `gtf/piRNABank.gtf` | piRNA GTF file from piRNABank |
 | `gtf/gencode_tRNA.gtf` | GTF file of tRNA from GENCODE |
 | `transcript_table/all.txt` | Table of transcript information (gene_id, transcript_id) |
-| `rsem_index/bowtie2/${rna_type}` | RSEM index files for each RNA type |
-| `rsem_index/bowtie2/${rna_type}.transcripts.fa` | Sequence for each RNA type |
+| `rsem_index/bowtie2/${rna_type}` | RSEM index files for each RNA type (built using the longest transcripts) |
+| `rsem_index/bowtie2/${rna_type}.transcripts.fa` | Sequence for each RNA type (longest transcripts) |
 | `gtf_longest_transcript/${rna_type}.gtf` | GTF files for the longest isoforms from GENCODE and Mitranscriptome |
 | `bed/*.bed` | Transcript in BED12 format extracted from GTF files in `gtf/*.gtf |
 | `index/bowtie2/circRNA` | Bowtie2 index for cirRNA |
