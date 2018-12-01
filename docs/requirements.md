@@ -52,6 +52,8 @@ List of all available Bioconda packages: (https://bioconda.github.io/recipes.htm
 * RUVSeq
 * sva
 * scRNA.seq.funcs
+* VGAM
+* countreg (R-forge)
 
 **Other packages**
 * [find_circ 1.2](https://github.com/marvin-jens/find_circ) (depends on Python 2.7)

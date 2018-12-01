@@ -1,26 +1,29 @@
-shell.prefix('set -x;')
+include: '../common'
 
-with open(config['sample_id_file'], 'r') as f:
-    sample_ids = f.read().split()
-# check validity of sample_ids
-for sample_id in sample_ids:
-    if '.' in sample_id:
-        raise ValueError('sample IDs cannot contain ".": {}'.format(sample_id))
-# check validity of rna_types
-for rna_type in rna_types:
-    if '.' in rna_type:
-        raise ValueError('RNA type cannot contain ".": {}'.format(sample_id))
+def get_all_inputs(wildcards):
+    available_inputs = dict(
 
-data_dir = config['data_dir']
-output_dir = config['output_dir']
+    )
+    enabled_inputs = list(available_inputs.keys())
+    inputs = []
+    for key, l in available_inputs.items():
+        if key in enabled_inputs:
+            inputs += l
+    return inputs
+
+
+rule all:
+    input:
+        get_all_inputs
+
 
 rule cutadapt_paired:
     input:
-        fastq1='{data_dir}/{sample_id}_1.fastq',
-        fastq2='{data_dir}/{sample_id}_2.fastq'
+        fastq1=data_dir + '/fastq/{sample_id}_1.fastq',
+        fastq2=data_dir + '/fastq/{sample_id}_2.fastq'
     output:
-        fastq1='{output_dir}/cutadapt/{sample_id}.fastq',
-        fastq2='{output_dir}/cutadapt/{sample_id}.fastq'
+        fastq1='{output_dir}/cutadapt/{sample_id}_1.fastq',
+        fastq2='{output_dir}/cutadapt/{sample_id}_2.fastq'
     threads:
         config['threads']
     params:
@@ -42,14 +45,16 @@ rule cutadapt_paired:
 
 rule map_star_paired:
     input:
-        fastq1='{data_dir}/{sample_id}_1.fastq',
-        fastq2='{data_dir}/{sample_id}_2.fastq',
+        fastq1=data_dir + '/{sample_id}_1.fastq',
+        fastq2=data_dir + '/{sample_id}_2.fastq',
         index=genome_dir + '/long_index/star'
     output:
-        bam='{output_dir}/mapping/{sample_id}.bam',
-        star_bam='{output_dir}/star_long/{sample_id}/Aligned.out.bam'
+        bam='{output_dir}/mapping_long/star/{sample_id}.bam',
+        unmapped='{output_dir}/unmapped/{sample_id}/genome.fa',
+        star_bam='{output_dir}/mapping_long/star/{sample_id}/Aligned.out.bam',
+        star_unmapped='{output_dir}/mapping_long/star/{sample_id}/Unmapped.out'
     params:
-        output_prefix='{output_dir}/star_long/{sample_id}/'
+        output_prefix='{output_dir}/mapping_long/star/{sample_id}/'
     threads:
         mapping_threads
     shell:
@@ -63,7 +68,7 @@ rule map_star_paired:
     
 rule remove_duplicates:
     input:
-        bam='{output_dir}/mapping/{sample_id}.bam'
+        bam='{output_dir}/gbam/{sample_id}.bam'
     output:
         bam='{output_dir}/remove_duplicates/{sample_id}.bam',
         metrics='{output_dir}/remove_duplicates/{sample_id}.metrics'
@@ -72,13 +77,4 @@ rule remove_duplicates:
             I={input.bam} \
             O={output.bam} \
             M={output.metrics}
-        '''
-
-rule generate_gbam:
-    input:
-        '{output_dir}/remove_duplicates/{sample_id}.bam'
-    output:
-        '{output_dir}/gbam/{sample_id}.bam'
-    shell:
-        '''ln -f {input} {output}
         '''

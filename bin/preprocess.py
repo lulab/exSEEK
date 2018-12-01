@@ -299,6 +299,16 @@ def filter_circrna_reads(args):
     if sam_filtered is not None:
         sam_filtered.close()
 
+@command_handler
+def chrom_sizes(args):
+    from Bio import SeqIO
+    from ioutils import open_file_or_stdin, open_file_or_stdout
+
+    fout = open_file_or_stdout(args.output_file)
+    with open_file_or_stdin(args.input_file) as fin:
+        for record in SeqIO.parse(fin, 'fasta'):
+            fout.write('{}\t{}\n'.format(record.id, len(record.seq)))
+        
 if __name__ == '__main__':
     main_parser = argparse.ArgumentParser(description='Preprocessing module')
     subparsers = main_parser.add_subparsers(dest='command')
@@ -367,6 +377,13 @@ if __name__ == '__main__':
         help='output SAM file')
     parser.add_argument('--filtered-file', '-u', type=str,
         help='write filtered SAM records to file')
+    
+    parser = subparsers.add_parser('chrom_sizes',
+        help='create chrom sizes file from FASTA file')
+    parser.add_argument('--input-file', '-i', type=str, default='-',
+        help='input FASTA')
+    parser.add_argument('--output-file', '-o', type=str, default='-',
+        help='output chrom sizes file')
 
     args = main_parser.parse_args()
     if args.command is None:

@@ -1,7 +1,7 @@
-rna_types: [rRNA, lncRNA, miRNA, mRNA, piRNA, snoRNA, snRNA, srpRNA, tRNA, tucpRNA, Y_RNA]
+rna_types: [rRNA, lncRNA, miRNA, mRNA, piRNA, snoRNA, 
+  snRNA, srpRNA, tRNA, tucpRNA, Y_RNA]
 threads: 4
-sample_id_file: metadata/sample_ids.scirep_small.txt
-pvalues": ["01", "05"]
+pvalues: "05"
 distribution: ZeroTruncatedNegativeBinomial
 bin_size: 20
 cov_threshold: 0.2
@@ -26,13 +26,14 @@ annotation_dir: genome/hg38
 genome_dir: genome/hg38
 output_dir: output/scirep
 temp_dir: tmp
+sample_id_file: metadata/sample_ids.scirep.txt
+data_dir: data/scirep
 
 # general parameters
 threads_compress: 1
 
 # mapping parameters
 aligner: bowtie2
-data_dir: data/scirep
 adaptor: AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC
 adaptor1: AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC
 adaptor2: AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT
@@ -43,7 +44,7 @@ min_base_quality_5p: 30
 min_base_quality_3p: 30
 quality_base: 33
 strandness: "forward"
-min_mapping_quality: 10
+min_mapping_quality: 0
 use_longest_transcript: true
 star_sjdboverhang: 100
 threads_mapping: 4

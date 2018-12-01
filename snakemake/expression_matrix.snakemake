@@ -1,6 +1,7 @@
 include: '../common'
 
 count_methods = ['featurecounts', 'htseq', 'transcript']
+count_methods = ['transcript']
 # remove rRNA and spikein
 rna_types = list(filter(lambda x: x not in ('rRNA', 'spikein'), rna_types))
 

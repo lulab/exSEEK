@@ -27,8 +27,6 @@ def get_all_inputs(wildcards):
     available_inputs = dict(
         tbam_to_gbam=expand('{output_dir}/gbam/{sample_id}/{rna_type}.bam', 
             output_dir=output_dir, sample_id=sample_ids, rna_type=rna_types),
-        bam=expand('{output_dir}/tbam/{sample_id}/{rna_type}.bam',
-            output_dir=output_dir, sample_id=sample_ids, rna_type=rna_types + ['other', 'circRNA']),
         fastqc=expand('{output_dir}/fastqc/{sample_id}_fastqc.zip',
             output_dir=output_dir, sample_id=sample_ids),
         summarize_fastqc=expand('{output_dir}/summary/fastqc.txt',
@@ -37,9 +35,9 @@ def get_all_inputs(wildcards):
             output_dir=output_dir),
         summarize_read_counts=expand('{output_dir}/summary/read_counts.txt',
             output_dir=output_dir),
-        collect_alignment_summary_metrics=expand('{output_dir}/alignment_summary_metrics/{sample_id}/{rna_type}',
-            output_dir=output_dir, sample_id=sample_ids, rna_type=rna_types + ['other']),
         mapped_read_length=expand('{output_dir}/stats/mapped_read_length_by_sample/{sample_id}',
+            output_dir=output_dir, sample_id=sample_ids),
+        bigwig=expand('{output_dir}/bigwig/{sample_id}.bigWig',
             output_dir=output_dir, sample_id=sample_ids)
     )
     enabled_inputs = list(available_inputs.keys())
@@ -73,7 +71,7 @@ rule read_counts_mapped:
     output:
         '{output_dir}/stats/read_counts_mapped/{sample_id}/{rna_type}'
     wildcard_constraints:
-        rna_type='(?!promoter$)(?!enhancer$)(?!intron$).*'
+        rna_type='(?!promoter$)(?!enhancer$)(?!intron$)(?!repeats$).*'
     shell:
         '''bamtools count -in {input} > {output}
         '''
@@ -95,7 +93,7 @@ rule summarize_read_counts:
             output_dir=wildcards.output_dir, sample_id=sample_ids),
         mapped=lambda wildcards: expand('{output_dir}/stats/read_counts_mapped/{sample_id}/{rna_type}',
             output_dir=wildcards.output_dir, sample_id=sample_ids, 
-            rna_type=rna_types + ['other', 'promoter', 'enhancer', 'intron', 'circRNA']),
+            rna_type=rna_types + ['other', 'promoter', 'enhancer', 'intron', 'circRNA', 'repeats']),
         unmapped=lambda wildcards: expand('{output_dir}/stats/read_counts_unmapped/{sample_id}/{rna_type}',
             output_dir=wildcards.output_dir, sample_id=sample_ids, rna_type=rna_types + ['clean', 'other', 'circRNA'])
     output:
@@ -229,12 +227,14 @@ import numpy as np"""))
         nb['cells'].append(new_code_cell(r"""summary = pd.read_table('fastqc.txt', sep='\t')"""))
         nb['cells'].append(new_code_cell(r"""summary.set_index('sample_id', inplace=True, drop=False)
 qc_status = summary.iloc[:, 9:].copy()
+qc_status.fillna('NA')
+qc_status = qc_status.astype('str')
 sample_ids = qc_status.index.values
 sections = qc_status.columns.values
 def style_func(val):
     status, row, col = val.split('|')
     row, col = int(row), int(col)
-    color = {'pass': 'green', 'fail': 'red', 'warn': 'orange'}[status]
+    color = {'pass': 'green', 'fail': 'red', 'warn': 'orange'}.get(status, 'gray')
     return '<a href="../fastqc/{sample_id}_fastqc.html#M{section}" style="color: {color}">{status}</a>'.format(
         sample_id=sample_ids[row], color=color, status=status, section=col)
 
@@ -278,8 +278,7 @@ rule cutadapt:
     input:
         data_dir + '/fastq/{sample_id}.fastq'
     output:
-        trimmed='{output_dir}/cutadapt/{sample_id}.fastq',
-        too_short='{output_dir}/too_short/{sample_id}.fastq'
+        trimmed='{output_dir}/cutadapt/{sample_id}.fastq'
     params:
         adaptor=config['adaptor'],
         min_read_length=config['min_read_length']
@@ -289,7 +288,7 @@ rule cutadapt:
         config['threads_compress']
     shell:
         '''cutadapt -a {params.adaptor} -m {params.min_read_length} --trim-n -q {min_base_quality} \
-            --too-short-output >(pigz -c -p {threads} > {output.too_short}) -o {output.trimmed} {input}
+            -o {output.trimmed} {input}
         '''
 
 rule fastq_to_fasta:
@@ -317,30 +316,53 @@ rule tbam_to_gbam:
 
 rule sort_gbam:
     input:
-        '{output_dir}/tbam/{sample_id}.{rna_type}.bam'
+        '{output_dir}/gbam/{sample_id}/{rna_type}.bam'
     output:
-        bam='{output_dir}/gbam_sorted/{sample_id}.{rna_type}.bam',
-        bai='{output_dir}/gbam_sorted/{sample_id}.{rna_type}.bam.bai'
+        bam='{output_dir}/gbam_sorted/{sample_id}/{rna_type}.bam',
+        bai='{output_dir}/gbam_sorted/{sample_id}/{rna_type}.bam.bai'
+    params:
+        temp_dir=config['temp_dir']
     shell:
-        '''samtools sort {input} > {output.bam}
+        '''samtools sort -T {params.temp_dir} -o {output.bam} {input}
         samtools index {output.bam}
+        '''
+
+rule gbam_to_gbed:
+    input:
+        '{output_dir}/gbam/{sample_id}/{rna_type}.bam'
+    output:
+        '{output_dir}/gbed/{sample_id}/{rna_type}.bed.gz'
+    shell:
+        '''bedtools bamtobed -i {input} -split \
+            | LC_COLLATE=C sort -k1,1 -k2,2n \
+            | pigz -c > {output}
         '''
 
 rule gbam_to_bedgraph:
     input:
-        '{output_dir}/gbam_sorted/{sample_id}.{rna_type}.bam'
+        '{output_dir}/gbam_sorted/{sample_id}/{rna_type}.bam'
     output:
-        '{output_dir}/gbedgraph/{sample_id}.{rna_type}.bedGraph'
+        '{output_dir}/bedgraph_by_biotype/{sample_id}/{rna_type}.bedGraph'
     shell:
-        '''bedtools genomecov -ibam {input} -bg -split > {output}
+        '''bedtools genomecov -ibam {input} -bg -split | LC_COLLATE=C sort -k1,1 -k2,2n > {output}
+        '''
+
+rule merge_bedgraphs:
+    input:
+        lambda wildcards: expand('{output_dir}/bedgraph_by_biotype/{sample_id}/{rna_type}.bedGraph',
+            output_dir=wildcards.output_dir, sample_id=wildcards.sample_id, rna_type=rna_types)
+    output:
+        '{output_dir}/bedgraph/{sample_id}.bedGraph'
+    shell:
+        '''LC_COLLATE=C sort -k1,1 -k2,2n -m {input} > {output}
         '''
 
 rule gbedgraph_to_bigwig:
     input:
-        bedgraph='{output_dir}/gbedgraph/{sample_id}.{rna_type}.bedGraph',
+        bedgraph='{output_dir}/bedgraph/{sample_id}.bedGraph',
         chrom_sizes=genome_dir + '/chrom_sizes/genome'
     output:
-        '{output_dir}/gbigwig/{sample_id}.{rna_type}.bigWig'
+        '{output_dir}/bigwig/{sample_id}.bigWig'
     shell:
         '''bedGraphToBigWig {input.bedgraph} {input.chrom_sizes} {output}
         '''
@@ -365,34 +387,53 @@ rule collect_alignment_summary_metrics:
         '''picard CollectAlignmentSummaryMetrics I={input} O={output}
         '''
 
+rule bam_to_bed:
+    input:
+        bam='{output_dir}/gbam/{sample_id}/{rna_type}.bam'
+    output:
+        bed='{output_dir}/gbed/{sample_id}/{rna_type}.bed.gz'
+    shell:
+        '''bedtools bamtobed -i {input} | bedtools sort | pigz -c > {output}
+        '''
+
 rule count_reads_intron:
     input:
-        bam='{output_dir}/gbam/{sample_id}/other.bam',
+        reads='{output_dir}/gbed/{sample_id}/other.bed.gz',
         bed=genome_dir + '/bed/long_RNA.intron.bed'
     output:
         '{output_dir}/stats/read_counts_mapped/{sample_id}/intron'
     shell:
-        '''bedtools intersect -wa -s -a {input.bam} -b {input.bed} | wc -l > {output}
+        '''pigz -d -c {input.reads} | bedtools intersect -bed -wa -s -a - -b {input.bed} | wc -l > {output}
         '''
 
 rule count_reads_promoter:
     input:
-        bam='{output_dir}/gbam/{sample_id}/other.bam',
+        reads='{output_dir}/gbed/{sample_id}/other.bed.gz',
         bed=genome_dir + '/bed/promoter.merged.bed'
     output:
         '{output_dir}/stats/read_counts_mapped/{sample_id}/promoter'
     shell:
-        '''bedtools intersect -wa -a {input.bam} -b {input.bed} | wc -l > {output}
+        '''pigz -d -c {input.reads} | bedtools intersect -bed -wa -a - -b {input.bed} | wc -l > {output}
         '''
 
 rule count_reads_enhancer:
     input:
-        bam='{output_dir}/gbam/{sample_id}/other.bam',
+        reads='{output_dir}/gbed/{sample_id}/other.bed.gz',
         bed=genome_dir + '/bed/enhancer.merged.bed'
     output:
         '{output_dir}/stats/read_counts_mapped/{sample_id}/enhancer'
     shell:
-        '''bedtools intersect -wa -a {input.bam} -b {input.bed} | wc -l > {output}
+        '''pigz -d -c {input.reads} | bedtools intersect -bed -wa -a - -b {input.bed} | wc -l > {output}
+        '''
+
+rule count_reads_rmsk:
+    input:
+        reads='{output_dir}/gbed/{sample_id}/other.bed.gz',
+        bed=genome_dir + '/bed/rmsk.bed'
+    output:
+        '{output_dir}/stats/read_counts_mapped/{sample_id}/repeats'
+    shell:
+        '''pigz -d -c {input.reads} | bedtools intersect -bed -wa -s -a - -b {input.bed} | wc -l > {output}
         '''
 
 rule map_circRNA:

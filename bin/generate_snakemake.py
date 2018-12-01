@@ -21,7 +21,8 @@ def get_aligner_index(aligner, rna_type, genome_dir=''):
     else:
         raise ValueError('unknown aligner: {}'.format(aligner))
 
-@command_handler
+
+#@command_handler
 def sequential_mapping(args):
     import string
     from ioutils import open_file_or_stdout
@@ -38,12 +39,13 @@ rule map_${rna_type}:
         unmapped='{output_dir}/unmapped/{sample_id}/${rna_type}.fa.gz',
         bam='{output_dir}/${bam_type}/{sample_id}/${rna_type}.bam'
     params:
-        index=genome_dir + '${index}'
+        index=genome_dir + '${index}',
+        norc='--norc' if ${norc} else ''
     threads: 
         config['threads_mapping']
     shell:
         '''pigz -d -c {input.reads} \
-        | bowtie2 -f -p {threads} --norc --sensitive --no-unal \\
+        | bowtie2 -f -p {threads} {params.norc} --sensitive --no-unal \\
             --un-gz {output.unmapped} -x {params.index} - -S - \\
         | samtools view -b -o {output.bam}
         '''
@@ -94,6 +96,22 @@ rule map_${rna_type}:
     with open_file_or_stdout(args.output_file) as fout:
         fout.write(content)
 
+@command_handler
+def sequential_mapping(args):
+    from jinja2 import Template, Environment
+    from ioutils import open_file_or_stdout
+
+    rna_types = []
+    if len(args.rna_types) > 0:
+        rna_types = args.rna_types.split(',')
+
+    logger.info('load template: ' + args.template)
+    env = Environment(lstrip_blocks=True, trim_blocks=True)
+    with open(args.template, 'r') as f:
+        template = env.from_string(f.read())
+    with open_file_or_stdout(args.output_file) as f:
+        f.write(template.render(rna_types=rna_types, aligner=args.aligner))
+
 if __name__ == '__main__':
     main_parser = argparse.ArgumentParser(description='Count reads in BAM files')
     subparsers = main_parser.add_subparsers(dest='command')
@@ -104,6 +122,8 @@ if __name__ == '__main__':
         help='comma-separated list of rna types')
     parser.add_argument('--aligner', type=str, default='bowtie2',
         help='aligner to use')
+    parser.add_argument('--template', '-t', type=str, default='templates/sequential_mapping.snakemake',
+        help='template for snakefile')
     parser.add_argument('--output-file', '-o', type=str, default='-',
         help='output file')
     

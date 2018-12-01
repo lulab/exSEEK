@@ -33,10 +33,11 @@ def get_all_inputs(wildcards):
             genome_dir=genome_dir),
         long_index_star=expand('{genome_dir}/long_index/star/Genome', genome_dir=genome_dir),
         circrna_index_bowtie2=expand('{genome_dir}/index/bowtie2/circRNA.1.bt2',
-            genome_dir=genome_dir)
+            genome_dir=genome_dir),
+        chrom_sizes=expand('{genome_dir}/chrom_sizes/transcriptome', genome_dir=genome_dir)
     )
-    available_inputs['rsem_index']
-    del available_inputs['long_index_star']
+    del available_inputs['rsem_index']
+    available_inputs['long_index_star']
     enabled_inputs = list(available_inputs.keys())
     inputs = []
     for key, l in available_inputs.items():
@@ -256,4 +257,25 @@ rule gtf_longest_transcript:
         '{genome_dir}/gtf_longest_transcript/{rna_type}.gtf'
     shell:
         '''bin/preprocess.py extract_longest_transcript -i {input} -o {output}
+        '''
+
+rule transcript_sizes:
+    input:
+        '{genome_dir}/bed_by_biotype/{rna_type}.bed'
+    output:
+        '{genome_dir}/chrom_sizes/{rna_type}'
+    wildcard_constraints:
+        rna_type='(?!transcriptome$)(?!genome$).*'
+    shell:
+        '''awk 'BEGIN{{OFS="\t";FS="\t"}}{{split($11,a,",");s=0;for(i in a){{s += a[i]}}; print $4,s}}' {input} > {output}
+        '''
+
+rule merge_transcript_sizes:
+    input:
+        lambda wildcards: expand('{genome_dir}/chrom_sizes/{rna_type}',
+            genome_dir=wildcards.genome_dir, rna_type=rna_types)
+    output:
+        '{genome_dir}/chrom_sizes/transcriptome'
+    shell:
+        '''cat {input} > {output}
         '''

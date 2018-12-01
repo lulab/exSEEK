@@ -1,14 +1,9 @@
 shell.prefix('set -x;')
-configfile: 'snakemake/config.json'
-
-if not config.get('sample_id_file'):
-    raise ValueError('config.sample_id_file is empty')
-
-with open(config['sample_id_file'], 'r') as f:
-    sample_ids = f.read().split()
+include: 'common'
 
 output_dir = config['output_dir']
 rna_types = config['rna_types']
+rna_types_long = [rna_type for rna_type in config['rna_types'] if rna_type not in ('miRNA', 'piRNA')]
 piranha_path = '../piranha-exrna-1.2.1/bin'
 normalize_methods = config['normalize_methods']
 
@@ -20,7 +15,7 @@ def get_all_inputs(wildcards):
             annotation_dir=config['annotation_dir']),
         normalize_matrix=expand('{output_dir}/normalized_matrix/{normalize_method}/domains_{pvalue}.txt',
             output_dir=output_dir, pvalue=config['pvalues'], normalize_method=normalize_methods)
-    )
+    }
     enabled_inputs = list(available_inputs)
     inputs = []
     for key, l in available_inputs.items():
@@ -57,7 +52,7 @@ rule bam_to_bed:
     input:
         '{output_dir}/gbam/{sample_id}/{rna_type}.bam'
     output:
-        '{output_dir}/gbed_by_rnatype/{sample_id}/{rna_type}.bed.gz'
+        '{output_dir}/gbed/{sample_id}/{rna_type}.bed.gz'
     threads: config['threads']
     shell:
         '''bedtools bamtobed -i {input} | pigz -c -p {threads} > {output}
@@ -65,10 +60,10 @@ rule bam_to_bed:
 
 rule merge_bam_by_rnatype:
     input:
-        lambda wildcards: expand('{output_dir}/gbed_by_rnatype/{sample_id}/{rna_type}.bed.gz',
+        lambda wildcards: expand('{output_dir}/gbed/{sample_id}/{rna_type}.bed.gz',
             output_dir=wildcards.output_dir, sample_id=wildcards.sample_id, rna_type=rna_types)
     output:
-        '{output_dir}/gbed/{sample_id}.bed.gz'
+        '{output_dir}/gbed_long_RNA/{sample_id}.bed.gz'
     threads: 2
     shell:
         '''pigz -p {threads} -d -c {input} \
