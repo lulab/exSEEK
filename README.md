@@ -33,6 +33,7 @@ An example configuration file is `snakemake/config.yaml`.
 The parameter values in the configuration file can also be overrided through the `--config` option in [snakemake](https://snakemake.readthedocs.io/en/stable/executable.html).
 
 The following parameters should be changed:
+
 | Parameter | Description | Example |
 | ------ | ----------- | ------- |
 | `genome_dir` | Directory for genome and annotation files | `genome/hg38` |
