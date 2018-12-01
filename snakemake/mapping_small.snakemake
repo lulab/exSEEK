@@ -462,5 +462,5 @@ rule map_circRNA:
         }} | pigz -c > {output.unmapped}
         '''
     
-include: 'sequential_mapping'
+include: 'sequential_mapping.snakemake'
 
