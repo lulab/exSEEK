@@ -1,0 +1,45 @@
+{% for rna_type in rna_types %}
+rule map_{{ rna_type }}:
+    input:
+        {% if loop.index0 == 0 %}
+        reads='{output_dir}/unmapped/{sample_id}/clean.fa.gz',
+        {% else %}
+        reads='{output_dir}/unmapped/{sample_id}/{{ rna_types[loop.index0 - 1] }}.fa.gz',
+        {% endif %}
+        index=genome_dir + '/rsem_index/{{ aligner }}/{{ rna_type }}.1.bt2'
+    output:
+        unmapped='{output_dir}/unmapped/{sample_id}/{{ rna_type }}.fa.gz',
+        bam='{output_dir}/tbam/{sample_id}/{{ rna_type }}.bam'
+    params:
+        index=genome_dir + '/rsem_index/{{ aligner }}/{{ rna_type }}'
+    threads: 
+        config['threads_mapping']
+    shell:
+        '''pigz -d -c {input.reads} \
+        | bowtie2 -f -p {threads} --norc --sensitive --no-unal \
+            --un-gz {output.unmapped} -x {params.index} - -S - \
+        | samtools view -b -o {output.bam}
+        '''
+
+{% endfor %}
+rule map_other:
+    input:
+        {% if (rna_types|length) == 0 %}
+        reads='{output_dir}/unmapped/{sample_id}/clean.fa.gz',
+        {% else %}
+        reads='{output_dir}/unmapped/{sample_id}/{{ rna_types[-1] }}.fa.gz',
+        {% endif %}
+        index=genome_dir + '/genome_index/{{ aligner }}/genome.1.bt2'
+    output:
+        unmapped='{output_dir}/unmapped/{sample_id}/other.fa.gz',
+        bam='{output_dir}/gbam/{sample_id}/other.bam'
+    params:
+        index=genome_dir + '/genome_index/{{ aligner }}/genome'
+    shell:
+        '''pigz -d -c {input.reads} \
+        | bowtie2 -f -p {threads} --sensitive --no-unal \
+            --un-gz {output.unmapped} -x {params.index} - -S - \
+        | samtools view -b -o {output.bam}
+        '''
+
+
