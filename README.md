@@ -178,3 +178,10 @@ snakemake --snakefile snakemake/call_domains_long.snakemake \
 | `${output_dir}/domains/${bin_size}/${pvalue}.bed` | Long RNA domain locations |
 | `${output_dir}/domains_recurrence/${bin_size}/${pvalue}.bed` | Recurrence of long RNA domains among samples (Column 5) |
 
+
+**Read count matrix**
+
+* File path: `${output_dir}/count_matrix/domain_${pvalue}.txt`
+* First row: sample IDs
+* First column: feature names
+* Feature name: `gene_id|gene_type|gene_name|domain_id|transcript_id|start|end`
