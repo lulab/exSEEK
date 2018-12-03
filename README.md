@@ -37,6 +37,7 @@ snakemake --snakefile snakemake/prepare_genome.snakemake \
 | `${input_dir}/fastq/${sample_id}.fastq` | Read files (single-end sequencing) |
 | `${input_dir}/fastq/${sample_id}_1.fastq`, `${input_dir}/fastq/${sample_id}_2.fastq` | Read files (paired-end sequencing) |
 | `${input_dir}/sample_ids.txt` | A text file with one sample ID per line. |
+| `${input_dir}/sample_classes.txt` | A tab-deliminated file with two columns: sample_id, sample_class |
 
 ## Configuration
 
@@ -159,6 +160,12 @@ snakemake --snakefile snakemake/expression_matrix.snakemake \
 | `${output_dir}/count_matrix/featurecounts.txt` | Count matrix of genes generated using featureCounts |
 | `${output_dir}/counts_by_biotype/${count_method}/${sample_id}/${rna_type}` | Gene/transcript counts generated using a feature counting tool |
 
+**Count matrix**
+
+* File path: `${output_dir}/count_matrix/transcript.txt`
+* First row: sample IDs
+* First column: feature names
+* Feature name: `gene_id|gene_type|gene_name`
 
 
 ## Call domains for long RNA
@@ -181,7 +188,7 @@ snakemake --snakefile snakemake/call_domains_long.snakemake \
 
 **Read count matrix**
 
-* File path: `${output_dir}/count_matrix/domain_${pvalue}.txt`
+* File path: `${output_dir}/count_matrix/domain_long.txt`
 * First row: sample IDs
 * First column: feature names
 * Feature name: `gene_id|gene_type|gene_name|domain_id|transcript_id|start|end`
