@@ -1,0 +1,13 @@
+shell.prefix('set -x;')
+import os
+
+data_dir = config['data_dir']
+genome_dir = config['genome_dir']
+output_dir = config['output_dir']
+rna_types = config['rna_types']
+
+with open(os.path.join(data_dir, 'sample_ids.txt'), 'r') as f:
+    sample_ids = f.read().split()
+for sample_id in sample_ids:
+    if '.' in sample_id:
+        raise ValueError('"." is not allowed in sample ID: {}'.format(sample_id))
