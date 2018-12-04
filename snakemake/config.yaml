@@ -1,7 +1,7 @@
 rna_types: [rRNA, lncRNA, miRNA, mRNA, piRNA, snoRNA, 
   snRNA, srpRNA, tRNA, tucpRNA, Y_RNA]
 threads: 4
-pvalues: "05"
+call_domain_pvalue: "05"
 distribution: ZeroTruncatedNegativeBinomial
 bin_size: 20
 cov_threshold: 0.2
@@ -26,7 +26,6 @@ annotation_dir: genome/hg38
 genome_dir: genome/hg38
 output_dir: output/scirep
 temp_dir: tmp
-sample_id_file: metadata/sample_ids.scirep.txt
 data_dir: data/scirep
 
 # general parameters
