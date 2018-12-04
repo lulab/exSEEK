@@ -1,27 +1,29 @@
 # Matrix Processing   
 
 ```
-normmethod SCnorm,TMM,RLE,CPM,CPM_top,CPM_rm,CPM_refer
-batchmetod rub,combat
-batchindex 1,2,3
+-s imputation normalization batch_removal
+--normmethod SCnorm,TMM,RLE,CPM,CPM_top,CPM_rm,CPM_refer
+--batchmetod RUV,Combat
+--batchindex 1,2,3
 
-bin/matrix-process.R  -i output/scirep/count_matrix/transcript.txt \
--c data/labels/scirep_classes.txt \
--b data/other_annotations/scirep_batch.txt \
--p 4 \
+bin/matrix-process.R -s batch_removal \
+-i output/scirep/count_matrix/transcript.txt \
+--imputemethod scimpute_count \
 --imputeout output/scirep/matrix_processing/imputation/ \
---normalizeout output/scirep/matrix_processing/normalization/ \
---batchremoveout output/scirep/matrix_processing/batch_removal/ \
 --filtercount 5 \
 --filtersample 10 \
---imputecluster 5  \
+--imputecluster 5 \
+-p 4 \
+--normalizeout output/scirep/matrix_processing/normalization/ \
 --normmethod RLE \
 --normtopk 20 \
 --removetype miRNA,piRNA \
 --cvthreshold 0.5 \
---rnatypefile data/matrix_processing/rna_type.rds \
 --refergenefile data/matrix_processing/refer_gene_id.txt \
---batchmethod combat \
+-c data/labels/scirep_classes.txt \
+-b data/other_annotations/scirep_batch.txt \
+--batchremoveout output/scirep/matrix_processing/batch_removal/ \
+--batchmethod RUV \
 --batchindex 1
 ```
 
