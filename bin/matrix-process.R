@@ -8,6 +8,7 @@ parser$add_argument("-i", "--input", required=TRUE, help="input expression matri
 parser$add_argument("-c", "--class", required=TRUE, help="input class info file")
 parser$add_argument("-b", "--batch", required=TRUE, help="input batch info file")
 
+parser$add_argument("--filterout", required=TRUE, help="output filter path")
 parser$add_argument("--imputeout", required=TRUE, help="output imputation path")
 parser$add_argument("--normalizeout", required=TRUE, help="output normalization file")
 parser$add_argument("--batchremoveout", required=TRUE, help="output batchremoved file")
@@ -57,6 +58,8 @@ parser$add_argument("-p", "--processors", type="integer", default=1,
 # otherwise if options not found on command line then set defaults,
 args <- parser$parse_args()
 
+splitname <- unlist(strsplit(args$input,split = '/',fixed = TRUE))
+splitname <- splitname[length(splitname)]
 
 #' @title read counts matrix
 #'
@@ -182,9 +185,13 @@ output_dir = '.',output_file = 'norm',cv_threshold=1,imputemethod = 'scimpute_co
     if ('CPM_refer' %in% norm_methods) Norm_CPM_refer <- norm_cpm_refer(mat, refer_gene_id_path)
     
     tmp_names <- ls(pattern = '^Norm_')
-    
+    if (imputemethod=='null'){
+        imputename <-''
+    } else {
+        imputename <-paste(imputemethod,'.',sep='')
+    }
     for(tmp_name in tmp_names) {
-        write.table(get(tmp_name), paste(output_dir, '/',imputemethod,'.', tmp_name,'.txt',sep=''),sep='\t')
+        write.table(get(tmp_name), paste(output_dir,'filter.',imputename, tmp_name,'.',splitname,sep=''),sep='\t')
     }
     
 }
@@ -397,16 +404,27 @@ output_path = './',batchindex
     if ('CPM_refer' %in% norm_methods) normname <- 'Norm_CPM_refer'
     #mat <- get(paste('mat_',tolower(norm_methods),sep=''))
     
-    mat <- read.table(paste(input_path,imputemethod,'.',normname,'.txt',sep=''),sep='\t',header=TRUE)
+    
+    if (imputemethod=='null'){
+        imputename <-''
+    } else {
+        imputename <-paste(imputemethod,'.',sep='')
+    }
+    if (norm_methods=='null'){
+        normname <-''
+    } else {
+        normname <-paste(normname,'.',sep='')
+    }
+
+    mat <- read.table(paste(input_path,'filter.',imputename, normname,splitname,sep=''),sep='\t',header=TRUE)
     if ('RUV' %in% batch_methods)       Batch_RUV <- ruv(mat,classinfo_path,output_path,2,10)
     if ('Combat' %in% batch_methods)    Batch_Combat <- combat(mat,batchinfo_path,output_path,batchindex)
-
     tmp_names <- ls(pattern = '^Batch_')
     for(tmp_name in tmp_names) {
         if (tmp_name=='Batch_Combat'){
-        write.table(get(tmp_name), paste(output_path,imputemethod,'.',normname,'.', tmp_name,'_',toString(batchindex),'.txt',sep=''),sep='\t',quote=FALSE, row.names=TRUE, col.names=TRUE)
+        write.table(get(tmp_name), paste(output_path,'filter.',imputename, normname, tmp_name,'_',toString(batchindex),'.',splitname,sep=''),sep='\t',quote=FALSE, row.names=TRUE, col.names=TRUE)
         } else {
-        write.table(get(tmp_name), paste(output_path,imputemethod,'.',normname,'.', tmp_name,'.txt',sep=''),sep='\t',quote=FALSE, row.names=TRUE, col.names=TRUE)
+        write.table(get(tmp_name), paste(output_path,'filter.',imputename, normname, tmp_name,'.',splitname,sep=''),sep='\t',quote=FALSE, row.names=TRUE, col.names=TRUE)
         }
     }
 }
@@ -448,7 +466,7 @@ combat <- function(
     batch_column = batchindex
 ){
     print('start batch removal using combat')
-    batch_info <-read.table(batchinfo_path,sep=',',row.names=1,header=T)
+    batch_info <-read.table(batchinfo_path,sep='\t',row.names=1,header=T)
     batchname <-toString(names(batch_info)[batch_column])
     batch_info=batch_info[names(mat),]
     mod <- model.matrix(~ 1, data = batch_info)
@@ -693,18 +711,32 @@ plot_refer_violin <- function(mat, refer_gene_id, refer_gene_name = refer_gene_i
 #args$batch: 'data/other_annotations/scirep_batch.txt'
 #args$imputeout: impute_path = "output/matrix_processing/imputation/"
 
+#dummy_io<- function(filename){}
 
 
-# imputation
-if(args$step =='imputation'){
-library(readr)
-mat_raw <- read_mat(args$input)
 # filter
+if (args$step =='filter'){
+mat_raw <- read_mat(args$input)
 mat_filter <-filter_low(mat_raw,args$filtercount, args$filtersample)
+write.table(mat_filter, paste(args$filterout, 'filter','.',splitname,sep=''),sep='\t')
+} else if(args$step =='imputation'){
+# imputation
+library(readr)
+if (args$imputemethod=='scimpute_count'){
+mat_filter <-read_mat(paste(args$filterout,'filter.',splitname,sep=''))
 imputation(mat_filter,impute_path= args$imputeout, K = args$imputecluster, N = args$processors)
+file.rename(paste(args$imputeout,'scimpute_count.txt',sep=''),paste(args$imputeout,'filter.scimpute_count.',splitname,sep=''))
+} else if(args$imputemethod=='null')
+print ('no imputation')
 }  else if(args$step =='normalization'){
 # normalization
-mat_impute <- read.table(paste(args$imputeout,"scimpute_count.txt",sep=""))
+imputemethod <-args$imputemethod
+if (imputemethod=='null'){
+        imputename <-''
+    } else {
+        imputename <-paste(imputemethod,'.',sep='')
+    }
+mat_impute <- read.table(paste(args$imputeout,'filter.',imputename,splitname,sep=""))
 normalize(mat_impute, norm_methods =args$normmethod,top_n = args$normtopk,cv_threshold = args$cvthreshold, imputemethod=args$imputemethod,
 rm_gene_type = args$removetype,refer_gene_id_path = args$refergenefile, output_dir = args$normalizeout, K = args$imputecluster, N = args$processors)
 }  else if(args$step =='batch_removal'){
