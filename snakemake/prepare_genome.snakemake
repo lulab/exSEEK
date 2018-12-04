@@ -1,4 +1,5 @@
 shell.prefix('set -x;')
+include: 'common.snakemake'
 
 genome_dir = config['genome_dir']
 rna_types = config['rna_types']
@@ -34,7 +35,8 @@ def get_all_inputs(wildcards):
         long_index_star=expand('{genome_dir}/long_index/star/Genome', genome_dir=genome_dir),
         circrna_index_bowtie2=expand('{genome_dir}/index/bowtie2/circRNA.1.bt2',
             genome_dir=genome_dir),
-        chrom_sizes=expand('{genome_dir}/chrom_sizes/transcriptome', genome_dir=genome_dir)
+        chrom_sizes=expand('{genome_dir}/chrom_sizes/transcriptome', genome_dir=genome_dir),
+        chrom_sizes2=expand('{genome_dir}/chrom_sizes/transcriptome_genome', genome_dir=genome_dir),
     )
     del available_inputs['rsem_index']
     available_inputs['long_index_star']
@@ -276,6 +278,25 @@ rule merge_transcript_sizes:
             genome_dir=wildcards.genome_dir, rna_type=rna_types)
     output:
         '{genome_dir}/chrom_sizes/transcriptome'
+    shell:
+        '''cat {input} > {output}
+        '''
+
+rule merge_transcript_sizes:
+    input:
+        '{genome_dir}/fasta/genome.fa.fai'
+    output:
+        '{genome_dir}/chrom_sizes/genome'
+    shell:
+        '''cut -f1-2 {input} > {output}
+        '''
+
+rule merge_transcriptome_genome_sizes:
+    input:
+        '{genome_dir}/chrom_sizes/transcriptome',
+        '{genome_dir}/chrom_sizes/genome'
+    output:
+        '{genome_dir}/chrom_sizes/transcriptome_genome'
     shell:
         '''cat {input} > {output}
         '''
