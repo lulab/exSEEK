@@ -3,6 +3,7 @@ suppressPackageStartupMessages(library("argparse"))
 
 # create parser object
 parser <- ArgumentParser()
+parser$add_argument("-s", "--step", required=TRUE, default='imputation', help="which step to run")
 parser$add_argument("-i", "--input", required=TRUE, help="input expression matrix file")
 parser$add_argument("-c", "--class", required=TRUE, help="input class info file")
 parser$add_argument("-b", "--batch", required=TRUE, help="input batch info file")
@@ -17,6 +18,9 @@ parser$add_argument("--filtercount", type="integer", default=5,
 parser$add_argument("--filtersample", type="integer", default=10,
     help="filter by counts of sample above certain counts of a gene [default = %(default)s]",
     metavar="NUMBER")
+parser$add_argument( "--imputemethod", type="character", default="scimpute_count",
+                    metavar="STRING",
+                    help="the imputation algorithm to use [default = %(default)s]")
 parser$add_argument("--imputecluster", type="integer", default=5,
     help="cluster number in scImpute [default = %(default)s]",
     metavar="NUMBER")
@@ -38,7 +42,7 @@ parser$add_argument( "--refergenefile", type="character", #default="miRNA,piRNA"
                     help="reference gene file path [default = %(default)s]")
 #they are feature name for full length feature, most are miRNA, for domain feature, they have the same feature name
 
-parser$add_argument("--batchmethod", type="character", default="ruv",
+parser$add_argument("--batchmethod", type="character", default="RUV",
                     metavar="STRING",
                     help="the batch removal algorithm to use [default = %(default)s]")
 parser$add_argument("--batchindex", type="integer", default=1,
@@ -160,27 +164,27 @@ normalize_check_arg <- function(norm_methods, top_n, rm_gene_type, refer_gene_id
 #' }
 normalize <- function(
 mat,
-norm_methods = c('SCnorm', 'TMM', 'RLE', 'CPM', 'CPM_top', 'CPM_rm', 'CPM_refer'),
+norm_methods = c( 'SCnorm', 'TMM', 'RLE', 'CPM', 'CPM_top', 'CPM_rm', 'CPM_refer'),
 top_n = 20, rm_gene_type = 'miRNA,tRNA',
 sample_class_path = NULL, PCA_label_by = NULL, PAC_color_by = NULL,
 refer_gene_id_path='data/matrix_processing/refer_gene_id.txt',
 tmp_path='.',impute_path="./imputation/", K = 5, N = 3,
-output_dir = '.',output_file = 'norm',cv_threshold=1
+output_dir = '.',output_file = 'norm',cv_threshold=1,imputemethod = 'scimpute_count'
 ) {
     rm_gene_type <- unlist(strsplit(rm_gene_type,',', fixed = TRUE))
     normalize_check_arg(norm_methods, top_n, rm_gene_type, read.table(refer_gene_id_path)[,1])
-    if ('SCnorm' %in% norm_methods)    mat_scnorm <- norm_SCnorm(mat)
-    if ('TMM' %in% norm_methods)       mat_tmm <- norm_tmm(mat)
-    if ('RLE' %in% norm_methods)       mat_rle <- norm_rle(mat)
-    if ('CPM' %in% norm_methods)       mat_cpm <- norm_cpm_total(mat)
-    if ('CPM_top' %in% norm_methods)   mat_cpm_top <- norm_cpm_top(mat, top_n)
-    if ('CPM_rm' %in% norm_methods)    mat_cpm_rm <- norm_cpm_rm(mat, rm_gene_type)
-    if ('CPM_refer' %in% norm_methods) mat_cpm_refer <- norm_cpm_refer(mat, refer_gene_id_path)
+    if ('SCnorm' %in% norm_methods)    Norm_SCnorm <- norm_SCnorm(mat)
+    if ('TMM' %in% norm_methods)       Norm_TMM <- norm_tmm(mat)
+    if ('RLE' %in% norm_methods)       Norm_RLE <- norm_rle(mat)
+    if ('CPM' %in% norm_methods)       Norm_CPM <- norm_cpm_total(mat)
+    if ('CPM_top' %in% norm_methods)   Norm_CPM_top <- norm_cpm_top(mat, top_n)
+    if ('CPM_rm' %in% norm_methods)    Norm_CPM_rm <- norm_cpm_rm(mat, rm_gene_type)
+    if ('CPM_refer' %in% norm_methods) Norm_CPM_refer <- norm_cpm_refer(mat, refer_gene_id_path)
     
-    tmp_names <- ls(pattern = '^mat_')
+    tmp_names <- ls(pattern = '^Norm_')
     
     for(tmp_name in tmp_names) {
-        write.table(get(tmp_name), paste(output_dir, '/', tmp_name,'.txt',sep=''))
+        write.table(get(tmp_name), paste(output_dir, '/',imputemethod,'.', tmp_name,'.txt',sep=''),sep='\t')
     }
     
 }
@@ -375,6 +379,7 @@ classinfo_path,
 batchinfo_path,
 input_path,
 norm_methods = 'SCnorm',
+imputemethod = 'scimpute_count',
 batch_methods = c('ruv','combat'),
 output_path = './',batchindex
 ){
@@ -383,19 +388,28 @@ output_path = './',batchindex
     suppressMessages(library(sva))
     suppressMessages(library(scRNA.seq.funcs))
     
-    if ('SCnorm' %in% norm_methods)    normname <- 'scnorm'
-    if ('TMM' %in% norm_methods)       normname <- 'tmm'
-    if ('RLE' %in% norm_methods)       normname <- 'rle'
-    if ('CPM' %in% norm_methods)       normname <- 'cpm'
-    if ('CPM_top' %in% norm_methods)   normname <- 'cpm_top'
-    if ('CPM_rm' %in% norm_methods)    normname <- 'cpm_rm'
-    if ('CPM_refer' %in% norm_methods) normname <- 'cpm_refer'
+    if ('SCnorm' %in% norm_methods)    normname <- 'Norm_SCnorm'
+    if ('TMM' %in% norm_methods)       normname <- 'Norm_TMM'
+    if ('RLE' %in% norm_methods)       normname <- 'Norm_RLE'
+    if ('CPM' %in% norm_methods)       normname <- 'Norm_CPM'
+    if ('CPM_top' %in% norm_methods)   normname <- 'Norm_CPM_top'
+    if ('CPM_rm' %in% norm_methods)    normname <- 'Norm_CPM_rm'
+    if ('CPM_refer' %in% norm_methods) normname <- 'Norm_CPM_refer'
     #mat <- get(paste('mat_',tolower(norm_methods),sep=''))
-    mat <- read.table(paste(input_path,'mat_',normname,'.txt',sep=''),header=TRUE)
-    if ('ruv' %in% batch_methods)       mat_ruv <- ruv(mat,classinfo_path,output_path,2,10)
-    if ('combat' %in% batch_methods)    mat_combat <- combat(mat,batchinfo_path,output_path,batchindex)
-}
+    
+    mat <- read.table(paste(input_path,imputemethod,'.',normname,'.txt',sep=''),sep='\t',header=TRUE)
+    if ('RUV' %in% batch_methods)       Batch_RUV <- ruv(mat,classinfo_path,output_path,2,10)
+    if ('Combat' %in% batch_methods)    Batch_Combat <- combat(mat,batchinfo_path,output_path,batchindex)
 
+    tmp_names <- ls(pattern = '^Batch_')
+    for(tmp_name in tmp_names) {
+        if (tmp_name=='Batch_Combat'){
+        write.table(get(tmp_name), paste(output_path,imputemethod,'.',normname,'.', tmp_name,'_',toString(batchindex),'.txt',sep=''),sep='\t',quote=FALSE, row.names=TRUE, col.names=TRUE)
+        } else {
+        write.table(get(tmp_name), paste(output_path,imputemethod,'.',normname,'.', tmp_name,'.txt',sep=''),sep='\t',quote=FALSE, row.names=TRUE, col.names=TRUE)
+        }
+    }
+}
 ruv <- function(
     mat,
     classinfo_path,
@@ -422,7 +436,7 @@ ruv <- function(
         scIdx[i, 1:length(tmp)] <- tmp
     }
     ruv <- RUVs(as.matrix(mat), cIdx, k = k, scIdx = scIdx, isLog = TRUE)
-    write.table(ruv$normalizedCounts, file=paste(output_path,'mx_ruv_batchremoval.txt',sep=''), sep='\t', quote=FALSE, row.names=TRUE, col.names=TRUE)
+    #write.table(ruv$normalizedCounts, file=paste(output_path,'mx_ruv_batchremoval.txt',sep=''), sep='\t', quote=FALSE, row.names=TRUE, col.names=TRUE)
     ruv$normalizedCounts
 }
 
@@ -449,7 +463,7 @@ combat <- function(
     )
     
     mat <- exp(combat)
-    write.csv(mat, file=paste(output_path,'mx_combat_batchremoval_',batchname,'.txt',sep=''))
+    #write.csv(mat, file=paste(output_path,'mx_combat_batchremoval_',batchname,'.txt',sep=''))
     mat
 }
 
@@ -679,18 +693,25 @@ plot_refer_violin <- function(mat, refer_gene_id, refer_gene_name = refer_gene_i
 #args$batch: 'data/other_annotations/scirep_batch.txt'
 #args$imputeout: impute_path = "output/matrix_processing/imputation/"
 
+
+
+# imputation
+if(args$step =='imputation'){
 library(readr)
 mat_raw <- read_mat(args$input)
-sample_class <- read_classinfo(args$class)
 # filter
 mat_filter <-filter_low(mat_raw,args$filtercount, args$filtersample)
-# imputation
 imputation(mat_filter,impute_path= args$imputeout, K = args$imputecluster, N = args$processors)
+}  else if(args$step =='normalization'){
 # normalization
 mat_impute <- read.table(paste(args$imputeout,"scimpute_count.txt",sep=""))
-normalize(mat_impute, norm_methods =args$normmethod,top_n = args$normtopk,cv_threshold = args$cvthreshold,
+normalize(mat_impute, norm_methods =args$normmethod,top_n = args$normtopk,cv_threshold = args$cvthreshold, imputemethod=args$imputemethod,
 rm_gene_type = args$removetype,refer_gene_id_path = args$refergenefile, output_dir = args$normalizeout, K = args$imputecluster, N = args$processors)
+}  else if(args$step =='batch_removal'){
 # batch removal
-batch(args$class,args$batch,output_path=args$batchremoveout,input_path = args$normalizeout,
+batch(classinfo_path = args$class, batchinfo_path = args$batch,
+output_path=args$batchremoveout,input_path = args$normalizeout,imputemethod=args$imputemethod,
 norm_methods = args$normmethod,batch_methods = args$batchmethod,args$batchindex)
-
+}  else{
+    print ('unexpected step')
+}   
