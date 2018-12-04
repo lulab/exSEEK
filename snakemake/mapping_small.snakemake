@@ -1,17 +1,7 @@
 shell.prefix('set -x;')
+include: 'common.snakemake'
 
 from collections import OrderedDict
-
-with open(config['sample_id_file'], 'r') as f:
-    sample_ids = f.read().split()
-# check validity of sample_ids
-for sample_id in sample_ids:
-    if '.' in sample_id:
-        raise ValueError('sample IDs cannot contain ".": {}'.format(sample_id))
-# check validity of rna_types
-for rna_type in config['rna_types']:
-    if '.' in rna_type:
-        raise ValueError('RNA type cannot contain ".": {}'.format(sample_id))
 
 data_dir = config['data_dir']
 output_dir = config['output_dir']
