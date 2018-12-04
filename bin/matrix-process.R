@@ -417,6 +417,7 @@ output_path = './',batchindex
     }
 
     mat <- read.table(paste(input_path,'filter.',imputename, normname,splitname,sep=''),sep='\t',header=TRUE)
+    print (dim(mat))
     if ('RUV' %in% batch_methods)       Batch_RUV <- ruv(mat,classinfo_path,output_path,2,10)
     if ('Combat' %in% batch_methods)    Batch_Combat <- combat(mat,batchinfo_path,output_path,batchindex)
     tmp_names <- ls(pattern = '^Batch_')
@@ -725,7 +726,7 @@ library(readr)
 if (args$imputemethod=='scimpute_count'){
 mat_filter <-read_mat(paste(args$filterout,'filter.',splitname,sep=''))
 imputation(mat_filter,impute_path= args$imputeout, K = args$imputecluster, N = args$processors)
-file.rename(paste(args$imputeout,'scimpute_count.txt',sep=''),paste(args$imputeout,'filter.scimpute_count.',splitname,sep=''))
+write.table(  read.table(paste(args$imputeout,'scimpute_count.txt',sep='') ,sep=' ') , file=paste(args$imputeout,'filter.scimpute_count.',splitname,sep='') ,sep='\t' )
 } else if(args$imputemethod=='null')
 print ('no imputation')
 }  else if(args$step =='normalization'){
