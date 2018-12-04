@@ -33,9 +33,6 @@ parser$add_argument( "--cvthreshold", type="double", default=0.5,
 parser$add_argument( "--removetype", type="character", default="miRNA,piRNA",
                     metavar="STRING",
                     help="remove some time of RNA for normalization scale factor calculation [default = %(default)s]")
-parser$add_argument( "--rnatypefile", type="character", default="data/matrix_processing/rna_type.rds",
-                    metavar="STRING",
-                    help="gene id and rna type, used to remove certain rna type feature [default = %(default)s]")
 parser$add_argument( "--refergenefile", type="character", #default="miRNA,piRNA",
                     metavar="STRING",
                     help="reference gene file path [default = %(default)s]")
@@ -683,16 +680,16 @@ plot_refer_violin <- function(mat, refer_gene_id, refer_gene_name = refer_gene_i
 #args$imputeout: impute_path = "output/matrix_processing/imputation/"
 
 library(readr)
-#mat_raw <- read_mat(args$input)
-#sample_class <- read_classinfo(args$class)
+mat_raw <- read_mat(args$input)
+sample_class <- read_classinfo(args$class)
 # filter
-#mat_filter <-filter_low(mat_raw,args$filtercount, args$filtersample)
+mat_filter <-filter_low(mat_raw,args$filtercount, args$filtersample)
 # imputation
-#imputation(mat_filter,impute_path= args$imputeout, K = args$imputecluster, N = args$processors)
+imputation(mat_filter,impute_path= args$imputeout, K = args$imputecluster, N = args$processors)
 # normalization
-#mat_impute <- read.table(paste(args$imputeout,"scimpute_count.txt",sep=""))
-#normalize(mat_impute, norm_methods =args$normmethod,top_n = args$normtopk,cv_threshold = args$cvthreshold,
-#rm_gene_type = args$removetype,refer_gene_id_path = args$refergenefile, output_dir = args$normalizeout, K = args$imputecluster, N = args$processors)
+mat_impute <- read.table(paste(args$imputeout,"scimpute_count.txt",sep=""))
+normalize(mat_impute, norm_methods =args$normmethod,top_n = args$normtopk,cv_threshold = args$cvthreshold,
+rm_gene_type = args$removetype,refer_gene_id_path = args$refergenefile, output_dir = args$normalizeout, K = args$imputecluster, N = args$processors)
 # batch removal
 batch(args$class,args$batch,output_path=args$batchremoveout,input_path = args$normalizeout,
 norm_methods = args$normmethod,batch_methods = args$batchmethod,args$batchindex)
