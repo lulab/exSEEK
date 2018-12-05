@@ -336,7 +336,7 @@ class FeatureSelection(object):
         self.n_samples = self.X.shape
         self.sample_ids = self.X.index.values
 
-    @define_stoe(inputs=['X', 'use_log', 'scaler'], outputs=['X'])
+    @define_step(inputs=['X', 'use_log', 'scaler'], outputs=['X'])
     def scale_features(self):
         if self.use_log:
             self.logger.info('apply log2 to feature matrix')
