@@ -1,11 +1,9 @@
 shell.prefix('set -x;')
-include: '../common'
+include: 'common.snakemake'
 
-pvalues = config['pvalues']
 output_dir = config['output_dir']
 rna_types = config['rna_types']
 rna_types_long = list(filter(lambda x: x not in ('miRNA', 'piRNA', 'rRNA'), rna_types))
-rna_types_long += ['other']
 
 piranha_path = '../piranha-exrna-1.2.1/bin'
 normalize_methods = config['normalize_methods']
@@ -14,8 +12,8 @@ def get_all_inputs(wildcards):
     available_inputs = dict(
         merge_reads_by_rnatype=expand('{output_dir}/tbed_long_RNA/{sample_id}.bed.gz',
             output_dir=output_dir, sample_id=sample_ids),
-        domain_count_matrix=expand('{output_dir}/count_matrix/domains_{pvalue}.txt',
-            output_dir=output_dir, pvalue=pvalues)
+        domain_count_matrix=expand('{output_dir}/count_matrix/domains_long.txt',
+            output_dir=output_dir)
     )
     enabled_inputs = list(available_inputs)
     inputs = []
@@ -28,20 +26,35 @@ rule all:
     input:
         get_all_inputs
 
-rule bam_to_bed:
+rule tbam_to_bed:
     input:
         '{output_dir}/tbam/{sample_id}/{rna_type}.bam'
     output:
         '{output_dir}/tbed/{sample_id}/{rna_type}.bed.gz'
     threads: 1
+    wildcard_constraints:
+        rna_type='(?!other).*'
+    shell:
+        '''bedtools bamtobed -i {input} | pigz -c -p {threads} > {output}
+        '''
+
+rule gbam_to_bed:
+    input:
+        '{output_dir}/gbam/{sample_id}/{rna_type}.bam'
+    output:
+        '{output_dir}/gbed/{sample_id}/{rna_type}.bed.gz'
+    threads: 1
+    wildcard_constraints:
+        rna_type='other'
     shell:
         '''bedtools bamtobed -i {input} | pigz -c -p {threads} > {output}
         '''
 
 rule merge_reads_by_rnatype:
     input:
-        lambda wildcards: expand('{output_dir}/tbed/{sample_id}/{rna_type}.bed.gz',
-            output_dir=wildcards.output_dir, sample_id=wildcards.sample_id, rna_type=rna_types_long)
+        tbed=lambda wildcards: expand('{output_dir}/tbed/{sample_id}/{rna_type}.bed.gz',
+            output_dir=wildcards.output_dir, sample_id=wildcards.sample_id, rna_type=rna_types_long),
+        other='{output_dir}/gbed/{sample_id}/other.bed.gz'
     output:
         '{output_dir}/tbed_long_RNA/{sample_id}.bed.gz'
     threads: 2
@@ -53,7 +66,7 @@ rule merge_reads_by_rnatype:
 rule bin_coverage:
     input:
         bed='{output_dir}/tbed_long_RNA/{sample_id}.bed.gz',
-        chrom_sizes=genome_dir + '/chrom_sizes/transcriptome'
+        chrom_sizes=genome_dir + '/chrom_sizes/transcriptome_genome'
     output:
         '{output_dir}/tbincov/{bin_size}/{sample_id}.bed'
     params:
@@ -104,7 +117,7 @@ rule domain_recurrence:
             bin_size=wildcards.bin_size,
             pvalue=wildcards.pvalue,
             sample_id=sample_ids),
-        chrom_sizes=genome_dir + '/chrom_sizes/transcriptome'
+        chrom_sizes=genome_dir + '/chrom_sizes/transcriptome_genome'
     output:
         '{output_dir}/domain_recurrence_by_strand/{bin_size}/{pvalue}.{strand}.bed'
     shell:
@@ -173,21 +186,25 @@ rule domain_count_matrix:
         peaks=lambda wildcards: expand('{output_dir}/domain_counts/{bin_size}/{pvalue}/{sample_id}.bed',
             output_dir=wildcards.output_dir,
             bin_size=config['bin_size'], 
-            pvalue=wildcards.pvalue, 
+            pvalue=config['call_domain_pvalue'], 
             sample_id=sample_ids),
         transcript_table=genome_dir + '/transcript_table/all.txt',
-        domains='{{output_dir}}/domains/{bin_size}/{{pvalue}}.bed'.format(bin_size=config['bin_size'])
+        domains='{{output_dir}}/domains/{bin_size}/{pvalue}.bed'.format(bin_size=config['bin_size'], pvalue=config['call_domain_pvalue']),
+        chrom_sizes=genome_dir + '/chrom_sizes/genome'
     output:
-        '{output_dir}/count_matrix/domains_{pvalue}.txt'
-    params:
-
+        '{output_dir}/count_matrix/domains_long.txt'
     run:
         import pandas as pd
         import re
+        import numpy as np
 
         transcript_table = pd.read_table(input.transcript_table, sep='\t', dtype='str')
+        transcript_table.drop_duplicates(['transcript_id'], inplace=True)
         transcript_table.set_index('transcript_id', drop=False, inplace=True)
-
+        transcript_table = transcript_table.loc[:, ['gene_id', 'gene_name', 'gene_type', 'transcript_id', 'start', 'end']].copy()
+        # extend transcript_table with genome regions
+        chrom_sizes = pd.read_table(input.chrom_sizes, sep='\t', names=['chrom', 'end'])
+        chrom_sizes.set_index('chrom', drop=False, inplace=True)
         domains = pd.read_table(input.domains, sep='\t', header=None,
             names=['chrom', 'start', 'end', 'domain_id', 'score', 'strand'], dtype='str')
 
@@ -204,14 +221,33 @@ rule domain_count_matrix:
             cov.name = sample_id
             mat.append(cov)
         mat = pd.concat(mat, axis=1)
-        transcript_ids = domains['chrom'].values
-        feature_names = transcript_table.loc[transcript_ids, 'gene_id'].values \
-            + '|' + transcript_table.loc[transcript_ids, 'gene_type'].values \
-            + '|' + transcript_table.loc[transcript_ids, 'gene_name'].values \
-            + '|' + domains['domain_id'].values \
-            + '|' + transcript_table.loc[transcript_ids, 'transcript_id'].values \
-            + '|' + domains['start'].values \
-            + '|' + domains['end'].values
+        # get seq
+        seq_ids = domains['chrom'].values
+        # get transcript peaks
+        is_genome_peaks = np.isin(seq_ids, chrom_sizes['chrom'].values)
+        seq_ids_genome = seq_ids[is_genome_peaks]
+        seq_ids_transcript = seq_ids[~is_genome_peaks]
+        # annotate transcript peaks with gene information
+        # feature name format: gene_id|gene_type|gene_name|domain_id|transcript_id|start|end
+        feature_names = np.empty(mat.shape[0], dtype='object')
+        print(np.sum(~is_genome_peaks), seq_ids_transcript.shape, transcript_table.loc[seq_ids_transcript, 'gene_name'].values.shape)
+        feature_names[~is_genome_peaks] = transcript_table.loc[seq_ids_transcript, 'gene_id'].values \
+            + '|' + transcript_table.loc[seq_ids_transcript, 'gene_type'].values \
+            + '|' + transcript_table.loc[seq_ids_transcript, 'gene_name'].values \
+            + '|' + domains['domain_id'].values[~is_genome_peaks] \
+            + '|' + transcript_table.loc[seq_ids_transcript, 'transcript_id'].values \
+            + '|' + domains['start'].values[~is_genome_peaks] \
+            + '|' + domains['end'].values[~is_genome_peaks]
+        # annotate genome peaks
+        print(seq_ids_genome.shape, np.sum(is_genome_peaks))
+        gene_ids_genome = seq_ids_genome + '_' + domains['start'].values[is_genome_peaks] + '_' + domains['end'].values[is_genome_peaks]
+        feature_names[is_genome_peaks] = gene_ids_genome \
+            + '|' + 'genomic' \
+            + '|' + gene_ids_genome \
+            + '|' + domains['domain_id'].values[is_genome_peaks] \
+            + '|' + domains['chrom'].values[is_genome_peaks] \
+            + '|' + domains['start'].values[is_genome_peaks] \
+            + '|' + domains['end'].values[is_genome_peaks]
         mat.index = feature_names
         mat.index.name = 'feature'
         mat.to_csv(output[0], sep='\t', header=True, index=True)
