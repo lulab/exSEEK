@@ -1,25 +1,24 @@
 rna_types: [rRNA, lncRNA, miRNA, mRNA, piRNA, snoRNA, 
   snRNA, srpRNA, tRNA, tucpRNA, Y_RNA]
-threads: 4
+threads: 1
 call_domain_pvalue: "05"
 distribution: ZeroTruncatedNegativeBinomial
 bin_size: 20
 cov_threshold: 0.2
 normalize_methods: [cpm]
-scalers: [robust]
+scale_method: robust
 classifiers: [random_forest]
 n_selects: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30, 40, 50]
-resample_methods: [bootstrap]
+resample_method: bootstrap
 select_methods: [robust]
-splitters: [stratified_shuffle_split]
+splitter: stratified_shuffle_split
+cross_validation_splits: 50
 
-compare_classes:
-  scirep:
-    Normal-CRC: ["Healthy Control", "Colorectal Cancer"]
-    exoRBase:
-      "Normal-HCC": ["Healthy", "HCC"]
-      "Normal-CRC": ["Healthy", "CRC"]
-      "Normal-PAAD": ["Healthy", "PAAD"]
+count_method: domains_combined
+imputation_methods: ["scimpute_count"]
+normalization_methods: ["SCnorm", "TMM", "RLE", "CPM", "CPM_top", "CPM_rm", "CPM_refer"]
+batch_removal_methods: ["null"]
+batch_indices: [1]
     
 # file paths
 annotation_dir: genome/hg38
