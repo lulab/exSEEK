@@ -37,7 +37,17 @@ snakemake --snakefile snakemake/prepare_genome.snakemake \
 | `${input_dir}/fastq/${sample_id}.fastq` | Read files (single-end sequencing) |
 | `${input_dir}/fastq/${sample_id}_1.fastq`, `${input_dir}/fastq/${sample_id}_2.fastq` | Read files (paired-end sequencing) |
 | `${input_dir}/sample_ids.txt` | A text file with one sample ID per line. |
-| `${input_dir}/sample_classes.txt` | A tab-deliminated file with two columns: sample_id, sample_class |
+| `${input_dir}/sample_classes.txt` | A tab-deliminated file (with header) with two columns: sample_id, label |
+| `${input_dir}/batch_info.txt` | A comma-deliminated file (with header) with at least two columns: sample_id, batch1, batch2, ... |
+| `${input_dir}/reference_genes.txt` | A text file with reference gene IDs. |
+| `${input_dir}/compare_groups.yaml` | A YAML file defining positive and negative classes. |
+
+**compare_groups.yaml**
+
+Every key-value pairs defines a compare group and a negative-positive class pair:
+```yaml
+Normal-CRC: ["Healthy Control", "Colorectal Cancer"]
+```
 
 ## Configuration
 
@@ -113,6 +123,14 @@ snakemake --snakefile snakemake/${snakefile} \
     --rerun-incomplete -k -j40
 ```
 **Note**: replace `${snakefile}` with a Snakefile.
+
+## Quality control
+
+```bash
+snakemake --snakefile snakemake/quality_control.snakemake \
+    --configfile snakemake/config.yaml \
+    --rerun-incomplete -k
+```
 
 ## Mapping (small RNA-seq)
 
@@ -192,3 +210,13 @@ snakemake --snakefile snakemake/call_domains_long.snakemake \
 * First row: sample IDs
 * First column: feature names
 * Feature name: `gene_id|gene_type|gene_name|domain_id|transcript_id|start|end`
+
+## Normalization
+
+### Output files
+
+| File name | Description |
+| `${output_dir}/normalized_matrix/${normalization_method}.${imputation_method}.${batch_removal_method}.txt` |
+| `${output_dir}/matrix_processing/normalization/${normalization_method}.txt` |
+| `${output_dir}/matrix_processing/imputation/${normalization_method}.${imputation_method}.txt` |
+| `${output_dir}/matrix_processing/batch_removal/${batch_removal_method}.${batch_index}.txt` |
