@@ -713,13 +713,13 @@ plot_refer_violin <- function(mat, refer_gene_id, refer_gene_name = refer_gene_i
 
 # filter
 if (args$step =='filter'){
-mat_raw <- read_mat(args$input)
+mat_raw <- read.table(args$input,sep='\t',row.names=1,header=T,check.names = TRUE)
 mat_filter <-filter_low(mat_raw,args$filtercount, args$filtersample)
 write.table(mat_filter, paste(args$filterout, 'filter','.',splitname,sep=''),sep='\t')
 } else if(args$step =='imputation'){
 # imputation
 library(readr)
-mat_filter <-read_mat(paste(args$filterout,'filter.',splitname,sep=''))
+mat_filter <-read.table(paste(args$filterout,'filter.',splitname,sep=''),sep='\t',row.names=1,header=T,check.names = TRUE)
 if (args$imputemethod=='scimpute_count'){
 imputation(mat_filter,impute_path= args$imputeout, K = args$imputecluster, N = args$processors)
 write.table(  read.table(paste(args$imputeout,'scimpute_count.txt',sep='') ,sep=' ',check.names = TRUE) , file=paste(args$imputeout,'filter.scimpute_count.',splitname,sep='') ,sep='\t' )
