@@ -190,7 +190,7 @@ output_dir = '.',output_file = 'norm',cv_threshold=1,imputemethod = 'scimpute_co
         write.table(get(tmp_name), paste(output_dir,'filter.',imputename, tmp_name,'.',splitname,sep=''),sep='\t')
     }
     if (imputemethod=='null'){
-        write.table(mat, paste(output_dir,'filter.',imputename, ,'null.',splitname,sep=''),sep='\t')
+        write.table(mat, paste(output_dir,'filter.',imputename,'null.',splitname,sep=''),sep='\t')
     }
     
 }
@@ -718,12 +718,13 @@ write.table(mat_filter, paste(args$filterout, 'filter','.',splitname,sep=''),sep
 } else if(args$step =='imputation'){
 # imputation
 library(readr)
-if (args$imputemethod=='scimpute_count'){
 mat_filter <-read_mat(paste(args$filterout,'filter.',splitname,sep=''))
+if (args$imputemethod=='scimpute_count'){
 imputation(mat_filter,impute_path= args$imputeout, K = args$imputecluster, N = args$processors)
 write.table(  read.table(paste(args$imputeout,'scimpute_count.txt',sep='') ,sep=' ') , file=paste(args$imputeout,'filter.scimpute_count.',splitname,sep='') ,sep='\t' )
-} else if(args$imputemethod=='null')
+} else if(args$imputemethod=='null'){
 write.table( mat_filter, paste(args$imputeout,'filter.null.',splitname,sep='') ,sep='\t')
+}
 }  else if(args$step =='normalization'){
 # normalization
 imputemethod <-args$imputemethod
