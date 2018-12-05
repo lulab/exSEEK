@@ -12,7 +12,7 @@ def normalize(args):
     if args.method == 'cpm':
         matrix = 1e6*matrix.astype('float')/matrix.sum(axis=0)
     with open_file_or_stdout(args.output_file) as f:
-        matrix.to_csv(f, sep='\t', header=True, index=True)
+        matrix.to_csv(f, sep='\t', header=True, index=True, na_rep='NA')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Normalization module')
@@ -20,6 +20,8 @@ if __name__ == '__main__':
         help='input feature matrix (rows are samples and columns are features')
     parser.add_argument('--method', '-m', type=str, default='cpm',
         choices=('cpm',), help='normalization method')
+    parser.add_argument('--transpose', '-t', action='store_true', 
+        help='transpose the matrix before normalization')
     parser.add_argument('--output-file', '-o', type=str, default='-',
         help='normalized matrix file')
     
