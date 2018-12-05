@@ -1,79 +1,57 @@
 shell.prefix('set -x; set -e;')
+include: 'common.snakemake'
 
-scalers = ['robust']
-#classifiers = ['random_forest', 'logistic_regression']
-classifiers = ['random_forest']
-#classifiers = ['linear_svm']
-#classifiers += [s + '_rfe' for s in classifiers]
-#n_selects = [30, 50, 100]
-#n_selects = [10, 20, 30, 40, 50]
-#n_selects = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30, 40, 50]
-n_selects = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-compute_sample_weights = [1]
-#resample_methods = ['jackknife', 'bootstrap']
-resample_methods = ['bootstrap']
-
-groups = {}
-for group in datasets.keys():
-    for dataset in datasets[group]:
-        groups[dataset] = group
-
-resample_methods = config['resample_methods']
-splitters = config['splitters']
-compare_classes = config['compare_classes']
-n_selects = config['n_selects']
-classifiers = config['classifiers']
-scalers = config['scalers']
-
-from functools import reduce
-
-def get_all_inputs(wildcards):
-    available_inputs['evaluate'] = []
-    for group in datasets.keys():
-        for dataset in datasets[group]:
-            available_inputs['evaluate'] += expand('output/{dataset}/feature_selection/{preprocess_method}/{compare_classes}/{classifier}.{n_select}.{select_method}.{splitter}',
-                dataset=dataset, classifier=classifiers, select_method=select_methods, 
-                compare_classes=compare_classes[group], n_select=n_selects,
-                splitter=splitters)
-    enabled_inputs = [
-        'evaluate'
-    ]
-    inputs = []
-    for key, l in available_inputs.items():
-        if key in enabled_inputs:
-            inputs += l
-    return inputs
+import yaml
+with open(data_dir + '/compare_groups.yaml', 'r') as f:
+    compare_groups = yaml.load(f)
+preprocess_methods = ['cpm']
+count_method = 'domains_combined'
 
 rule all:
     input:
-        get_all_inputs
+        #feature_selection=expand('{output_dir}/feature_selection/{count_method}/{preprocess_method}/{compare_group}/{classifier}.{n_select}.{select_method}',
+        #    output_dir=output_dir, count_method=count_method, preprocess_method=preprocess_methods,
+        #    classifier=config['classifiers'], select_method=config['select_methods'], 
+        #    compare_group=list(compare_groups.keys()), n_select=config['n_selects']),
+        preprocess_features=expand('{output_dir}/preprosess_features/{count_method}/{preprocess_method}.txt',
+            output_dir=output_dir, count_method=count_method, preprocess_method=get_preprocess_methods())
 
-
+rule preprocess_features:
+    input:
+        '{output_dir}/normalized_matrix/{count_method}/{preprocess_method}.txt'
+    output:
+        '{output_dir}/preprosess_features/{count_method}/{preprocess_method}.txt'
+    params:
+        scaler=config['scale_method'],
+        remove_zero_features=0.2,
+        rpkm_top=2000
+    shell:
+        '''bin/feature_selection.py preprocess_features -i {input} --scaler {params.scaler} \
+            --use-log --transpose --rpkm-top {params.rpkm_top} --remove-zero-features {params.remove_zero_features} -o {output}
+        '''
+    
 rule evaluate:
     input:
-        matrix='output/cpm_matrix/{dataset}.txt',
-        sample_classes=lambda wildcards: 'metadata/sample_classes.{group}.txt'.format(group=groups[wildcards.dataset])
+        matrix='{output_dir}/preprosess_features/{count_method}/{preprocess_method}.txt',
+        sample_classes=data_dir+ '/sample_classes.txt'
     output:
-        directory('output/feature_selection/{dataset}/{compare_classes}/{classifier}.{n_select}.{select_method}.{splitter}')
+        directory('{output_dir}/feature_selection/{count_method}/{preprocess_method}/{compare_group}/{classifier}.{n_select}.{select_method}')
     params:
-        rfe=lambda wildcards: {True: '--rfe --rfe-resample-method jackknife --rfe-max-runs 50'},
-        select_method=lambda wildcards: {'rfe': '--rfe --rfe-step 0.1',
+        select_method=lambda wildcards: {'rfe': '--rfe --rfe-step 0.1 --rfe-resample-method jackknife --rfe-max-runs 50',
             'ranking': '',
-            'robust': '--robust-select --robust-max-runs 50 --robust-resample-method jackknife --robust-jackknife-remove 0.1' }[wildcards.select_method],
-        positive_class=lambda wildcards: compare_classes[groups[wildcards.dataset]][wildcards.compare_classes][1],
-        negative_class=lambda wildcards: compare_classes[groups[wildcards.dataset]][wildcards.compare_classes][0],
-        n_splits=lambda wildcards: {'shuffle_split': 50, 'stratified_shuffle_split': 50}.get(wildcards.splitter, 5),
-        use_log=lambda wildcards: '' if (groups[wildcards.dataset] in 'qpcr') or (wildcards.dataset.startswith('nolabel.logged.ruvs')) else '--use-log',
-        remove_zero_features=lambda wildcards: '' if groups[wildcards.dataset] in 'qpcr' else '--remove-zero-features 0.2'
+            'robust': '--robust-select --robust-max-runs 10 --robust-resample-method jackknife --robust-jackknife-remove 0.1' }[wildcards.select_method],
+        positive_class=lambda wildcards: compare_groups[wildcards.compare_group][1],
+        negative_class=lambda wildcards: compare_groups[wildcards.compare_group][0],
+        n_splits=config['cross_validation_splits'],
+        splitter=config['splitter']
     shell:
         '''bin/feature_selection.py evaluate -i {input.matrix} \
-            --transpose {params.use_log} --sample-classes {input.sample_classes} \
+            --sample-classes {input.sample_classes} \
             --positive-class '{params.positive_class}' --negative-class '{params.negative_class}' \
-            --scaler robust --method {wildcards.classifier} --n-select {wildcards.n_select} \
-            --splitter {wildcards.splitter} \
+            --method {wildcards.classifier} --n-select {wildcards.n_select} \
+            --splitter {params.splitter} \
             {params.select_method} \
             --n-splits {params.n_splits} \
             --compute-sample-weight \
-            {params.remove_zero_features} \
             -o {output}
         '''

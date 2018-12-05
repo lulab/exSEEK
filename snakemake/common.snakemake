@@ -1,5 +1,6 @@
 shell.prefix('set -x;')
 import os
+import yaml
 
 data_dir = config['data_dir']
 genome_dir = config['genome_dir']
@@ -11,3 +12,25 @@ with open(os.path.join(data_dir, 'sample_ids.txt'), 'r') as f:
 for sample_id in sample_ids:
     if '.' in sample_id:
         raise ValueError('"." is not allowed in sample ID: {}'.format(sample_id))
+
+def get_preprocess_methods():
+    preprocess_methods = []
+    for batch_removal_method in config['batch_removal_methods']:
+        if batch_removal_method == 'Combat':
+            template = 'filter.{imputation_method}.Norm_{normalization_method}.Batch_{batch_removal_method}_{batch_index}.{count_method}'
+            preprocess_methods += expand(template,
+                output_dir=output_dir,
+                imputation_method=config['imputation_methods'],
+                normalization_method=config['normalization_methods'],
+                batch_removal_method=batch_removal_method,
+                batch_index=config['batch_indices'],
+                count_method=config['count_method'])
+        else:
+            template = 'filter.{imputation_method}.Norm_{normalization_method}.Batch_{batch_removal_method}.{count_method}'
+            preprocess_methods += expand(template,
+                output_dir=output_dir,
+                imputation_method=config['imputation_methods'],
+                normalization_method=config['normalization_methods'],
+                batch_removal_method=batch_removal_method,
+                count_method=config['count_method'])
+    return preprocess_methods
