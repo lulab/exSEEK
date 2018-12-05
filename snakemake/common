@@ -1,8 +1,0 @@
-shell.prefix('set -x;')
-
-with open(config['sample_id_file'], 'r') as f:
-    sample_ids = f.read().split()
-
-genome_dir = config['genome_dir']
-output_dir = config['output_dir']
-rna_types = config['rna_types']
