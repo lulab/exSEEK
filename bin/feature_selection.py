@@ -9,41 +9,38 @@ def command_handler(f):
     return f
 
 @command_handler
-def preprocess_matrix(args):
+def preprocess_features(args):
     import numpy as np
     import pandas as pd
+    from sklearn.preprocessing import StandardScaler, RobustScaler, MinMaxScaler, MaxAbsScaler
 
     logger.info('read feature matrix: ' + args.matrix)
-    m = pd.read_table(args.matrix, index_col=0, sep='\t')
+    X = pd.read_table(args.matrix, index_col=0, sep='\t')
     if args.transpose:
         logger.info('transpose feature matrix')
-        m = m.T
-    logger.info('{} samples, {} features'.format(m.shape[0], m.shape[1]))
+        X = X.T
+    logger.info('{} samples, {} features'.format(X.shape[0], X.shape[1]))
     if args.remove_zero_features is not None:
-        logger.info('remove features with zero fraction below {}'.format(args.remove_zero_features))
-        m = m.loc[:, np.isclose(m, 0).sum(axis=0) < (m.shape[0]*args.remove_zero_features)]
-    if args.top_features_by_median is not None:
-        nonzero_samples = (m > 0).sum(axis=0)
-        counts_geomean = np.exp(np.sum(np.log(np.maximum(m, 1)), axis=0)/nonzero_samples)
-        m = m.loc[:, counts_geomean.sort_values(ascending=False)[:args.top_features_by_median].index.values]
-    feature_names = m.columns.values
-    logger.info('{} samples, {} features'.format(m.shape[0], m.shape[1]))
-    logger.info('sample: {} ...'.format(str(m.index.values[:3])))
-    logger.info('features: {} ...'.format(str(m.columns.values[:3])))
-
-    logger.info('read sample classes: ' + args.sample_classes)
-    sample_classes = pd.read_table(args.sample_classes, header=None, 
-        names=['sample_id', 'sample_class'], index_col=0, sep='\t')
-    sample_classes = sample_classes.iloc[:, 0]
-    sample_classes = sample_classes.loc[m.index.values]
-    logger.info('sample_classes: {}'.format(sample_classes.shape[0]))
+        logger.info('remove features with zero fraction larger than {}'.format(args.remove_zero_features))
+        X = X.loc[:, ~(np.isclose(X, 0).sum(axis=0) > (X.shape[0]*args.remove_zero_features))]
+    if args.rpkm_top is not None:
+        logger.info('select top {} features ranked by RPKM'.format(args.rpkm_top))
+        feature_info = X.columns.to_series().str.split('|', expand=True)
+        feature_info.columns = ['gene_id', 'gene_type', 'gene_name', 'feature_id', 'transcript_id', 'start', 'end']
+        feature_info['start'] = feature_info['start'].astype('int')
+        feature_info['end'] = feature_info['end'].astype('int')
+        feature_info['length'] = feature_info['end'] - feature_info['start']
+        rpkm = 1e3*X.div(feature_info['length'], axis=1)
+        mean_rpkm = np.exp(np.log(rpkm + 0.01).mean(axis=0)) - 0.01
+        features_select = mean_rpkm.sort_values(ascending=False)[:args.rpkm_top].index.values
+        X = X.loc[:, features_select]
+    feature_names = X.columns.values
+    logger.info('{} samples, {} features'.format(X.shape[0], X.shape[1]))
+    logger.info('sample: {} ...'.format(str(X.index.values[:3])))
+    logger.info('features: {} ...'.format(str(X.columns.values[:3])))
 
     n_samples, n_features = X.shape
     sample_ids = X.index.values
-
-    if not os.path.isdir(args.output_dir):
-        logger.info('create outout directory: ' + args.output_dir)
-        os.makedirs(args.output_dir)
 
     if args.use_log:
         logger.info('apply log2 to feature matrix')
@@ -63,9 +60,8 @@ def preprocess_matrix(args):
         X = MaxAbsScaler().fit_transform(X)
     
     X = pd.DataFrame(X, index=sample_ids, columns=feature_names)
-    X.columns.name = 'sample'
-    X = X.T
-    X.to_csv(os.path.join(args.output_dir, 'matrix.txt'), sep='\t', header=True, index=True)
+    X.index.name = 'sample'
+    X.to_csv(args.output_file, sep='\t', header=True, index=True, na_rep='NA')
 
 @command_handler
 def evaluate(args):
@@ -94,8 +90,7 @@ def evaluate(args):
     logger.info('features: {} ...'.format(str(m.columns.values[:3])))
 
     logger.info('read sample classes: ' + args.sample_classes)
-    sample_classes = pd.read_table(args.sample_classes, header=None, 
-        names=['sample_id', 'sample_class'], index_col=0, sep='\t')
+    sample_classes = pd.read_table(args.sample_classes, index_col=0, sep='\t')
     sample_classes = sample_classes.iloc[:, 0]
     sample_classes = sample_classes.loc[m.index.values]
     logger.info('sample_classes: {}'.format(sample_classes.shape[0]))
@@ -122,15 +117,8 @@ def evaluate(args):
     y[X_pos.shape[0]:] = 1
     del X_pos
     del X_neg
-    X_raw = X
     n_samples, n_features = X.shape
     sample_ids = X.index.values
-
-    logger.info('save sample ids')
-    X.index.to_series().to_csv(os.path.join(args.output_dir, 'samples.txt'),
-        sep='\t', header=False, index=False)
-    logger.info('save sample classes')
-    np.savetxt(os.path.join(args.output_dir, 'classes.txt'), y, fmt='%d')
 
     if not os.path.isdir(args.output_dir):
         logger.info('create outout directory: ' + args.output_dir)
@@ -141,6 +129,9 @@ def evaluate(args):
         sep='\t', header=False, index=False)
     logger.info('save sample classes')
     np.savetxt(os.path.join(args.output_dir, 'classes.txt'), y, fmt='%d')
+
+    # get numpy array from DataFrame
+    X = X.values
 
     # check NaN values
     if np.any(np.isnan(X)):
@@ -153,7 +144,7 @@ def evaluate(args):
         grid_search = {'C': [1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1, 1e2, 1e3, 1e4, 1e5]}
     elif args.method == 'random_forest':
         estimator = RandomForestClassifier()
-        grid_search = {'n_estimators': [10, 20, 30], 'max_depth': list(range(2, 10)) }
+        grid_search = {'n_estimators': [25, 50, 75], 'max_depth': list(range(2, 8)) }
     elif args.method == 'linear_svm':
         estimator = LinearSVC()
         grid_search = {'C': [1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1, 1e2, 1e3, 1e4, 1e5]}
@@ -225,7 +216,7 @@ def evaluate(args):
         X_test, y_test = X[test_index], y[test_index]
         # optimize hyper-parameters
         if grid_search is not None:
-            cv = GridSearchCV(estimator, grid_search, cv=3)
+            cv = GridSearchCV(estimator, grid_search, cv=5)
             cv.fit(X[train_index], y[train_index])
             estimator = cv.best_estimator_
         
@@ -243,7 +234,7 @@ def evaluate(args):
                 elif args.robust_resample_method == 'bootstrap':
                     resampler_args = {'max_runs': args.robust_max_runs}
                 robust_estimator = RobustEstimator(estimator, n_select=args.n_select, 
-                    grid_search=grid_search, resample_method=args.robust_resample_method,
+                    resample_method=args.robust_resample_method,
                     rfe=args.rfe, **resampler_args)
                 robust_estimator.fit(X_train, y_train, sample_weight=sample_weight)
                 estimator = robust_estimator.estimator_
@@ -335,19 +326,19 @@ if __name__ == '__main__':
     parser = subparsers.add_parser('preprocess_features')
     parser.add_argument('--matrix', '-i', type=str, required=True,
         help='input feature matrix (rows are samples and columns are features')
-    parser.add_argument('--sample-classes', type=str, required=True,
-        help='input file containing sample classes with 2 columns: sample_id, sample_class')
     parser.add_argument('--use-log', action='store_true',
         help='apply log2 to feature matrix')
     parser.add_argument('--transpose', action='store_true', default=False,
         help='transpose the feature matrix')
-    parser.add_argument('--scaler', type=str, default='zscore',
+    parser.add_argument('--scaler', type=str,
         choices=('zscore', 'robust', 'max_abs', 'min_max', 'none'),
         help='method for scaling features')
-    parser.add_argument('--output-dir', '-o', type=str, required=True,
-        help='output directory')
+    parser.add_argument('--output-file', '-o', type=str, required=True,
+        help='output file name')
     parser.add_argument('--remove-zero-features', type=float, 
         help='remove features that have fraction of zero values above this value')
+    parser.add_argument('--rpkm-top', type=int,
+        help='Maximum number of top features to select ranked by RPKM')
     
     parser = subparsers.add_parser('evaluate')
     parser.add_argument('--matrix', '-i', type=str, required=True,
