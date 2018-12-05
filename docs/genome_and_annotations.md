@@ -49,6 +49,25 @@
 [ -d "genome/hg38/source" ] || mkdir -p "genome/hg38/source"
 ```
 
+### Chromosome ID conversion table
+
+* Column 1: UCSC chromosome ID
+* Column 2: RefSeq chromosome ID
+
+```bash
+mysql --user=genome --host=genome-mysql.cse.ucsc.edu -A -N -e "SELECT * FROM ucscToRefSeq;" hg38 | cut -f1,4 > genome/hg38/source/ucscToRefSeq.txt
+```
+
+### Download Gene annotation (NCBI)
+```bash
+# NCBI Human Release 109
+wget -P genome/hg38/source ftp://ftp.ncbi.nlm.nih.gov/genomes/H_sapiens/GFF/ref_GRCh38.p12_top_level.gff3.gz
+[ -d genome/hg38/gff3 ] || mkdir -p genome/hg38/gff3
+awk 'BEGIN{OFS="\t";FS="\t"} NR==FNR{c[$2]=$1;next} !/^#/{print c[$1],$2,$3,$4,$5,$6,$7,$8,$9}' \
+    genome/hg38/source/ucscToRefSeq.txt <(zcat genome/hg38/source/ref_GRCh38.p12_top_level.gff3.gz) \
+    > genome/hg38/gff3/ncbi.gff3
+```
+
 ### Download chain files for CrossMap
 ```bash
 wget -O genome/hg38/source/hg18ToHg38.over.chain.gz http://hgdownload.soe.ucsc.edu/goldenPath/hg18/liftOver/hg18ToHg38.over.chain.gz
