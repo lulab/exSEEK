@@ -405,7 +405,7 @@ output_path = './',batchindex
     
     
     imputename <-paste(imputemethod,'.',sep='')
-    normname <-paste(normname,'.',sep='')
+    normname <-paste(norm_methods,'.',sep='')
 
     mat <- read.table(paste(input_path,'filter.',imputename, normname,splitname,sep=''),sep='\t',header=TRUE)
     print (dim(mat))
@@ -419,8 +419,8 @@ output_path = './',batchindex
         write.table(get(tmp_name), paste(output_path,'filter.',imputename, normname, tmp_name,'.',splitname,sep=''),sep='\t',quote=FALSE, row.names=TRUE, col.names=TRUE)
         }
     }
-    if (batchmethod=='null'){
-        write.table(mat, paste(output_path,'filter.',imputename, normname, ,'null.',splitname,sep=''),sep='\t',quote=FALSE, row.names=TRUE, col.names=TRUE)
+    if (batch_methods=='null'){
+        write.table(mat, paste(output_path,'filter.',imputename, normname,'null.',splitname,sep=''),sep='\t',quote=FALSE, row.names=TRUE, col.names=TRUE)
     }
 }
 ruv <- function(
