@@ -93,7 +93,7 @@ read_mat <- function(path, ...) {
 
 # path = 'scirep_classes.txt'
 read_classinfo <- function(path, ...) {
-    read.csv(path, sep = "\t")#, header=T)
+    read.table(path, sep='\t', header=TRUE)
 }
 
 ################################################################################
@@ -190,7 +190,7 @@ output_dir = '.',output_file = 'norm',cv_threshold=1,imputemethod = 'scimpute_co
         write.table(get(tmp_name), paste(output_dir,'filter.',imputename, tmp_name,'.',splitname,sep=''),sep='\t')
     }
     if (imputemethod=='null'){
-        write.table(mat, paste(output_dir,'filter.',imputename,'null.',splitname,sep=''),sep='\t')
+        write.table(mat, paste(output_dir,'filter.',imputename,'Norm_null.',splitname,sep=''),sep='\t')
     }
     
 }
@@ -401,11 +401,12 @@ output_path = './',batchindex
     if ('CPM_top' %in% norm_methods)   normname <- 'Norm_CPM_top'
     if ('CPM_rm' %in% norm_methods)    normname <- 'Norm_CPM_rm'
     if ('CPM_refer' %in% norm_methods) normname <- 'Norm_CPM_refer'
+    if ('null' %in% norm_methods) normname <- 'Norm_null'
     #mat <- get(paste('mat_',tolower(norm_methods),sep=''))
     
     
     imputename <-paste(imputemethod,'.',sep='')
-    normname <-paste(norm_methods,'.',sep='')
+    normname <-paste(normname,'.',sep='')
 
     mat <- read.table(paste(input_path,'filter.',imputename, normname,splitname,sep=''),sep='\t',header=TRUE)
     print (dim(mat))
@@ -420,7 +421,7 @@ output_path = './',batchindex
         }
     }
     if (batch_methods=='null'){
-        write.table(mat, paste(output_path,'filter.',imputename, normname,'null.',splitname,sep=''),sep='\t',quote=FALSE, row.names=TRUE, col.names=TRUE)
+        write.table(mat, paste(output_path,'filter.',imputename, normname,'Batch_null.',splitname,sep=''),sep='\t',quote=FALSE, row.names=TRUE, col.names=TRUE)
     }
 }
 ruv <- function(
