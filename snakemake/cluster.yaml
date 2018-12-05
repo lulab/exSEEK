@@ -1,0 +1,7 @@
+__default__:
+  queue: Z-LU
+  name: {rule}.{wildcards}
+  stderr: logs/cluster/{rule}/{wildcards}.stderr
+  stdout: logs/cluster/{rule}/{wildcards}.stdout
+  threads: {threads}
+  resources: span[hosts=1]

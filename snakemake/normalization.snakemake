@@ -1,0 +1,29 @@
+shell.prefix('set -x;')
+include: 'common.snakemake'
+
+def get_all_inputs(wildcards):
+    available_inputs = dict(
+        normalize=expand('{output_dir}/normalized_matrix/{count_method}/cpm.txt',
+            output_dir=output_dir, count_method='domains_combined')
+    )
+    enabled_inputs = list(available_inputs.keys())
+    inputs = []
+    for key, l in available_inputs.items():
+        if key in enabled_inputs:
+            inputs += l
+    return inputs
+
+rule all:
+    input:
+        get_all_inputs
+
+rule normalize:
+    input:
+        matrix='{output_dir}/count_matrix/{count_method}.txt'
+    output:
+        '{output_dir}/normalized_matrix/{count_method}/cpm.txt',
+    threads:
+        config['threads']
+    shell:
+        '''bin/normalize.py -m cpm -i {input} -o {output}
+        '''
