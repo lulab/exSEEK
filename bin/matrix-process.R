@@ -328,7 +328,7 @@ norm_cpm_top <- function(mat, top_n) {
     row_top <-  mat %>% rowSums() %>% sort(decreasing = T, index.return = T) %>%
     {.$ix[seq_len(top_n)]}
     
-    norm_cpm_impl(mat, row_top)
+    norm_cpm_impl(mat, -row_top)
 }
 
 
