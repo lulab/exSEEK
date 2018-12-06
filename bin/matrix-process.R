@@ -135,10 +135,14 @@ filter_low <- function(mat, min_count = 5, min_sample_per_gene = 10) {
 imputation <- function(mat,tmp_path=".",impute_path="./imputation/", K = 5, N = 3) {
     suppressMessages(library("scImpute"))
     print('start imputation using scImpute')
-    write.csv(mat, paste(tmp_path,"tmpsave.csv",sep=""))
+    mat_correct <- names(mat)
+    names(mat) <-  paste('C_',seq_len(length(names(mat))))
+    write.table(mat, paste(tmp_path,"tmpsave.csv",sep=""),sep='\t')
     scimpute(count_path = paste(tmp_path,"tmpsave.csv",sep=""), infile = "csv",
     outfile = "txt", out_dir = impute_path , Kcluster = K, ncores = N)
-    #read.table(paste(out_path,"scimpute_count.txt",sep=""))
+    mat <- read.table(paste(impute_path,"scimpute_count.txt",sep=""),sep=' ',check.names = FALSE)
+    names(mat) <-mat_correct
+    write.table(  mat , file=paste(args$imputeout,'filter.scimpute_count.',splitname,sep='') ,sep='\t' )
 }
 
 
@@ -432,9 +436,9 @@ ruv <- function(
     k = 10
 ){
     print('start batch removal using RUVs')
-    cIdx <- rownames(mat,batchinfo_path,)
+    cIdx <- rownames(mat)
     
-    sample_info <- read_classinfo(classinfo_path)
+    sample_info <- read.table(classinfo_path,sep='\t',row.names=1,header=T,check.names = FALSE)
     ##rank by mat
     if(unique(is.na(sample_info$sample_id))) 
     stop("sample_id not in file")
@@ -722,7 +726,6 @@ library(readr)
 mat_filter <-read.table(paste(args$filterout,'filter.',splitname,sep=''),sep='\t',row.names=1,header=T,check.names = FALSE)
 if (args$imputemethod=='scimpute_count'){
 imputation(mat_filter,impute_path= args$imputeout, K = args$imputecluster, N = args$processors)
-write.table(  read.table(paste(args$imputeout,'scimpute_count.txt',sep='') ,sep=' ',check.names = FALSE) , file=paste(args$imputeout,'filter.scimpute_count.',splitname,sep='') ,sep='\t' )
 } else if(args$imputemethod=='null'){
 write.table( mat_filter, paste(args$imputeout,'filter.null.',splitname,sep='') ,sep='\t')
 }
