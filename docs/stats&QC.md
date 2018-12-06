@@ -2,36 +2,58 @@
 
 ## Basic Analysis    
 
-* **Count the proportion of different RNA type and show them in a pie chart**
+###  Counts, Ratio and Length of different RNA type
 
-  
-![](../assets/pie.png)
+- Ratio Pie Plot 
 
-* **Count the length distribution of mapped reads of different RNA types**
+**Count the proportion of different RNA type and show them in a pie chart**
 
-  * Line plot of length distribution
-  
-  ![](../assets/length.png)
-  
-  * 3D bar plot of length distribution
-  
-  ![](../assets/3d_distribution.png)
-  
+![](../assets/pie_ratio.png)
+
+- Ratio Box Plot 
+
+**Count the proportion of different RNA type and show them in a boxplot**
+
+![](../assets/box_ratio.png)
+
+**Count the proportion of different RNA type and show them by sample**
+
+- 3D bar plot 
+
+![](../assets/3Dbar_ratio.png)
+
+- Stack Bar ratio plot 
+
+![](../assets/stack_ratio.png)
+
+- Stack Bar count plot 
+
+![](../assets/stack_count.png)
 
 
-* **Counts of different RNA types in different samples**
+- Length Line Plot
 
-![](../assets/boxplot_rnatype.png)
+**Counting the length distribution of mapped reads of different RNA types**
 
-* **Counts of specific RNA types in different samples**, use lncRNA as example
+![](../assets/line_length.png)
 
-![](../assets/countsoflnc.png)
+- Length 3D Bar Plot
 
-* **Analyze the proportion of different RNAs in each sample**
+![](../assets/3Dbar_length.png)
 
-![](../assets/stackbarhccorigin.png) 
 
-![](../assets/stackbarhcc.png)
+
+**Counts of specific RNA types in different samples**
+
+- Bar plot of ratio
+
+![](../assets/ratio_by_rna.png)
+
+- Bar plot of count
+
+![](../assets/count_by_rna.png)
+
+
 
 
 ### Sample QC   
@@ -48,5 +70,13 @@ We have developed a set of criteria for quality control of samples based on the 
 | Y RNA% | **10%~65%** | Reads mapped to Y RNA |
 | miRNA% | **10%~65% \(**up to 80% for exoRNAs**\)** | Reads mapped to miRNA |
 
-- [ ]to do: customized QC criteria
+- FastQC
+![](../assets/fastqc.png)
+
+- Sample QC
+![](../assets/sample_qc.png)
+
+
+- [ ] to do: sample QC
+
 
