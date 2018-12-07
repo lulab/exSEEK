@@ -4,10 +4,10 @@
 
 | Type | Number of genes  | Source |
 | ---- | ---- | ------ |
-| miRNA | 1881 | GENCODE V27 (precursor) |
+| miRNA | 1917 | miRBase hairpin (Version 22) |
 | piRNA | 23431 | piRNABank | 
 | lncRNA | 15778 | GENCODE V27 and mitranscriptome |
-| rRNA | 544 | GENCODE V27 |
+| rRNA | 37 | NCBI refSeq 109 |
 | mRNA | 19836 | GENCODE V27 |
 | snoRNA | 943 | GENCODE V27 |
 | snRNA | 1900 | GENCODE V27 |
@@ -63,9 +63,20 @@ mysql --user=genome --host=genome-mysql.cse.ucsc.edu -A -N -e "SELECT * FROM ucs
 # NCBI Human Release 109
 wget -P genome/hg38/source ftp://ftp.ncbi.nlm.nih.gov/genomes/H_sapiens/GFF/ref_GRCh38.p12_top_level.gff3.gz
 [ -d genome/hg38/gff3 ] || mkdir -p genome/hg38/gff3
-awk 'BEGIN{OFS="\t";FS="\t"} NR==FNR{c[$2]=$1;next} !/^#/{print c[$1],$2,$3,$4,$5,$6,$7,$8,$9}' \
+awk 'BEGIN{OFS="\t";FS="\t"} NR==FNR{c[$2]=$1;next} !/^#/{chrom=c[$1]; if(length(chrom) > 0) print c[$1],$2,$3,$4,$5,$6,$7,$8,$9}' \
     genome/hg38/source/ucscToRefSeq.txt <(zcat genome/hg38/source/ref_GRCh38.p12_top_level.gff3.gz) \
-    > genome/hg38/gff3/ncbi.gff3
+    > genome/hg38/gff3/refseq.gff3
+gffread --bed -o genome/hg38/bed/ncbi.bed genome/hg38/gff3/refseq.gff3
+wget -O genome/hg38/source/refSeq_rna.fa.gz ftp://ftp.ncbi.nlm.nih.gov/genomes/H_sapiens/RNA/rna.fa.gz
+# get rRNA sequence IDs
+zgrep 'ribosomal RNA$' genome/hg38/source/refSeq_rna.fa.gz \
+    | sed 's/>ref|\(NR_[0-9.]\+\)|.*(\([^)]\+\)).*/\1|\2/' > genome/hg38/source/refSeq_rRNA.ids.txt
+# get rRNA sequences
+zcat genome/hg38/source/refSeq_rna.fa.gz \
+    | awk 'FNR==NR{split($0,a,"|");ids[a[1]]=1;next} 
+{if($0 ~ /^>/){split($0,a,"|");if(ids[a[2]] == 1){keep=1; print ">" a[2];}else{keep=0}} else{if(keep == 1){print}}}' \
+genome/hg38/source/refSeq_rRNA.ids.txt - > genome/hg38/fasta/rRNA.fa
+samtools faidx genome/hg38/fasta/rRNA.fa
 ```
 
 ### Download chain files for CrossMap
@@ -196,9 +207,15 @@ bedtools getfasta -s -name -fi genome/hg38/fasta/genome.fa -bed genome/hg38/sour
     > genome/hg38/source/piRNABank.human.hg38.fa
 ```
 
-### miRBase
+### miRBase (Version 22)
 ```bash
 wget -O genome/hg38/source/miRBase.hsa.gff3 ftp://mirbase.org/pub/mirbase/CURRENT/genomes/hsa.gff3
+wget -O genome/hg38/source/miRBase.hairpin.fa.gz ftp://mirbase.org/pub/mirbase/CURRENT/hairpin.fa.gz
+# extract human pre-miRNA
+zcat genome/hg38/source/miRBase.hairpin.fa.gz \
+    | awk '/^>/{if($0 ~ />hsa-/) {keep=1; print $1} else{keep=0}; next}{if(keep==1){gsub(/U/, "T");print}}' \
+    > genome/hg38/fasta/miRNA.fa
+samtools faidx genome/hg38/fasta/miRNA.fa
 ```
 
 ### Intron
@@ -220,7 +237,7 @@ wget -P genome/hg38/source http://hgdownload.soe.ucsc.edu/goldenPath/hg19/encode
 wget -P genome/hg38/source http://hgdownload.soe.ucsc.edu/goldenPath/hg19/encodeDCC/wgEncodeBroadHmm/wgEncodeBroadHmmHuvecHMM.bed.gz
 wget -P genome/hg38/source http://hgdownload.soe.ucsc.edu/goldenPath/hg19/encodeDCC/wgEncodeBroadHmm/wgEncodeBroadHmmK562HMM.bed.gz
 wget -P genome/hg38/source http://hgdownload.soe.ucsc.edu/goldenPath/hg19/encodeDCC/wgEncodeBroadHmm/wgEncodeBroadHmmNhekHMM.bed.gz
-wget -P genome/hg38/source http://hgdownload.soe.ucsc.edu/goldenPath/hg19/encodeDCC/wgEncodeBroadHmm/wgEncodeBroadHmmNhlfHMM.bed.g`
+wget -P genome/hg38/source http://hgdownload.soe.ucsc.edu/goldenPath/hg19/encodeDCC/wgEncodeBroadHmm/wgEncodeBroadHmmNhlfHMM.bed.gz
 
 # hg19 => hg38
 tracks="wgEncodeBroadHmmGm12878HMM wgEncodeBroadHmmH1hescHMM wgEncodeBroadHmmHepg2HMM
@@ -252,12 +269,12 @@ UCSC GenomeBrowser -> Tools -> Table Browser
 
 Dowload to: genome/hg38/source/rmsk.bed.gz
 ```bash
-gunzip -c genome/hg38/source/rmsk.bed.gz > genome/hg38/bed/rmsk.bed
+gunzip -c genome/hg38/source/rmsk.bed.gz | bedtools sort > genome/hg38/bed/rmsk.bed
 ```
 
 ### circRNA database (circBase)
 ```bash
 wget -O genome/hg38/source/circbase.hg19.fa.gz http://www.circbase.org/download/human_hg19_circRNAs_putative_spliced_sequence.fa.gz
-zcat genome/hg38/source/circbase.hg19.fa.gz | bin/preprocess.py extract_circrna_junction -s 50 -o genome/hg38/fasta/circbase.junction.fa
-samtools faidx genome/hg38/fasta/circbase.junction.fa
+zcat genome/hg38/source/circbase.hg19.fa.gz | bin/preprocess.py extract_circrna_junction -s 50 -o genome/hg38/fasta/circRNA.fa
+samtools faidx genome/hg38/fasta/circRNA.fa
 ```
