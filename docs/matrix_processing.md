@@ -8,11 +8,12 @@ usage: bin/matrix-process.R [-h] -s STEP -i INPUT -c CLASS -b BATCH
                             --normalizeout NORMALIZEOUT --batchremoveout
                             BATCHREMOVEOUT [--filtercount NUMBER]
                             [--filtersample NUMBER] [--imputemethod STRING]
-                            [--imputecluster NUMBER] [--normmethod STRING]
-                            [--normtopk NUMBER] [--cvthreshold NUMBER]
-                            [--removetype STRING] [--refergenefile STRING]
-                            [--batchmethod STRING] [--batchindex INT]
-                            [-p NUMBER]
+                            [--imputecluster NUMBER] [--imputenum NUMBER]
+                            [--imputecutoff NUMBER] [--imputealpha NUMBER]
+                            [--normmethod STRING] [--normtopk NUMBER]
+                            [--cvthreshold NUMBER] [--removetype STRING]
+                            [--refergenefile STRING] [--batchmethod STRING]
+                            [--batchindex INT] [-p NUMBER]
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -40,6 +41,10 @@ optional arguments:
                         scimpute_count]
   --imputecluster NUMBER
                         cluster number in scImpute [default = 5]
+  --imputenum NUMBER    number in viper [default = 5000]
+  --imputecutoff NUMBER
+                        cutoff in viper [default = 0.5]
+  --imputealpha NUMBER  alpha in viper [default = 0.1]
   --normmethod STRING   the normalization algorithm to use [default = SCNorm]
   --normtopk NUMBER     top K feature as scale factor [default = 20]
   --cvthreshold NUMBER  coefficient variance threshold of reference gene,
@@ -60,7 +65,7 @@ optional arguments:
 
 ```
 -s filter imputation normalization batch_removal
---imputemethod scimpute_count,null
+--imputemethod scimpute_count,viper_count,null
 --normmethod SCnorm,TMM,RLE,CPM,CPM_top,CPM_rm,CPM_refer,null
 --batchmetod RUV,Combat,null
 --batchindex 1
@@ -69,25 +74,28 @@ optional arguments:
 - **Example:**
 
 ```
-bin/matrix-process.R -s batch_removal \
--i output/scirep/count_matrix/transcript.txt \
---filterout output/scirep/matrix_processing/ \
---imputemethod null \
---imputeout output/scirep/matrix_processing/ \
+bin/matrix-process.R -s imputation \
+-i /Share/home/shibinbin/projects/exSeek-dev/output/lulab_hcc/count_matrix/domains_combined.txt \
+--filterout /Share/home/shibinbin/projects/exSeek-dev/output/lulab_hcc/matrix_processing/ \
+--imputemethod viper_count \
+--imputeout /Share/home/shibinbin/projects/exSeek-dev/output/lulab_hcc/matrix_processing/ \
 --filtercount 5 \
 --filtersample 10 \
 --imputecluster 5 \
+--imputenum 5000 \
+--imputecutoff 0.1 \
+--imputealpha 0.5 \
 -p 4 \
---normalizeout output/scirep/matrix_processing/ \
---normmethod null \
+--normalizeout /Share/home/shibinbin/projects/exSeek-dev/output/lulab_hcc/matrix_processing/ \
+--normmethod RLE \
 --normtopk 20 \
 --removetype miRNA,piRNA \
 --cvthreshold 0.5 \
 --refergenefile data/matrix_processing/refer_gene_id.txt \
--c data/labels/scirep_classes.txt \
--b data/other_annotations/scirep_batch.txt \
+-c /Share/home/shibinbin/projects/exSeek-dev/data/lulab_hcc/sample_classes.txt \
+-b /Share/home/shibinbin/projects/exSeek-dev/data/lulab_hcc/batch_info.txt \
 --batchremoveout output/scirep/matrix_processing/ \
---batchmethod Combat \
+--batchmethod RUV \
 --batchindex 1
 ```
 
