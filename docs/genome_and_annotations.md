@@ -26,7 +26,11 @@
 | File | Description |
 | ---- | ------ |
 | `fasta/genome.fa` | genome sequence |
-| `fasta/circbase.junction.fa` | junction sequence in circBase |
+| `fasta/circRNA.fa` | junction sequence in circBase |
+| `fasta/rRNA.fa` | rRNA sequences in NCBI RefSeq |
+| `fasta/miRNA.fa` | miRNA hairpin (precursor) sequences in miRBase |
+| `fasta/piRNA.fa` | piRNA sequences in piRNABank |
+| `fasta/${rna_type}.fa` | Longest isoform for each gene extracted from GENCODE annotations |
 | `gtf_by_biotype/${rna_type}.gtf` | separate GTF files for each RNA type |
 | `gtf/gencode.gtf` | GENCODE GTF file |
 | `gtf/mitranscriptome.gtf` | Mitranscriptome GTF file |
@@ -38,7 +42,8 @@
 | `rsem_index/bowtie2/${rna_type}.transcripts.fa` | Sequence for each RNA type (longest transcripts) |
 | `gtf_longest_transcript/${rna_type}.gtf` | GTF files for the longest isoforms from GENCODE and Mitranscriptome |
 | `bed/*.bed` | Transcript in BED12 format extracted from GTF files in `gtf/*.gtf |
-| `index/bowtie2/circRNA` | Bowtie2 index for cirRNA |
+| `index/bowtie2/${rna_type}` | STAR index for transcripts |
+| `index/star/${rna_type}` | STAR index for transcripts |
 | `long_index/star/` | STAR index including splicing junctions of long RNA |
 
 
@@ -77,6 +82,14 @@ zcat genome/hg38/source/refSeq_rna.fa.gz \
 {if($0 ~ /^>/){split($0,a,"|");if(ids[a[2]] == 1){keep=1; print ">" a[2];}else{keep=0}} else{if(keep == 1){print}}}' \
 genome/hg38/source/refSeq_rRNA.ids.txt - > genome/hg38/fasta/rRNA.fa
 samtools faidx genome/hg38/fasta/rRNA.fa
+# generate transcript table
+{
+echo -e 'chrom\tstart\tend\tname\tscore\tstrand\tgene_id\ttranscript_id\tgene_name\ttranscript_name\tgene_type\ttranscript_type\tsource'
+awk 'BEGIN{OFS="\t";FS="\t"}FNR==NR{split($0,a,"|");gene_name[a[1]]=a[2];next}{print $1,0,$2,a[1],0,"+",$1,$1,gene_name[$1],gene_name[$1],"rRNA","rRNA","RefSeq"}' \
+    genome/hg38/source/refSeq_rRNA.ids.txt genome/hg38/fasta/rRNA.fa.fai
+} > genome/hg38/transcript_table/rRNA.txt
+# build STAR index (small genome)
+STAR --runMode genomeGenerate --genomeSAindexNbases 5 --genomeDir genome/hg38/index/star/rRNA/ --genomeFastaFiles genome/hg38/fasta/rRNA.fa
 ```
 
 ### Download chain files for CrossMap
@@ -211,11 +224,19 @@ bedtools getfasta -s -name -fi genome/hg38/fasta/genome.fa -bed genome/hg38/sour
 ```bash
 wget -O genome/hg38/source/miRBase.hsa.gff3 ftp://mirbase.org/pub/mirbase/CURRENT/genomes/hsa.gff3
 wget -O genome/hg38/source/miRBase.hairpin.fa.gz ftp://mirbase.org/pub/mirbase/CURRENT/hairpin.fa.gz
+wget -O genome/hg38/source/miRBase.mature.fa.gz ftp://mirbase.org/pub/mirbase/CURRENT/mature.fa.gz
+
 # extract human pre-miRNA
 zcat genome/hg38/source/miRBase.hairpin.fa.gz \
     | awk '/^>/{if($0 ~ />hsa-/) {keep=1; print $1} else{keep=0}; next}{if(keep==1){gsub(/U/, "T");print}}' \
     > genome/hg38/fasta/miRNA.fa
 samtools faidx genome/hg38/fasta/miRNA.fa
+# generate transcript table
+{
+echo -e 'chrom\tstart\tend\tname\tscore\tstrand\tgene_id\ttranscript_id\tgene_name\ttranscript_name\tgene_type\ttranscript_type\tsource'
+awk 'BEGIN{OFS="\t";FS="\t"}{print $1,0,$2,$1,0,"+",$1,$1,$1,$1,"miRNA","miRNA","miRBase"}' \
+    genome/hg38/fasta/miRNA.fa.fai
+} > genome/hg38/transcript_table/miRNA.txt
 ```
 
 ### Intron
@@ -275,6 +296,17 @@ gunzip -c genome/hg38/source/rmsk.bed.gz | bedtools sort > genome/hg38/bed/rmsk.
 ### circRNA database (circBase)
 ```bash
 wget -O genome/hg38/source/circbase.hg19.fa.gz http://www.circbase.org/download/human_hg19_circRNAs_putative_spliced_sequence.fa.gz
-zcat genome/hg38/source/circbase.hg19.fa.gz | bin/preprocess.py extract_circrna_junction -s 50 -o genome/hg38/fasta/circRNA.fa
+zcat genome/hg38/source/circbase.hg19.fa.gz | bin/preprocess.py extract_circrna_junction -s 150 -o genome/hg38/fasta/circRNA.fa
 samtools faidx genome/hg38/fasta/circRNA.fa
+STAR --runMode genomeGenerate --genomeSAindexNbases 10 --genomeChrBinNbits 7 --genomeDir genome/hg38/index/star/rRNA/ --genomeFastaFiles genome/hg38/fasta/rRNA.fa
+```
+
+### Merge transcript table
+```bash
+{
+echo -e 'chrom\tstart\tend\tname\tscore\tstrand\tgene_id\ttranscript_id\tgene_name\ttranscript_name\tgene_type\ttranscript_type\tsource'
+for rna_type in rRNA lncRNA miRNA mRNA piRNA snoRNA snRNA srpRNA tRNA tucpRNA Y_RNA;do
+    sed '1 d' genome/hg38/transcript_table/${rna_type}.txt
+done
+} > genome/hg38/transcript_table/all.txt
 ```
