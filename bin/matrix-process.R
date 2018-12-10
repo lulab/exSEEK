@@ -25,6 +25,15 @@ parser$add_argument( "--imputemethod", type="character", default="scimpute_count
 parser$add_argument("--imputecluster", type="integer", default=5,
     help="cluster number in scImpute [default = %(default)s]",
     metavar="NUMBER")
+parser$add_argument("--imputenum", type="integer", default=5000,
+    help="number in viper [default = %(default)s]",
+    metavar="NUMBER")
+parser$add_argument( "--imputecutoff", type="double", default=0.5
+                    metavar="NUMBER",
+                    help="cutoff in viper [default = %(default)s]")
+parser$add_argument( "--imputealpha", type="double", default=0.1
+                    metavar="NUMBER",
+                    help="alpha in viper [default = %(default)s]")
 
 parser$add_argument( "--normmethod", type="character", default="SCNorm",
                     metavar="STRING",
@@ -132,7 +141,7 @@ filter_low <- function(mat, min_count = 5, min_sample_per_gene = 10) {
 #' @examples imputation(mat, "data/expression_matrix/", "data/matrix_processing/imputation/",5,3)
 #'
 #' @export
-imputation <- function(mat,tmp_path=".",impute_path="./imputation/", K = 5, N = 3) {
+scimpute <- function(mat,tmp_path=".",impute_path=".", K = 5, N = 3) {
     suppressMessages(library("scImpute"))
     print('start imputation using scImpute')
     mat_correct <- names(mat)
@@ -143,6 +152,16 @@ imputation <- function(mat,tmp_path=".",impute_path="./imputation/", K = 5, N = 
     mat <- read.table(paste(impute_path,"scimpute_count.txt",sep=""),sep=' ',check.names = FALSE)
     names(mat) <-mat_correct
     write.table(  mat , file=paste(args$imputeout,'filter.scimpute_count.',splitname,sep='') ,sep='\t' )
+}
+
+viper <- function(mat,tmp_path=".",impute_path=".",num = 5000, percentage.cutoff = 0.1, alpha= 0.5) {
+    suppressWarnings(library(VIPER))
+    mat_correct <- names(mat)
+    names(mat) <-  paste('C_',seq_len(length(names(mat))))
+    VIPER(mat, num = num, percentage.cutoff = percentage.cutoff, minbool = FALSE, alpha = alpha, report = TRUE, outdir = impute_path)
+    mat <- read.table(paste(impute_path,'imputed_counts.csv',sep=''),sep=' ',header=TRUE, check.names = FALSE)
+    names(mat) <-mat_correct
+    write.table(mat, file=paste(args$imputeout,'filter.viper_count.',splitname,sep='') ,sep='\t' )
 }
 
 
@@ -737,7 +756,9 @@ write.table(mat_filter, paste(args$filterout, 'filter','.',splitname,sep=''),sep
 library(readr)
 mat_filter <-read.table(paste(args$filterout,'filter.',splitname,sep=''),sep='\t',row.names=1,header=T,check.names = FALSE)
 if (args$imputemethod=='scimpute_count'){
-imputation(mat_filter,impute_path= args$imputeout, K = args$imputecluster, N = args$processors)
+scimpute(mat_filter,impute_path= args$imputeout, K = args$imputecluster, N = args$processors)
+} else if(args$imputemethod=='viper_count'){
+viper(mat_filter, impute_path= args$imputeout,num = args$imputevipernum,percentage.cutoff = args$imputecutoff, alpha= args$imputealpha) 
 } else if(args$imputemethod=='null'){
 write.table( mat_filter, paste(args$imputeout,'filter.null.',splitname,sep='') ,sep='\t')
 }
