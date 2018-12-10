@@ -83,13 +83,6 @@ splitname <- splitname[length(splitname)]
 #' @export
 
 
-read_mat <- function(path, ...) {
-	path %>% readr::read_tsv(T, readr::cols(.default = 'c'), ...) %>%
-		dplyr::mutate_at(-1, readr::parse_integer) %>%
-		dplyr::rename('transcript' = 1) %>% as.data.frame() %>%
-		tibble::column_to_rownames('transcript') %>% as.matrix()
-}
-
 #' @title sample classinfo
 #'
 #' @param path string.
@@ -102,7 +95,7 @@ read_mat <- function(path, ...) {
 
 # path = 'scirep_classes.txt'
 read_classinfo <- function(path, ...) {
-    read.table(path, sep='\t', header=TRUE,check.names = FALSE)
+    read.table(path, sep='\t', header=TRUE,  check.names=FALSE, row.names=1, stringsAsFactors=FALSE)
 }
 
 ################################################################################
@@ -141,26 +134,25 @@ filter_low <- function(mat, min_count = 5, min_sample_per_gene = 10) {
 #' @examples imputation(mat, "data/expression_matrix/", "data/matrix_processing/imputation/",5,3)
 #'
 #' @export
-scimpute <- function(mat,tmp_path=".",impute_path=".", K = 5, N = 3) {
+scimpute_count <- function(mat,tmp_path=".",impute_path=".", K = 5, N = 3) {
     suppressMessages(library("scImpute"))
     print('start imputation using scImpute')
     mat_correct <- names(mat)
     names(mat) <-  paste('C_',seq_len(length(names(mat))))
-    write.csv(mat, paste(tmp_path,"tmpsave.csv",sep=""),sep=',')
-    scimpute(count_path = paste(tmp_path,"tmpsave.csv",sep=""), infile = "csv",
-    outfile = "txt", out_dir = impute_path , Kcluster = K, ncores = N)
-    mat <- read.table(paste(impute_path,"scimpute_count.txt",sep=""),sep=' ',check.names = FALSE)
+    write.csv(mat, paste(tmp_path,"tmpsave.csv",sep=""), sep=',')
+    scimpute(count_path = paste(tmp_path,"tmpsave.csv",sep=""), infile = "csv", outfile = "txt", out_dir = impute_path , Kcluster = K, ncores = N)
+    mat <- read.table(paste(impute_path,"scimpute_count.txt",sep=""),sep=' ',header=TRUE,  check.names=FALSE, row.names=1, stringsAsFactors=FALSE)
     names(mat) <-mat_correct
     write.table(  mat , file=paste(args$imputeout,'filter.scimpute_count.',splitname,sep='') ,sep='\t' )
 }
 
-viper <- function(mat,tmp_path=".",impute_path=".",num = 5000, percentage.cutoff = 0.1, alpha= 0.5) {
+viper_count <- function(mat,tmp_path=".",impute_path=".",num = 5000, percentage.cutoff = 0.1, alpha= 0.5) {
     suppressWarnings(library(VIPER))
     mat_correct <- names(mat)
     names(mat) <-  paste('C_',seq_len(length(names(mat))))
     print (num, percentage.cutoff, alpha)
     VIPER(mat, num = num, percentage.cutoff = percentage.cutoff, minbool = FALSE, alpha = alpha, report = TRUE, outdir = impute_path)
-    mat <- read.table(paste(impute_path,'imputed_counts.csv',sep=''),sep=' ',header=TRUE, check.names = FALSE)
+    mat <- read.table(paste(impute_path,'imputed_counts.csv',sep=''),sep=' ',header=TRUE,  check.names=FALSE, row.names=1, stringsAsFactors=FALSE)
     names(mat) <-mat_correct
     write.table(mat, file=paste(args$imputeout,'filter.viper_count.',splitname,sep='') ,sep='\t' )
 }
@@ -199,7 +191,7 @@ tmp_path='.',impute_path="./imputation/", K = 5, N = 3,
 output_dir = '.',output_file = 'norm',cv_threshold=1,imputemethod = 'scimpute_count'
 ) {
     rm_gene_type <- unlist(strsplit(rm_gene_type,',', fixed = TRUE))
-    normalize_check_arg(norm_methods, top_n, rm_gene_type, read.table(refer_gene_id_path,check.names = FALSE)[,1])
+    normalize_check_arg(norm_methods, top_n, rm_gene_type, read.table(refer_gene_id_path,header=TRUE,  check.names=FALSE, row.names=1, stringsAsFactors=FALSE)[,1])
     if ('SCnorm' %in% norm_methods)    Norm_SCnorm <- norm_SCnorm(mat)
     if ('TMM' %in% norm_methods)       Norm_TMM <- norm_tmm(mat)
     if ('RLE' %in% norm_methods)       Norm_RLE <- norm_rle(mat)
@@ -402,7 +394,7 @@ cv_fun <- function(x) {
 
 norm_cpm_refer <- function(mat, refer_gene_id_path='data/matrix_processing/refer_gene_id.txt',cv_threshold=0.5) {
     print(paste('start normalization by reference gene ','thresholding reference gene by Coefficient of Variance:',args$cvthreshold,sep=' '))
-    refer_gene_id <- read.table(refer_gene_id_path,check.names = FALSE)[,1]
+    refer_gene_id <- read.table(refer_gene_id_path,header=TRUE,  check.names=FALSE, row.names=1, stringsAsFactors=FALSE)[,1]
     row_refer <- mat %>% rownames() %>% stringr::str_extract('[^|]+') %>%
     {. %in% refer_gene_id}
     if (!any(row_refer))
@@ -444,7 +436,7 @@ output_path = './',batchindex
     imputename <-paste(imputemethod,'.',sep='')
     normname <-paste(normname,'.',sep='')
 
-    mat <- read.table(paste(input_path,'filter.',imputename, normname,splitname,sep=''),sep='\t',header=TRUE,check.names = FALSE)
+    mat <- read.table(paste(input_path,'filter.',imputename, normname,splitname,sep=''),sep='\t',header=TRUE,  check.names=FALSE, row.names=1, stringsAsFactors=FALSE)
     print (dim(mat))
     if ('RUV' %in% batch_methods)       Batch_RUV <- ruv(mat,classinfo_path,output_path,2,10)
     if ('Combat' %in% batch_methods)    Batch_Combat <- combat(mat,batchinfo_path,output_path,batchindex)
@@ -470,7 +462,7 @@ ruv <- function(
     print('start batch removal using RUVs')
     cIdx <- rownames(mat)
     
-    sample_info <- read.table(classinfo_path,sep='\t',row.names=1,header=T,check.names = FALSE)
+    sample_info <- read.table(classinfo_path,sep='\t',header=TRUE,  check.names=FALSE, row.names=1, stringsAsFactors=FALSE)
     ##rank by mat
     if(unique(is.na(sample_info$sample_id))) 
     stop("sample_id not in file")
@@ -499,7 +491,7 @@ combat <- function(
     batch_column = batchindex
 ){
     print('start batch removal using combat')
-    batch_info <-read.table(batchinfo_path,sep='\t',row.names=1,header=T,check.names = FALSE)
+    batch_info <-read.table(batchinfo_path,sep='\t',header=TRUE,  check.names=FALSE, row.names=1, stringsAsFactors=FALSE)
     batchname <-toString(names(batch_info)[batch_column])
     batch_info=batch_info[names(mat),]
     mod <- model.matrix(~ 1, data = batch_info)
@@ -749,17 +741,17 @@ plot_refer_violin <- function(mat, refer_gene_id, refer_gene_name = refer_gene_i
 
 # filter
 if (args$step =='filter'){
-mat_raw <- read.table(args$input,sep='\t',row.names=1,header=T,check.names = FALSE)
+mat_raw <- read.table(args$input,sep='\t',header=TRUE,  check.names=FALSE, row.names=1, stringsAsFactors=FALSE)
 mat_filter <-filter_low(mat_raw,args$filtercount, args$filtersample)
 write.table(mat_filter, paste(args$filterout, 'filter','.',splitname,sep=''),sep='\t')
 } else if(args$step =='imputation'){
 # imputation
 library(readr)
-mat_filter <-read.table(paste(args$filterout,'filter.',splitname,sep=''),sep='\t',row.names=1,header=T,check.names = FALSE)
+mat_filter <-read.table(paste(args$filterout,'filter.',splitname,sep=''),sep='\t',header=TRUE,  check.names=FALSE, row.names=1, stringsAsFactors=FALSE)
 if (args$imputemethod=='scimpute_count'){
-scimpute(mat_filter,impute_path= args$imputeout, K = args$imputecluster, N = args$processors)
+scimpute_count(mat_filter,impute_path= args$imputeout, K = args$imputecluster, N = args$processors)
 } else if(args$imputemethod=='viper_count'){
-viper(mat_filter, impute_path= args$imputeout,num = args$imputevipernum,percentage.cutoff = args$imputecutoff, alpha= args$imputealpha) 
+viper_count(mat_filter, impute_path= args$imputeout,num = args$imputevipernum,percentage.cutoff = args$imputecutoff, alpha= args$imputealpha) 
 } else if(args$imputemethod=='null'){
 write.table( mat_filter, paste(args$imputeout,'filter.null.',splitname,sep='') ,sep='\t')
 }
@@ -767,7 +759,7 @@ write.table( mat_filter, paste(args$imputeout,'filter.null.',splitname,sep='') ,
 # normalization
 imputemethod <-args$imputemethod
 imputename <-paste(imputemethod,'.',sep='')
-mat_impute <- read.table(paste(args$imputeout,'filter.',imputename,splitname,sep=""),check.names = FALSE)
+mat_impute <- read.table(paste(args$imputeout,'filter.',imputename,splitname,sep=""),header=TRUE,  check.names=FALSE, row.names=1, stringsAsFactors=FALSE)
 normalize(mat_impute, norm_methods =args$normmethod,top_n = args$normtopk,cv_threshold = args$cvthreshold, imputemethod=args$imputemethod,
 rm_gene_type = args$removetype,refer_gene_id_path = args$refergenefile, output_dir = args$normalizeout, K = args$imputecluster, N = args$processors)
 }  else if(args$step =='batch_removal'){
