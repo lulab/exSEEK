@@ -75,10 +75,10 @@ optional arguments:
 
 ```
 bin/matrix-process.R -s imputation \
--i /Share/home/shibinbin/projects/exSeek-dev/output/lulab_hcc/count_matrix/domains_combined.txt \
---filterout /Share/home/shibinbin/projects/exSeek-dev/output/lulab_hcc/matrix_processing/ \
+-i output/lulab_hcc/count_matrix/domains_combined.txt \
+--filterout  output/lulab_hcc/matrix_processing/ \
 --imputemethod viper_count \
---imputeout /Share/home/shibinbin/projects/exSeek-dev/output/lulab_hcc/matrix_processing/ \
+--imputeout output/lulab_hcc/matrix_processing/ \
 --filtercount 5 \
 --filtersample 10 \
 --imputecluster 5 \
@@ -86,14 +86,14 @@ bin/matrix-process.R -s imputation \
 --imputecutoff 0.1 \
 --imputealpha 0.5 \
 -p 4 \
---normalizeout /Share/home/shibinbin/projects/exSeek-dev/output/lulab_hcc/matrix_processing/ \
+--normalizeout output/lulab_hcc/matrix_processing/ \
 --normmethod RLE \
 --normtopk 20 \
 --removetype miRNA,piRNA \
 --cvthreshold 0.5 \
 --refergenefile data/matrix_processing/refer_gene_id.txt \
--c /Share/home/shibinbin/projects/exSeek-dev/data/lulab_hcc/sample_classes.txt \
--b /Share/home/shibinbin/projects/exSeek-dev/data/lulab_hcc/batch_info.txt \
+-c data/lulab_hcc/sample_classes.txt \
+-b data/lulab_hcc/batch_info.txt \
 --batchremoveout output/scirep/matrix_processing/ \
 --batchmethod RUV \
 --batchindex 1
