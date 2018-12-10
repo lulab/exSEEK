@@ -462,7 +462,7 @@ ruv <- function(
     print('start batch removal using RUVs')
     cIdx <- rownames(mat)
     
-    sample_info <- read.table(classinfo_path,sep='\t',header=TRUE,  check.names=FALSE, row.names=1, stringsAsFactors=FALSE)
+    sample_info <- read.table(classinfo_path,sep='\t',header=TRUE,  check.names=FALSE,  stringsAsFactors=FALSE)
     ##rank by mat
     if(unique(is.na(sample_info$sample_id))) 
     stop("sample_id not in file")
@@ -491,7 +491,7 @@ combat <- function(
     batch_column = batchindex
 ){
     print('start batch removal using combat')
-    batch_info <-read.table(batchinfo_path,sep='\t',header=TRUE,  check.names=FALSE, row.names=1, stringsAsFactors=FALSE)
+    batch_info <-read.table(batchinfo_path,sep='\t',row.names=1,header=T,check.names = FALSE)
     batchname <-toString(names(batch_info)[batch_column])
     batch_info=batch_info[names(mat),]
     mod <- model.matrix(~ 1, data = batch_info)
