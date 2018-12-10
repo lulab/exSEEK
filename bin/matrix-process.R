@@ -25,13 +25,13 @@ parser$add_argument( "--imputemethod", type="character", default="scimpute_count
 parser$add_argument("--imputecluster", type="integer", default=5,
     help="cluster number in scImpute [default = %(default)s]",
     metavar="NUMBER")
-parser$add_argument("--imputenum", type="integer", default=5000,
+parser$add_argument("--imputevipernum", type="integer", default=5000,
     help="number in viper [default = %(default)s]",
     metavar="NUMBER")
-parser$add_argument( "--imputecutoff", type="double", default=0.5
+parser$add_argument( "--imputecutoff", type="double", default=0.5,
                     metavar="NUMBER",
                     help="cutoff in viper [default = %(default)s]")
-parser$add_argument( "--imputealpha", type="double", default=0.1
+parser$add_argument( "--imputealpha", type="double", default=0.1,
                     metavar="NUMBER",
                     help="alpha in viper [default = %(default)s]")
 
@@ -158,6 +158,7 @@ viper <- function(mat,tmp_path=".",impute_path=".",num = 5000, percentage.cutoff
     suppressWarnings(library(VIPER))
     mat_correct <- names(mat)
     names(mat) <-  paste('C_',seq_len(length(names(mat))))
+    print (num, percentage.cutoff, alpha)
     VIPER(mat, num = num, percentage.cutoff = percentage.cutoff, minbool = FALSE, alpha = alpha, report = TRUE, outdir = impute_path)
     mat <- read.table(paste(impute_path,'imputed_counts.csv',sep=''),sep=' ',header=TRUE, check.names = FALSE)
     names(mat) <-mat_correct
