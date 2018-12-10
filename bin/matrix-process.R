@@ -320,6 +320,16 @@ norm_cpm_total <- function(mat) {
 #' norm_cpm_top(sim_mat, 20L)
 #'
 #' @export
+#norm_cpm_top <- function(mat, top_n) {
+#   print(paste('start normalization using top',top_n,'genes as scale factor',sep=' '))
+#   if (nrow(mat) < top_n)
+#    stop('too few feature for CPM top n normalization')
+#    
+#    row_top <-  mat %>% rowSums() %>% sort(decreasing = T, index.return = T) %>%
+#    {.$ix[seq_len(top_n)]}
+#    
+#    norm_cpm_impl(mat, -row_top)
+#}
 norm_cpm_top <- function(mat, top_n) {
     print(paste('start normalization using top',top_n,'genes as scale factor',sep=' '))
     if (nrow(mat) < top_n)
@@ -328,9 +338,11 @@ norm_cpm_top <- function(mat, top_n) {
     row_top <-  mat %>% rowSums() %>% sort(decreasing = T, index.return = T) %>%
     {.$ix[seq_len(top_n)]}
     
-    norm_cpm_impl(mat, -row_top)
+    top = t(t(mat[row_top,]*1e6) / colSums(mat[row_top, , drop = F], na.rm = T))
+    top_down= t(t(mat[setdiff(seq_len(dim(mat)[1]),row_top),]*1e6) / colSums(mat[setdiff(seq_len(dim(mat)[1]),row_top), , drop = F], na.rm = T))
+    mat_top <- rbind(top,top_down)
+    mat_top[rownames(mat),]
 }
-
 
 #' @rdname norm_cpm
 #'
