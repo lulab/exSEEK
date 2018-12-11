@@ -115,11 +115,19 @@ read_classinfo <- function(path, ...) {
 #' filter_low(sim_mat)
 #'
 #' @export
-filter_low <- function(mat, min_count = 5, min_sample_per_gene = 10) {
+#filter_low <- function(mat, min_count = 5, min_sample_per_gene = 10) {
+#    print(paste('start filtering lowly expressed gene:','count threshold',min_count,'sample threshold',min_sample_per_gene,sep=' '))
+#	low_per_row <- rowSums(mat > min_count)
+#	keeped_row <- low_per_row > min_sample_per_gene
+#	mat[keeped_row, ]
+#}
+
+filter_low <- function(mat, min_count = 5, min_sample_per_gene = 0.5) {
     print(paste('start filtering lowly expressed gene:','count threshold',min_count,'sample threshold',min_sample_per_gene,sep=' '))
-	low_per_row <- rowSums(mat > min_count)
-	keeped_row <- low_per_row > min_sample_per_gene
-	mat[keeped_row, ]
+    min_sample_per_gene <- ceiling(dim(mat)[2]*min_sample_per_gene)
+    low_per_row <- rowSums(mat > min_count)
+    keeped_row <- low_per_row >= min_sample_per_gene
+    mat[keeped_row, ]
 }
 
 #' @imputation
