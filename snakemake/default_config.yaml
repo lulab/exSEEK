@@ -1,0 +1,53 @@
+rna_types: [rRNA, lncRNA, miRNA, mRNA, piRNA, snoRNA, 
+  snRNA, srpRNA, tRNA, tucpRNA, Y_RNA]
+threads: 1
+call_domain_pvalue: "05"
+distribution: ZeroTruncatedNegativeBinomial
+bin_size: 20
+cov_threshold: 0.2
+normalize_methods: [cpm]
+scale_method: robust
+classifiers: [random_forest]
+n_selects: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30, 40, 50]
+resample_method: bootstrap
+select_methods: [robust]
+splitter: stratified_shuffle_split
+cross_validation_splits: 50
+
+count_method: domains_combined
+imputation_methods: ["scimpute_count", "null"]
+normalization_methods: ["SCnorm", "TMM", "RLE", "CPM", "CPM_top", "CPM_rm", "null"]
+batch_removal_methods: ["null"]
+batch_indices: [1, 2, 3]
+    
+# file paths
+annotation_dir: genome/hg38
+genome_dir: genome/hg38
+output_dir: output/scirep
+temp_dir: tmp
+data_dir: data/scirep
+tools_dir: tools
+python2: /apps/anaconda2/bin/python
+python3: /apps/anaconda3/bin/python
+
+# general parameters
+threads_compress: 1
+
+# mapping parameters
+aligner: bowtie2
+adaptor: AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC
+adaptor1: AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC
+adaptor2: AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT
+min_read_length: 16
+max_read_length: 100
+min_base_quality: 30
+min_base_quality_5p: 30
+min_base_quality_3p: 30
+quality_base: 33
+strandness: "forward"
+min_mapping_quality: 0
+use_longest_transcript: true
+star_sjdboverhang: 100
+threads_mapping: 4
+paired_end: false
+small_rna: true
