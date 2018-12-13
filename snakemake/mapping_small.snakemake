@@ -15,14 +15,12 @@ temp_dir = config['temp_dir']
 
 def get_all_inputs(wildcards):
     available_inputs = dict(
-        tbam_to_gbam=expand('{output_dir}/gbam/{sample_id}/{rna_type}.bam', 
-            output_dir=output_dir, sample_id=sample_ids, rna_type=rna_types),
         summarize_read_counts=expand('{output_dir}/summary/read_counts.txt',
             output_dir=output_dir),
         mapped_read_length=expand('{output_dir}/stats/mapped_read_length_by_sample/{sample_id}',
             output_dir=output_dir, sample_id=sample_ids),
-        bigwig=expand('{output_dir}/bigwig/{sample_id}.bigWig',
-            output_dir=output_dir, sample_id=sample_ids)
+        bigwig=expand('{output_dir}/bigwig/{sample_id}.{rna_type}.{strand}.bigWig',
+            output_dir=output_dir, sample_id=sample_ids, rna_type=['other', 'genome'], strand=['+', '-'])
     )
     enabled_inputs = list(available_inputs.keys())
     inputs = []
@@ -134,45 +132,6 @@ rule merge_mapped_read_length:
         table = pd.DataFrame(table)
         table.to_csv(output[0], sep='\t', header=True, index=True)
 
-rule cutadapt:
-    input:
-        data_dir + '/fastq/{sample_id}.fastq'
-    output:
-        trimmed='{output_dir}/cutadapt/{sample_id}.fastq'
-    params:
-        adaptor=config['adaptor'],
-        min_read_length=config['min_read_length']
-    log:
-        '{output_dir}/log/cutadapt/{sample_id}'
-    threads:
-        config['threads_compress']
-    shell:
-        '''cutadapt -a {params.adaptor} -m {params.min_read_length} --trim-n -q {min_base_quality} \
-            -o {output.trimmed} {input}
-        '''
-
-rule fastq_to_fasta:
-    input:
-        '{output_dir}/cutadapt/{sample_id}.fastq'
-    output:
-        '{output_dir}/unmapped/{sample_id}/clean.fa.gz'
-    threads:
-        config['threads_compress']
-    shell:
-        '''fastq_to_fasta -r -i {input} | pigz -p {threads} -c > {output}
-        '''
-
-rule tbam_to_gbam:
-    input:
-        bam='{output_dir}/tbam/{sample_id}/{rna_type}.bam',
-        index=genome_dir + '/rsem_index/{aligner}/{{rna_type}}.transcripts.fa'.format(aligner=config['aligner'])
-    output:
-        '{output_dir}/gbam/{sample_id}/{rna_type}.bam'
-    params:
-        index=genome_dir + '/rsem_index/{aligner}/{{rna_type}}'.format(aligner=config['aligner'])
-    shell:
-        '''rsem-tbam2gbam {params.index} {input.bam} {output}
-        '''
 
 rule sort_gbam:
     input:
@@ -187,42 +146,21 @@ rule sort_gbam:
         samtools index {output.bam}
         '''
 
-rule gbam_to_gbed:
-    input:
-        '{output_dir}/gbam/{sample_id}/{rna_type}.bam'
-    output:
-        '{output_dir}/gbed/{sample_id}/{rna_type}.bed.gz'
-    shell:
-        '''bedtools bamtobed -i {input} -split \
-            | LC_COLLATE=C sort -k1,1 -k2,2n \
-            | pigz -c > {output}
-        '''
-
 rule gbam_to_bedgraph:
     input:
         '{output_dir}/gbam_sorted/{sample_id}/{rna_type}.bam'
     output:
-        '{output_dir}/bedgraph_by_biotype/{sample_id}/{rna_type}.bedGraph'
+        '{output_dir}/bedgraph/{sample_id}.{rna_type}.{strand}.bedGraph'
     shell:
-        '''bedtools genomecov -ibam {input} -bg -split | LC_COLLATE=C sort -k1,1 -k2,2n > {output}
-        '''
-
-rule merge_bedgraphs:
-    input:
-        lambda wildcards: expand('{output_dir}/bedgraph_by_biotype/{sample_id}/{rna_type}.bedGraph',
-            output_dir=wildcards.output_dir, sample_id=wildcards.sample_id, rna_type=rna_types)
-    output:
-        '{output_dir}/bedgraph/{sample_id}.bedGraph'
-    shell:
-        '''LC_COLLATE=C sort -k1,1 -k2,2n -m {input} > {output}
+        '''bedtools genomecov -ibam {input} -strand {wildcards.strand} -bg -split | LC_COLLATE=C sort -k1,1 -k2,2n > {output}
         '''
 
 rule gbedgraph_to_bigwig:
     input:
-        bedgraph='{output_dir}/bedgraph/{sample_id}.bedGraph',
+        bedgraph='{output_dir}/bedgraph/{sample_id}.{rna_type}.{strand}.bedGraph',
         chrom_sizes=genome_dir + '/chrom_sizes/genome'
     output:
-        '{output_dir}/bigwig/{sample_id}.bigWig'
+        '{output_dir}/bigwig/{sample_id}.{rna_type}.{strand}.bigWig'
     shell:
         '''bedGraphToBigWig {input.bedgraph} {input.chrom_sizes} {output}
         '''
@@ -320,6 +258,22 @@ rule map_circRNA:
             pigz -d -c {output.unmapped_aligner}
             samtools fasta {output.bam_filtered}
         }} | pigz -c > {output.unmapped}
+        '''
+
+rule map_genome:
+    input:
+        reads='{output_dir}/unmapped/{sample_id}/clean.fa.gz',
+        index=genome_dir + '/genome_index/bowtie2/genome.1.bt2'
+    output:
+        unmapped='{output_dir}/unmapped/{sample_id}/genome.fa.gz',
+        bam='{output_dir}/gbam/{sample_id}/genome.bam'
+    params:
+        index=genome_dir + '/genome_index/bowtie2/genome'
+    shell:
+        '''pigz -d -c {input.reads} \
+        | bowtie2 -f -p {threads} --sensitive --no-unal \
+            --un-gz {output.unmapped} -x {params.index} - -S - \
+        | samtools view -b -o {output.bam}
         '''
     
 include: 'sequential_mapping.snakemake'

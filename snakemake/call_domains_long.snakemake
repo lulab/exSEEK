@@ -240,7 +240,8 @@ rule domain_count_matrix:
             + '|' + domains['end'].values[~is_genome_peaks]
         # annotate genome peaks
         print(seq_ids_genome.shape, np.sum(is_genome_peaks))
-        gene_ids_genome = seq_ids_genome + '_' + domains['start'].values[is_genome_peaks] + '_' + domains['end'].values[is_genome_peaks]
+        gene_ids_genome = seq_ids_genome + '_' + domains['start'].values[is_genome_peaks] \
+            + '_' + domains['end'].values[is_genome_peaks] + '_' + domains['strand'].values[is_genome_peaks]
         feature_names[is_genome_peaks] = gene_ids_genome \
             + '|' + 'genomic' \
             + '|' + gene_ids_genome \

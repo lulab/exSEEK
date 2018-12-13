@@ -3,6 +3,8 @@ include: 'common.snakemake'
 
 genome_dir = config['genome_dir']
 rna_types = config['rna_types']
+rna_types_gencode = list(filter(lambda x: x not in ('rRNA', 'miRNA', 'piRNA', 'circRNA'), rna_types))
+
 aligner = config['aligner']
 use_longest_transcript = config['use_longest_transcript']
 star_sjdboverhang = config['star_sjdboverhang']
@@ -33,10 +35,12 @@ def get_all_inputs(wildcards):
         genome_index_star=expand('{genome_dir}/genome_index/star/SA',
             genome_dir=genome_dir),
         long_index_star=expand('{genome_dir}/long_index/star/Genome', genome_dir=genome_dir),
-        circrna_index_bowtie2=expand('{genome_dir}/index/bowtie2/circRNA.1.bt2',
-            genome_dir=genome_dir),
+        bowtie2_index=expand('{genome_dir}/index/bowtie2/{rna_type}.1.bt2',
+            genome_dir=genome_dir, rna_type=['circRNA', 'rRNA', 'miRNA']),
+        star_index=expand('{genome_dir}/index/star/{rna_type}/SA',
+            genome_dir=genome_dir, rna_type=['circRNA', 'rRNA', 'miRNA']),
         chrom_sizes=expand('{genome_dir}/chrom_sizes/transcriptome', genome_dir=genome_dir),
-        chrom_sizes2=expand('{genome_dir}/chrom_sizes/transcriptome_genome', genome_dir=genome_dir),
+        chrom_sizes2=expand('{genome_dir}/chrom_sizes/transcriptome_genome', genome_dir=genome_dir)
     )
     del available_inputs['rsem_index']
     available_inputs['long_index_star']
@@ -60,27 +64,39 @@ rule fasta_index:
         '''samtools faidx {input}
         '''
 
-rule chrom_sizes:
+rule transcript_index_bowtie2:
     input:
-        '{genome_dir}/fasta/{rna_type}.fa.fai'
+        '{genome_dir}/fasta/{rna_type}.fa'
     output:
-        '{genome_dir}/chrom_sizes/{rna_type}'
-    shell:
-        '''cut -f1,2 {input} > {output}
-        '''
-
-rule circrna_index_bowtie2:
-    input:
-        '{genome_dir}/fasta/circbase.junctions.fa'
-    output:
-        bt2_1='{genome_dir}/index/bowtie2/circRNA.1.bt2',
-        bt2rev_1='{genome_dir}/index/bowtie2/circRNA.rev.1.bt2'
+        bt2_1='{genome_dir}/index/bowtie2/{rna_type}.1.bt2',
+        bt2rev_1='{genome_dir}/index/bowtie2/{rna_type}.rev.1.bt2'
     params:
-        output_prefix='{genome_dir}/index/bowtie2/circRNA'
+        output_prefix='{genome_dir}/index/bowtie2/{rna_type}'
     threads:
         config['threads']
     shell:
         '''bowtie2-build --threads {threads} {input} {params.output_prefix}
+        '''
+
+rule transcript_index_star:
+    input:
+        fasta='{genome_dir}/fasta/{rna_type}.fa',
+        fai='{genome_dir}/fasta/{rna_type}.fa.fai'
+    output:
+        Genome='{genome_dir}/index/star/{rna_type}/Genome',
+        SA='{genome_dir}/index/star/{rna_type}/SA'
+    params:
+        output_prefix='{genome_dir}/index/star/{rna_type}',
+        small_genome=lambda wildcards: '--genomeSAindexNbases'
+    threads:
+        config['threads_mapping']
+    shell:
+        '''STAR --runThreadN {threads} \
+            --runMode genomeGenerate \
+            --genomeSAindexNbases ${sa_size} \
+            --genomeDir {params.output_prefix} \
+            --genomeFastaFiles {input.fasta} \
+            --genomeChrBinNbits $(chr_bin_nbits)
         '''
 
 rule genome_index_bowtie2:
@@ -110,7 +126,6 @@ rule genome_index_star:
     shell:
         '''STAR --runMode genomeGenerate --runThreadN {threads} \
             --genomeDir {params.output_prefix} --genomeFastaFiles {input} \
-            --outFileNamePrefix {params.output_prefix}
         '''
 
 rule long_index_star:
@@ -207,8 +222,7 @@ rule gtf_by_biotype:
         main='{genome_dir}/gtf/gencode.gtf',
         tRNA='{genome_dir}/gtf/gencode_tRNA.gtf',
         lncRNA='{genome_dir}/gtf/merged_lncRNA.gtf',
-        tucpRNA='{genome_dir}/gtf/mitranscriptome_tucp.gtf',
-        piRNA='{genome_dir}/gtf/piRNABank.gtf'
+        tucpRNA='{genome_dir}/gtf/mitranscriptome_tucp.gtf'
     output:
         '{genome_dir}/gtf_by_biotype/{rna_type}.gtf'
     shell:
@@ -224,8 +238,6 @@ rule gtf_by_biotype:
             cp {input.lncRNA} {output}
         elif [ "{wildcards.rna_type}" = "tucpRNA" ];then
             cp {input.tucpRNA} {output}
-        elif [ "{wildcards.rna_type}" = "piRNA" ];then
-            cp {input.piRNA} {output}
         else
             grep 'gene_type "{wildcards.rna_type}"' {input.main} > {output}
         fi
@@ -261,6 +273,21 @@ rule gtf_longest_transcript:
         '''bin/preprocess.py extract_longest_transcript -i {input} -o {output}
         '''
 
+rule extract_transcript_fasta:
+    input:
+        bed='{genome_dir}/bed_by_biotype/{rna_type}.bed',
+        fasta='{genome_dir}/fasta/genome.fa'
+    output:
+        fasta='{genome_dir}/fasta/{rna_type}.fa',
+        index='{genome_dir}/fasta/{rna_type}.fa.fai'
+    wildcard_constraints:
+        rna_type='(?!genome).*'
+    shell:
+        '''bedtools getfasta -s -bed {input.bed} -fa {input.fasta} -split -name \
+        | awk '{gsub(/\([+-]\)/,"");print}' > {output.fasta}
+        samtools faidx {output.fasta}
+        '''
+"""
 rule transcript_sizes:
     input:
         '{genome_dir}/bed_by_biotype/{rna_type}.bed'
@@ -270,6 +297,18 @@ rule transcript_sizes:
         rna_type='(?!transcriptome$)(?!genome$).*'
     shell:
         '''awk 'BEGIN{{OFS="\t";FS="\t"}}{{split($11,a,",");s=0;for(i in a){{s += a[i]}}; print $4,s}}' {input} > {output}
+        '''
+"""
+
+rule chrom_sizes:
+    input:
+        '{genome_dir}/fasta/{rna_type}.fa.fai'
+    output:
+        '{genome_dir}/chrom_sizes/{rna_type}'
+    wildcard_constraints:
+        rna_type='(?!transcriptome$)(?!genome$)(?!transcriptome_genome$).*'
+    shell:
+        '''cut -f1,2 {input} > {output}
         '''
 
 rule merge_transcript_sizes:
@@ -282,7 +321,7 @@ rule merge_transcript_sizes:
         '''cat {input} > {output}
         '''
 
-rule merge_transcript_sizes:
+rule genome_chrom_sizes:
     input:
         '{genome_dir}/fasta/genome.fa.fai'
     output:

@@ -1,80 +1,186 @@
-include: '../common'
-
-def get_all_inputs(wildcards):
-    available_inputs = dict(
-
-    )
-    enabled_inputs = list(available_inputs.keys())
-    inputs = []
-    for key, l in available_inputs.items():
-        if key in enabled_inputs:
-            inputs += l
-    return inputs
-
+include: 'common.snakemake'
 
 rule all:
     input:
-        get_all_inputs
+        cutadapt_paired=expand('{output_dir}/cutadapt/{sample_id}_{pair_index}.fastq.gz',
+            output_dir=output_dir, sample_id=sample_ids, pair_index=[1, 2]),
+        map_rRNA_paired=expand('{output_dir}/bam/{sample_id}/rRNA.bam',
+            output_dir=output_dir, sample_id=sample_ids),
+        remove_duplicates=expand('{output_dir}/bam/{sample_id}/remove_duplicates.bam',
+            output_dir=output_dir, sample_id=sample_ids)
 
+
+rule fastq_to_fasta_paired:
+    input:
+        '{output_dir}/cutadapt/{sample_id}_{pair_index}.fastq.gz'
+    output:
+        '{output_dir}/unmapped/{sample_id}/clean_{pair_index}.fa.gz'
+    threads:
+        config['threads_compress']
+    wildcard_constraints:
+        pair_index='[12]'
+    shell:
+        '''pigz -p {threads} -d -c {input} \
+            | fastq_to_fasta -r -n \
+            | pigz -p {threads} -c > {output}
+        '''
+
+rule count_clean_reads_paired:
+    input:
+        '{output_dir}/unmapped/{sample_id}/clean_1.fa.gz'
+    output:
+        '{output_dir}/stats/read_counts_clean/{sample_id}'
+    shell:
+        '''gzip -d -c {input} | wc -l | awk '{print int($0/2)}' > {output}
+        '''
+
+rule count_reads_mapped_paired:
+    input:
+        '{output_dir}/bam/{sample_id}/rRNA.bam'
+    
 
 rule cutadapt_paired:
     input:
         fastq1=data_dir + '/fastq/{sample_id}_1.fastq',
         fastq2=data_dir + '/fastq/{sample_id}_2.fastq'
     output:
-        fastq1='{output_dir}/cutadapt/{sample_id}_1.fastq',
-        fastq2='{output_dir}/cutadapt/{sample_id}_2.fastq'
+        fastq1='{output_dir}/cutadapt/{sample_id}_1.fastq.gz',
+        fastq2='{output_dir}/cutadapt/{sample_id}_2.fastq.gz'
     threads:
         config['threads']
     params:
         quality_5p=config['min_base_quality_5p'],
         quality_3p=config['min_base_quality_3p'],
         adaptor1=config['adaptor1'],
-        adaptor2=config['adaptor2],
+        adaptor2=config['adaptor2'],
         miniL=config['min_read_length'],
         quality_base=config['quality_base']
     log:
         '{output_dir}/log/cutadapt/{sample_id}'
     shell:
-        '''cutadapt -j {threads} -q {params.quality_5p}.{params.quality_3p} \
+        '''cutadapt -j {threads} -q {params.quality_5p},{params.quality_3p} \
             -a {params.adaptor1} -A {params.adaptor2} \
             --trim-n -m {params.miniL} \
-            -o {output.fastq1} -p {output.fastq2} \
-            {input.fastq1} {input.fastq2}
+            -o >(gzip -c > {output.fastq1}) -p >(gzip -c > {output.fastq2}) \
+            {input.fastq1} {input.fastq2} > {log} 2>&1
         '''
 
-rule map_star_paired:
+rule map_rRNA_paired:
     input:
-        fastq1=data_dir + '/{sample_id}_1.fastq',
-        fastq2=data_dir + '/{sample_id}_2.fastq',
-        index=genome_dir + '/long_index/star'
+        reads1='{output_dir}/unmapped/{sample_id}/clean_1.fa.gz',
+        reads2='{output_dir}/unmapped/{sample_id}/clean_2.fa.gz',
+        index=genome_dir + '/index/star/rRNA/SA'
     output:
-        bam='{output_dir}/mapping_long/star/{sample_id}.bam',
-        unmapped='{output_dir}/unmapped/{sample_id}/genome.fa',
-        star_bam='{output_dir}/mapping_long/star/{sample_id}/Aligned.out.bam',
-        star_unmapped='{output_dir}/mapping_long/star/{sample_id}/Unmapped.out'
+        bam='{output_dir}/bam/{sample_id}/rRNA.bam',
+        unmapped1='{output_dir}/unmapped/{sample_id}/rRNA_1.fa.gz',
+        unmapped2='{output_dir}/unmapped/{sample_id}/rRNA_2.fa.gz',
+        log='{output_dir}/mapping_star/{sample_id}/rRNA/Log.final.out'
     params:
-        output_prefix='{output_dir}/mapping_long/star/{sample_id}/'
+        output_prefix='{output_dir}/mapping_star/{sample_id}/rRNA/',
+        index=genome_dir + '/index/star/rRNA'
     threads:
-        mapping_threads
+        config['threads_mapping']
     shell:
-        '''STAR --genomeDir {input.index} \
-            --readFilesIn {input.fastq1} {input.fastq2} \
+        '''STAR --genomeDir {params.index} \
+            --readFilesIn {input.reads1} {input.reads2} \
             --runThreadN {threads} \
-            --outputFileNamePrefix {params.output_prefix} \
-            --outputSAMtype BAM Unsorted
-        ln -f {output.star_bam} {output.bam}
+            --outFileNamePrefix {params.output_prefix} \
+            --outSAMtype BAM Unsorted \
+            --outReadsUnmapped Fastx \
+            --readFilesCommand gzip -d -c \
+            --outSAMmultNmax 1 \
+            --outMultimapperOrder Random
+        mv {params.output_prefix}Aligned.out.bam {output.bam}
+        gzip -c {params.output_prefix}Unmapped.out.mate1 > {output.unmapped1}
+        gzip -c {params.output_prefix}Unmapped.out.mate2 > {output.unmapped2}
+        rm -f {params.output_prefix}Unmapped.out.mate1 {params.output_prefix}Unmapped.out.mate2
+        '''
+
+rule map_genome_paired:
+    input:
+        reads1='{output_dir}/unmapped/{sample_id}/rRNA_1.fa.gz',
+        reads2='{output_dir}/unmapped/{sample_id}/rRNA_2.fa.gz',
+        index=genome_dir + '/long_index/star/SA'
+    output:
+        bam='{output_dir}/bam/{sample_id}/genome.bam',
+        unmapped1='{output_dir}/unmapped/{sample_id}/genome_1.fa.gz',
+        unmapped2='{output_dir}/unmapped/{sample_id}/genome_2.fa.gz',
+        log='{output_dir}/mapping_star/{sample_id}/genome/Log.final.out'
+    params:
+        output_prefix='{output_dir}/mapping_star/{sample_id}/genome/',
+        index=genome_dir + '/long_index/star'
+    threads:
+        config['threads_mapping']
+    shell:
+        '''STAR --genomeDir {params.index} \
+            --readFilesIn {input.reads1} {input.reads2} \
+            --runThreadN {threads} \
+            --outFileNamePrefix {params.output_prefix} \
+            --outSAMtype BAM Unsorted \
+            --outReadsUnmapped Fastx \
+            --readFilesCommand gzip -d -c \
+            --outSAMmultNmax 1 \
+            --outMultimapperOrder Random
+        mv {params.output_prefix}Aligned.out.bam {output.bam}
+        gzip -c {params.output_prefix}Unmapped.out.mate1 > {output.unmapped1}
+        gzip -c {params.output_prefix}Unmapped.out.mate2 > {output.unmapped2}
+        rm -f {params.output_prefix}Unmapped.out.mate1 {params.output_prefix}Unmapped.out.mate2
         '''
     
+rule map_circRNA_paired:
+    input:
+        reads1='{output_dir}/unmapped/{sample_id}/rRNA_1.fa.gz',
+        reads2='{output_dir}/unmapped/{sample_id}/rRNA_2.fa.gz',
+        index=genome_dir + '/index/star/circRNA/SA'
+    output:
+        bam='{output_dir}/bam/{sample_id}/circRNA.bam',
+        log='{output_dir}/mapping_star/{sample_id}/circRNA/Log.final.out'
+    params:
+        output_prefix='{output_dir}/mapping_star/{sample_id}/circRNA/',
+        index=genome_dir + '/index/star/circRNA'
+    threads:
+        config['threads_mapping']
+    shell:
+        '''
+        '''
+
+rule sort_bam_by_name:
+    input:
+        '{output_dir}/bam/{sample_id}/genome.bam'
+    output:
+        '{output_dir}/bam_sorted_by_name/{sample_id}/genome.bam'
+    shell:
+        '''picard SortSam I={input} O={output} SORT_ORDER=queryname
+        '''
+
 rule remove_duplicates:
     input:
-        bam='{output_dir}/gbam/{sample_id}.bam'
+        bam='{output_dir}/bam_sorted_by_name/{sample_id}/genome.bam'
     output:
-        bam='{output_dir}/remove_duplicates/{sample_id}.bam',
-        metrics='{output_dir}/remove_duplicates/{sample_id}.metrics'
+        bam='{output_dir}/bam/{sample_id}/remove_duplicates.bam',
+        metrics='{output_dir}/log/remove_duplicates/{sample_id}'
     shell:
         '''picard MarkDuplicates REMOVE_DUPLICATES=true \
+            ASSUME_SORT_ORDER=queryname \
             I={input.bam} \
             O={output.bam} \
             M={output.metrics}
+        '''
+
+rule featurecounts:
+    input:
+        bam='{output_dir}/bam/{sample_id}/remove_duplicates.bam',
+        gtf=genome_dir + '/gtf/long_RNA.gtf'
+    output:
+        counts='{output_dir}/counts/featurecounts/{sample_id}/remove_duplicates',
+        summary='{output_dir}/counts/featurecounts/{sample_id}/remove_duplicates.summary'
+    params:
+        strandness={'forward': 1, 'reverse': 2}.get(config['strandness'], 0),
+        paired_end={True: '-p', False: ''}[config['paired_end']],
+        min_mapping_quality=config['min_mapping_quality']
+    log:
+        '{output_dir}/log/featurecounts/{sample_id}/remove_duplicates'
+    shell:
+        '''featureCounts -t exon -g gene_id -s {params.strandness} -Q {params.min_mapping_quality} \
+            {params.paired_end} -a {input.gtf} -o {output.counts} {input.bam} > {log}
         '''

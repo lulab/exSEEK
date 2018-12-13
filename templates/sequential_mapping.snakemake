@@ -6,12 +6,20 @@ rule map_{{ rna_type }}:
         {% else %}
         reads='{output_dir}/unmapped/{sample_id}/{{ rna_types[loop.index0 - 1] }}.fa.gz',
         {% endif %}
+        {% if rna_type in ['rRNA', 'miRNA', 'circRNA'] %}
+        index=genome_dir + '/index/{{ aligner }}/{{ rna_type }}.1.bt2'
+        {% else %}
         index=genome_dir + '/rsem_index/{{ aligner }}/{{ rna_type }}.1.bt2'
+        {% endif %}
     output:
         unmapped='{output_dir}/unmapped/{sample_id}/{{ rna_type }}.fa.gz',
         bam='{output_dir}/tbam/{sample_id}/{{ rna_type }}.bam'
     params:
+        {% if rna_type in ['rRNA', 'miRNA', 'circRNA'] %}
+        index=genome_dir + '/index/{{ aligner }}/{{ rna_type }}'
+        {% else %}
         index=genome_dir + '/rsem_index/{{ aligner }}/{{ rna_type }}'
+        {% endif %}
     threads: 
         config['threads_mapping']
     shell:

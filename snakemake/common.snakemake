@@ -2,10 +2,17 @@ shell.prefix('set -x;')
 import os
 import yaml
 
+with open('snakemake/default_config.yaml', 'r') as f:
+    default_config = yaml.load(f)
+
+default_config.update(config)
+config = default_config
+
 data_dir = config['data_dir']
 genome_dir = config['genome_dir']
 output_dir = config['output_dir']
 rna_types = config['rna_types']
+tools_dir = config['tools_dir']
 
 with open(os.path.join(data_dir, 'sample_ids.txt'), 'r') as f:
     sample_ids = f.read().split()
@@ -17,20 +24,18 @@ def get_preprocess_methods():
     preprocess_methods = []
     for batch_removal_method in config['batch_removal_methods']:
         if batch_removal_method == 'Combat':
-            template = 'filter.{imputation_method}.Norm_{normalization_method}.Batch_{batch_removal_method}_{batch_index}.{count_method}'
+            template = 'filter.{imputation_method}.Norm_{normalization_method}.Batch_{batch_removal_method}_{batch_index}'
             preprocess_methods += expand(template,
                 output_dir=output_dir,
                 imputation_method=config['imputation_methods'],
                 normalization_method=config['normalization_methods'],
                 batch_removal_method=batch_removal_method,
-                batch_index=config['batch_indices'],
-                count_method=config['count_method'])
+                batch_index=config['batch_indices'])
         else:
-            template = 'filter.{imputation_method}.Norm_{normalization_method}.Batch_{batch_removal_method}.{count_method}'
+            template = 'filter.{imputation_method}.Norm_{normalization_method}.Batch_{batch_removal_method}'
             preprocess_methods += expand(template,
                 output_dir=output_dir,
                 imputation_method=config['imputation_methods'],
                 normalization_method=config['normalization_methods'],
-                batch_removal_method=batch_removal_method,
-                count_method=config['count_method'])
+                batch_removal_method=batch_removal_method)
     return preprocess_methods
