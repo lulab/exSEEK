@@ -105,8 +105,8 @@ __default__:
 
 | Parameter | Description |
 | ------ | ----------- |
-| `__default__` | Rule name (`__default__` for default configuration) | 
-| `queueq | Queue name |
+| `__default__` | Rule name (`__default__`) for default configuration) | 
+| `queue` | Queue name |
 | `name` | Job name |
 | `stderr` | Log file for standard error |
 | `stdout` | Log file for standard output |

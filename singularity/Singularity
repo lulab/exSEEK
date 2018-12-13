@@ -1,0 +1,93 @@
+Bootstrap: docker
+From: ubuntu:16.04
+
+%environment:
+    PATH=/opt/conda/bin:/opt/conda2/bin:/opt/ucsc_tools:$PATH
+    export PATH
+
+%labels:
+    SOFTWAREVERSION 1.0
+    PACKAGENAME main
+    MAINTAINER Binbin Shi
+
+%files:
+    bin/conda-executables.py /conda-executables.py
+
+%post
+    [ -d /Share/home ] || mkdir -p /Share/home
+    [ -d /BioII ] || mkdir -p /BioII
+    apt-get update
+    apt-get install -y graphviz build-essential vim procps htop bash-completion lftp imagemagick man locales parallel libssl-dev libcurl4-openssl-dev git openjdk-8-jdk
+    apt-get clean
+    echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen \
+	    && locale-gen en_US.utf8 \
+	    && /usr/sbin/update-locale LANG=en_US.UTF-8
+    # install Miniconda3
+    wget https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda3-latest-Linux-x86_64.sh
+    bash Miniconda3-latest-Linux-x86_64.sh -b -p /opt/conda
+    rm -f Miniconda3-latest-Linux-x86_64.sh
+    # install Miniconda2
+    wget https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda2-latest-Linux-x86_64.sh
+    bash Miniconda2-latest-Linux-x86_64.sh -b -p /opt/conda2
+    rm -f Miniconda2-latest-Linux-x86_64.sh
+
+    export PATH=/opt/conda/bin:$PATH
+    conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free/
+    conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main/
+    conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/
+    conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/bioconda/
+    conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/r/
+    conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/mro/
+    conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/pro/
+    conda install -y fastqc bowtie bowtie2
+    conda install -y bedtools sra-tools fastx_toolkit bamtools samtools
+    conda install -y gffread gffcompare subread htseq 
+    conda install -y bedops rsem star snakemake sra-tools
+    conda install -y h5py snakemake ipython pandas matplotlib crossmap pyfaidx
+    conda install -y jupyter numba scikit-learn jupyter_contrib_nbextensions nbconvert tqdm
+    conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/pytorch/
+    # install scVI
+    conda install -y pytorch-cpu torchvision
+    conda install -y -c bioconda scvi
+
+    pip install tqdm
+    conda clean -y --all
+    # install Anaconda2
+    wget 'https://mirrors.tuna.tsinghua.edu.cn/anaconda/archive/Anaconda2-5.1.0-Linux-x86_64.sh'
+    bash Anaconda2-5.1.0-Linux-x86_64.sh -b -p /opt/conda2
+    rm -f Anaconda2-5.1.0-Linux-x86_64.sh
+    /opt/conda2/bin/conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free/
+    /opt/conda2/bin/conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main/
+    /opt/conda2/bin/conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/
+    /opt/conda2/bin/conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/bioconda/
+    /opt/conda2/bin/conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/pytorch/
+    /opt/conda2/bin/conda install crossmap bx-python
+    /opt/conda2/bin/conda clean -y --all
+    pip install pyfaidx
+
+    # install R
+    wget 'https://mran.blob.core.windows.net/install/mro/3.5.1/microsoft-r-open-3.5.1.tar.gz'
+    tar zxf microsoft-r-open-3.5.1.tar.gz
+    cd microsoft-r-open/
+    ./install.sh -s -a
+    cd ..
+    
+    export CURL_CA_BUNDLE='/opt/microsoft/ropen/3.5.1/lib64/R/lib/microsoft-r-cacert.pem'
+    # install R packages
+
+    # install perl modules
+    cpan Getopt::Long
+    cpan Pod::Usage
+    cpan File::Temp
+    cpan Fcntl
+    cpan Cwd
+    cpan JSON
+    cpan Cairo
+    cpan Statistics::PCA
+    cpan MIME::Base64
+
+    python /conda-executables.py --conda-dir /opt/conda $packages > /executables.txt
+
+
+%runscript
+    exec /bin/bash "$@"

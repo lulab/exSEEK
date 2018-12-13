@@ -1,0 +1,25 @@
+microsoft-r-open-mro-3.5.1 apt
+gcc apt
+g++ apt
+openjdk-8-jdk-headless apt
+openjdk-8-jre-headless apt
+perl apt
+python conda
+bedtools conda
+samtools conda
+star conda
+subread conda
+bowtie2 conda
+rsem conda
+bamtools conda
+cutadapt conda
+picard conda
+gffread conda
+gffcompare conda
+ucsc-bedtogenepred conda
+ucsc-genepredtogtf conda
+ucsc-bedgraphtobigwig
+htseq conda
+fastx_toolkit conda
+ipython conda
+jupyter_core conda
