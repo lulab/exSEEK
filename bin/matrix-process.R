@@ -191,7 +191,7 @@ normalize_check_arg <- function(norm_methods, top_n, rm_gene_type, refer_gene_id
 #' }
 normalize <- function(
 mat,
-norm_methods = c( 'SCnorm', 'TMM', 'RLE', 'CPM', 'CPM_top', 'CPM_rm', 'CPM_refer'),
+norm_methods = c( 'SCnorm', 'TMM', 'RLE', 'CPM', 'CPM_top', 'CPM_rm', 'CPM_refer', 'null'),
 top_n = 20, rm_gene_type = 'miRNA,tRNA',
 sample_class_path = NULL, PCA_label_by = NULL, PAC_color_by = NULL,
 refer_gene_id_path='data/matrix_processing/refer_gene_id.txt',
@@ -207,15 +207,17 @@ output_dir = '.',output_file = 'norm',cv_threshold=1,imputemethod = 'scimpute_co
     if ('CPM_top' %in% norm_methods)   Norm_CPM_top <- norm_cpm_top(mat, top_n)
     if ('CPM_rm' %in% norm_methods)    Norm_CPM_rm <- norm_cpm_rm(mat, rm_gene_type)
     if ('CPM_refer' %in% norm_methods) Norm_CPM_refer <- norm_cpm_refer(mat, refer_gene_id_path)
+    if ('null' %in% norm_methods)      Norm_null <- mat
+
     
     tmp_names <- ls(pattern = '^Norm_')
     imputename <-paste(imputemethod,'.',sep='')
     for(tmp_name in tmp_names) {
         write.table(get(tmp_name), paste(output_dir,'filter.',imputename, tmp_name,'.',splitname,sep=''),sep='\t')
     }
-    if (imputemethod=='null'){
-        write.table(mat, paste(output_dir,'filter.',imputename,'Norm_null.',splitname,sep=''),sep='\t')
-    }
+#    if (imputemethod=='null'){
+#        write.table(mat, paste(output_dir,'filter.',imputename,'Norm_null.',splitname,sep=''),sep='\t')
+#    }
     
 }
 

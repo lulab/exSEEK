@@ -19,6 +19,7 @@ imputation_methods: ["scimpute_count", "null"]
 normalization_methods: ["SCnorm", "TMM", "RLE", "CPM", "CPM_top", "CPM_rm"]
 batch_removal_methods: ["null", "Combat", "RUV"]
 batch_indices: [1, 2, 3]
+
     
 # file paths
 annotation_dir: genome/hg38
@@ -51,3 +52,6 @@ star_sjdboverhang: 100
 threads_mapping: 4
 paired_end: false
 small_rna: true
+tools_dir: ./tools
+python2: /apps/anaconda2/bin/python
+python3: /apps/anaconda3/bin/python
