@@ -34,13 +34,13 @@ conda install -y ucsc-bedtogenepred ucsc-genepredtogtf ucsc-bedgraphtobigwig
 conda install -y htseq fastx_toolkit biopython rpy2
 ```
 
-**Install Ubuntu packages**
+## Install Ubuntu packages
 
 ```bash
-sudo apt-get install -y gzip pigz
+sudo apt-get install -y gzip pigz openjdk-8-jdk
 ```
 
-**Install R packages**
+## Install R packages
 
 Install by running the following code in an R interactive session:
 ```R
@@ -62,5 +62,27 @@ install_github("Vivianstats/scImpute")
 install_github("hemberg-lab/scRNA.seq.funcs")
 ```
 
-**Other packages**
+## Other packages
 * [find_circ 1.2](https://github.com/marvin-jens/find_circ) (depends on Python 2.7)
+
+## Singularity
+
+### Build image
+
+```bash
+singularity build singularity/exseek.img singularity/Singularity
+```
+
+### Make wrappers for singularity executables
+```bash
+bin/make_singularity_wrappers.py \
+    --image singularity/exseek.simg \
+    --list-file singularity/exports.txt \
+    --singularity-path $(which singularity) \
+    -o singularity/wrappers
+```
+
+### Add wrappers to PATH
+```bash
+export PATH="$PWD/singularity/wrappers:$PATH"
+```
