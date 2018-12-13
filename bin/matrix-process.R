@@ -16,7 +16,7 @@ parser$add_argument("--batchremoveout", required=TRUE, help="output batchremoved
 parser$add_argument("--filtercount", type="integer", default=5,
     help="filter by counts of a gene [default = %(default)s]",
     metavar="NUMBER")
-parser$add_argument("--filtersample", type="integer", default=0.2,
+parser$add_argument("--filtersample", type="double", default=0.2,
     help="filter by counts of sample above certain counts of a gene [default = %(default)s]",
     metavar="NUMBER")
 parser$add_argument( "--imputemethod", type="character", default="scimpute_count",
