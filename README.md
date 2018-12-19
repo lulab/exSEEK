@@ -162,6 +162,27 @@ snakemake --snakefile snakemake/mapping_small.snakemake \
 | `${output_dir}/summary/read_counts.txt` | Summary table for read counts |
 | `${output_dir}/stats/mapped_read_length_by_sample/${sample_id}` | Length distribution of mapped reads |
 
+## Mapping (long RNA-seq)
+
+```bash
+snakemake --rerun-incomplete -k --snakefile snakemake/mapping_long.snakemake \
+    --configfile config/${dataset}.yaml
+```
+
+### Output files
+
+| File name | Descrpition |
+| --------- | ----------- |
+| `${output_dir}/cutadapt/${sample_id}.fastq` | Reads with adaptor trimmed |
+| `${output_dir}/bam/${sample_id}/rRNA.bam` | BAM files for reads mapped to rRNA |
+| `${output_dir}/bam/${sample_id}/genome.bam` | BAM files for reads mapped to genome |
+| `${output_dir}/bam/${sample_id}/remove_duplicates.bam` | BAM files for reads after removing duplicates |
+| `${output_dir}/bam/${sample_id}/circRNA.bam` | BAM files for reads after removing duplicates |
+| `${output_dir}/unmapped/${sample_id}/${map_step}_1.fa.gz` | Unmapped reads in each step |
+| `${output_dir}/fastqc/${sample_id}_fastqc.html` | FastQC report file |
+| `${output_dir}/summary/read_counts.txt` | Summary table for read counts |
+| `${output_dir}/stats/mapped_read_length_by_sample/${sample_id}` | Length distribution of mapped reads |
+| `${output_dir}/stats/mapped_insert_size_by_sample/${sample_id}` | Length distribution of mapped reads |
 
 ## Generate expression matrix
 ```bash
