@@ -1,0 +1,52 @@
+shell.prefix('set -x; set -e;')
+include: 'common.snakemake'
+
+import yaml
+with open(data_dir + '/compare_groups.yaml', 'r') as f:
+    compare_groups = yaml.load(f)
+
+count_method = config['count_method']
+# read selected matrix preprocessing methods
+preprocess_methods = config['evaluate_features_preprocess_methods']
+
+
+rule all:
+    input:
+        evaluate_features=expand('{output_dir}/evaluate_features/result/{preprocess_method}/{compare_group}/{classifier}',
+            output_dir=output_dir, preprocess_method=preprocess_methods,
+            classifier=config['classifiers'], compare_group=list(compare_groups.keys())),
+
+
+rule preprocess_features:
+    input:
+        '{output_dir}/evaluate_features/matrix/{preprocess_method}.txt'
+    output:
+        '{output_dir}/evaluate_features/preprocess_features/{preprocess_method}.txt'
+    params:
+        scaler=config['scale_method']
+    shell:
+        '''bin/feature_selection.py preprocess_features -i {input} --scaler {params.scaler} \
+            --use-log --transpose -o {output}
+        '''
+        
+rule evaluate_features:
+    input:
+        matrix='{output_dir}/evaluate_features/preprocess_features/{preprocess_method}.txt',
+        sample_classes=data_dir+ '/sample_classes.txt'
+    output:
+        directory('{output_dir}/evaluate_features/result/{preprocess_method}/{compare_group}/{classifier}')
+    params:
+        n_splits=config['cross_validation_splits'],
+        splitter=config['splitter'],
+        positive_class=lambda wildcards: compare_groups[wildcards.compare_group][1],
+        negative_class=lambda wildcards: compare_groups[wildcards.compare_group][0],
+    shell:
+        '''bin/feature_selection.py evaluate -i {input.matrix} \
+            --sample-classes {input.sample_classes} \
+            --positive-class '{params.positive_class}' --negative-class '{params.negative_class}' \
+            --method {wildcards.classifier} \
+            --splitter {params.splitter} \
+            --n-splits {params.n_splits} \
+            --compute-sample-weight \
+            -o {output}
+        '''
