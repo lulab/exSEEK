@@ -1,0 +1,24 @@
+batch_indices: [1, 2, 3]
+    
+# file paths
+annotation_dir: genome/hg38
+genome_dir: genome/hg38
+output_dir: output/scirep
+temp_dir: tmp
+data_dir: data/scirep
+tools_dir: tools
+python2: /apps/anaconda2/bin/python
+python3: /apps/anaconda3/bin/python
+
+# general parameters
+threads_compress: 1
+
+# mapping parameters
+aligner: bowtie2
+adaptor: AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC
+paired_end: false
+small_rna: true
+tools_dir: ./tools
+count_method: domains_combined
+
+evaluate_features_preprocess_methods: [control_markers_0,scirep.de_selected_mx]
