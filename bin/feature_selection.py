@@ -34,6 +34,12 @@ def preprocess_features(args):
         mean_rpkm = np.exp(np.log(rpkm + 0.01).mean(axis=0)) - 0.01
         features_select = mean_rpkm.sort_values(ascending=False)[:args.rpkm_top].index.values
         X = X.loc[:, features_select]
+    elif args.expr_top is not None:
+        logger.info('select top {} features ranked by raw expression value'.format(args.expr_top))
+        mean_expr = np.exp(np.log(X + 0.01).mean(axis=0)) - 0.01
+        features_select = mean_expr.sort_values(ascending=False)[:args.expr_top].index.values
+        X = X.loc[:, features_select]
+
     feature_names = X.columns.values
     logger.info('{} samples, {} features'.format(X.shape[0], X.shape[1]))
     logger.info('sample: {} ...'.format(str(X.index.values[:3])))
@@ -319,6 +325,30 @@ def evaluate(args):
     logger.info('save metrics')
     metrics.to_csv(os.path.join(args.output_dir, 'metrics.txt'), sep='\t', header=True, index=False)
 
+@command_handler
+def calculate_clustering_score(args):
+    import numpy as np
+    import pandas as pd
+    from evaluation import uca_score
+    from ioutils import open_file_or_stdout
+
+    logger.info('read feature matrix: ' + args.matrix)
+    X = pd.read_table(args.matrix, index_col=0, sep='\t')
+    logger.info('read sample classes: ' + args.sample_classes)
+    sample_classes = pd.read_table(args.sample_classes, index_col=0, sep='\t').iloc[:, 0]
+    if args.transpose:
+        logger.info('transpose feature matrix')
+        X = X.T
+    if args.use_log:
+        logger.info('apply log2 to feature matrix')
+        X = np.log2(X + 0.001)
+    y = sample_classes[X.index.values].values
+    logger.info('calculate clustering score')
+    score = uca_score(X, y)
+    with open_file_or_stdout(args.output_file) as fout:
+        fout.write('{}'.format(uca_score(X, y)))
+
+
 if __name__ == '__main__':
     main_parser = argparse.ArgumentParser(description='Feature selection module')
     subparsers = main_parser.add_subparsers(dest='command')
@@ -339,6 +369,8 @@ if __name__ == '__main__':
         help='remove features that have fraction of zero values above this value')
     parser.add_argument('--rpkm-top', type=int,
         help='Maximum number of top features to select ranked by RPKM')
+    parser.add_argument('--expr-top', type=int, 
+        help='Maximum number of top features to select ranked by raw expression value')
     
     parser = subparsers.add_parser('evaluate')
     parser.add_argument('--matrix', '-i', type=str, required=True,
@@ -382,6 +414,19 @@ if __name__ == '__main__':
         help='number/fraction of samples to remove during each resampling run for robust feature selection')
     parser.add_argument('--remove-zero-features', type=float, 
         help='remove features that have fraction of zero values above this value')
+    
+    parser = subparsers.add_parser('calculate_clustering_score',
+        help='evaluate a normalized matrix by clustering score')
+    parser.add_argument('--matrix', '-i', type=str, required=True,
+        help='input feature matrix (rows are samples and columns are features')
+    parser.add_argument('--sample-classes', type=str, required=True,
+        help='input file containing sample classes with 2 columns: sample_id, sample_class')
+    parser.add_argument('--output-file', '-o', type=str, default='-',
+        help='output file for the score')
+    parser.add_argument('--transpose', action='store_true', default=False,
+        help='transpose the feature matrix')
+    parser.add_argument('--use-log', action='store_true',
+        help='apply log2 to feature matrix')
 
     args = main_parser.parse_args()
     if args.command is None:
