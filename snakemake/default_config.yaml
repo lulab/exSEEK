@@ -15,9 +15,11 @@ splitter: stratified_shuffle_split
 cross_validation_splits: 50
 
 count_method: domains_combined
-imputation_methods: ["scimpute_count", "null"]
+filtercount: 10
+filtersample: 0.2
+imputation_methods: ["scimpute_count", "viper_count", "null"]
 normalization_methods: ["SCnorm", "TMM", "RLE", "CPM", "CPM_top", "CPM_rm", "null"]
-batch_removal_methods: ["null"]
+batch_removal_methods: ["null", "Combat", "RUV"]
 batch_indices: [1, 2, 3]
     
 # file paths
@@ -44,7 +46,7 @@ min_base_quality: 30
 min_base_quality_5p: 30
 min_base_quality_3p: 30
 quality_base: 33
-strandness: "forward"
+strandness: forward
 min_mapping_quality: 0
 use_longest_transcript: true
 star_sjdboverhang: 100
