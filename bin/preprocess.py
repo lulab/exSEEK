@@ -172,6 +172,25 @@ def extract_longest_transcript(args):
                 fout.write(line)
 
 @command_handler
+def gff3_to_transcript_table(args):
+    from ioutils import open_file_or_stdin, open_file_or_stdout
+    from collections import OrderedDict
+
+    fout = open_file_or_stdout(args.output_file)
+    with open_file_or_stdin(args.input_file) as fin:
+        transcripts = OrderedDict()
+        for line in fin:
+            if line.startswith('#'):
+                continue
+            c = line.strip().split('\t')
+            attrs = {}
+            for a in c[8].split(';'):
+                key, value = a.split('=')
+                attrs[key] = value
+            
+
+
+@command_handler
 def gtf_to_transcript_table(args):
     from ioutils import open_file_or_stdin, open_file_or_stdout
     from collections import OrderedDict
@@ -196,6 +215,14 @@ def gtf_to_transcript_table(args):
                 key = a[:i]
                 val = a[(i + 1):].strip('"')
                 attrs[key] = val
+            # mitranscriptome
+            if c[1] == 'mitranscriptome':
+                if attrs['tcat'] == 'lncrna':
+                    attrs['gene_type'] = 'lncRNA'
+                    attrs['transcript_type'] = 'lncRNA'
+                elif attrs['tcat'] == 'tucp':
+                    attrs['gene_type'] = 'tucpRNA'
+                    attrs['transcript_type'] = 'tucpRNA'
             if 'transcript_name' not in attrs:
                 attrs['transcript_name'] = attrs['transcript_id']
             if 'gene_name' not in attrs:
@@ -308,6 +335,124 @@ def chrom_sizes(args):
     with open_file_or_stdin(args.input_file) as fin:
         for record in SeqIO.parse(fin, 'fasta'):
             fout.write('{}\t{}\n'.format(record.id, len(record.seq)))
+
+@command_handler
+def extract_feature_sequence(args):
+    from pyfaidx import Fasta
+    from Bio.Seq import Seq
+    from ioutils import open_file_or_stdout
+
+    fout = open_file_or_stdout(args.output_file)
+    fastas = {}
+    with open(args.input_file, 'r') as fin:
+        for lineno, line in enumerate(fin):
+            feature = line.split('\t')[0]
+            gene_id, gene_type, gene_name, domain_id, transcript_id, start, end = feature.split('|')
+            start = int(start)
+            end = int(end)
+            if gene_type == 'genomic':
+                gene_type = 'genome'
+            if gene_type not in fastas:
+                fastas[gene_type] = Fasta(os.path.join(args.genome_dir, 'fasta', gene_type + '.fa'))
+            if gene_type == 'genome':
+                chrom, gstart, gend, strand = gene_id.split('_')
+                gstart = int(gstart)
+                gend = int(gend)
+                seq = fastas[gene_type][chrom][gstart:gend].seq
+                if strand == '-':
+                    seq = str(Seq(seq).reverse_complement())
+            else:
+                seq = fastas[gene_type][transcript_id][start:end].seq
+            seq = seq.upper()
+            fout.write('>{}\n'.format(feature))
+            fout.write(seq)
+            fout.write('\n')
+    fout.close()
+
+@command_handler
+def calculate_star_parameters(args):
+    from math import log2
+
+    genome_length = 0
+    n_seqs = 0
+    with open(args.input_file, 'r') as f:
+        for line in f:
+            genome_length += int(line.split('\t')[1])
+            n_seqs += 1
+    if args.parameter == 'genomeSAindexNbases':
+        print(min(14, int(log2(genome_length)//2) - 1))
+    elif args.parameter == 'genomeChrBinNbits':
+        print(min(18, int(log2(genome_length/n_seqs))))
+
+@command_handler
+def get_mature_mirna_location(args):
+    import gzip
+    from Bio import SeqIO
+    from collections import defaultdict
+    from ioutils import open_file_or_stdout
+
+    logger.info('read hairpin sequences: ' + args.hairpin)
+    hairpin_seqs = {}
+    with open(args.hairpin, 'r') as f:
+        for record in SeqIO.parse(f, 'fasta'):
+            if (args.species is None) or (args.species == record.id.split('-')[0]):
+                hairpin_seqs[record.id] = str(record.seq)
+    
+    logger.info('read mature sequences: ' + args.mature)
+    fout = open_file_or_stdout(args.output_file)
+    mature_positions = defaultdict(dict)
+    with open(args.mature, 'r') as f:
+        for record in SeqIO.parse(f, 'fasta'):
+            if not ((args.species is None) or (args.species == record.id.split('-')[0])):
+                continue
+            if record.id.endswith('-5p') or record.id.endswith('-3p'):
+                end_type = record.id.split('-')[-1]
+                hairpin_id = record.id[:-3].lower()
+                hairpin_seq = hairpin_seqs.get(hairpin_id)
+                if hairpin_seq is None:
+                    logger.warn('hairpin sequence id {} is not found in hairpin file'.format(hairpin_id))
+                    continue
+                mature_id = record.id
+                mature_seq = str(record.seq)
+                pos = hairpin_seq.find(mature_seq)
+                if pos < 0:
+                    logger.warn('mature sequence {} is not found in hairpin file'.format(mature_id))
+                    continue
+                else:
+                    mature_positions[hairpin_id][end_type] = (pos, pos + len(mature_seq))
+
+    for hairpin_id, hairpin_seq in hairpin_seqs.items():
+        mature_position = mature_positions.get(hairpin_id)
+        if mature_position is None:
+            mature_position = {}
+        fout.write('>{}\n'.format(hairpin_id))
+        offset = 0
+        if '5p' in mature_position:
+            start, end = mature_position['5p']
+            fout.write('{0}\x1B[31;1m{1}\x1B[0m'.format(hairpin_seq[offset:start], hairpin_seq[start:end]))
+            offset = end
+        if '3p' in mature_position:
+            start, end = mature_position['3p']
+            fout.write('{0}\x1B[32;1m{1}\x1B[0m'.format(hairpin_seq[offset:start], hairpin_seq[start:end]))
+            offset = end
+        fout.write('{}\n'.format(hairpin_seq[offset:]))
+    fout.close()
+
+@command_handler
+def calculate_gene_length(args):
+    import HTSeq
+    from collections import defaultdict
+    from functools import partial
+    import numpy as np
+    from ioutils import open_file_or_stdin
+    from tqdm import tqdm
+
+    fin = open_file_or_stdin(args.input_file)
+    gff = HTSeq.GFF_Reader(fin)
+    exons = defaultdict(partial(defaultdict, int))
+    for feature in tqdm(gff, unit='feature'):
+        if feature.type == 'exon':
+            exons[feature.attr['gene_id']][feature.attr['transcript_id']] += feature.iv.length
         
 if __name__ == '__main__':
     main_parser = argparse.ArgumentParser(description='Preprocessing module')
@@ -384,7 +529,42 @@ if __name__ == '__main__':
         help='input FASTA')
     parser.add_argument('--output-file', '-o', type=str, default='-',
         help='output chrom sizes file')
+    
+    parser = subparsers.add_parser('extract_feature_sequence',
+        help='extract sequences using feature names')
+    parser.add_argument('--input-file', '-i', type=str, required=True,
+        help='feature file with feature names in the first column')
+    parser.add_argument('--genome-dir', '-g', type=str, required=True,
+        help='genome directory where fasta/${rna_type}.fa contains sequences')
+    parser.add_argument('--output-file', '-o', type=str, default='-',
+        help='output file in FASTA format')
+    
+    parser = subparsers.add_parser('calculate_star_parameters',
+        help='calculate --genomeSAindexNbases and --genomeChrBinNbits for STAR')
+    parser.add_argument('--input-file', '-i', type=str, required=True,
+        help='FASTA index (.fai) file')
+    parser.add_argument('--parameter', '-p', type=str, required=True,
+        choices=('genomeSAindexNbases', 'genomeChrBinNbits'),
+        help='parameter to calculate')
 
+    parser = subparsers.add_parser('get_mature_mirna_location',
+        help='get mature miRNA location in precursor miRNA in miRBase')
+    parser.add_argument('--mature', type=str, required=True,
+        help='FASTA file of mature sequences')
+    parser.add_argument('--hairpin', type=str, required=True,
+        help='FASTA file of hairpin sequences')
+    parser.add_argument('--output-file', '-o', type=str, default='-')
+    parser.add_argument('--species', type=str)
+
+    parser = subparsers.add_parser('calculate_gene_length',
+        help='calculate effective gene length')
+    parser.add_argument('--input-file', '-i', type=str, default='-',
+        help='GTF/GFF file')
+    parser.add_argument('--method', '-m', type=str,
+        choices=('isoform_length_mean', 'isoform_length_median', 'isoform_length_max', 'merged_exon_length'))
+    parser.add_argument('--output-file', '-o', type=str,
+        help='output tab-deliminated file with two columns: gene_id, length')
+    
     args = main_parser.parse_args()
     if args.command is None:
         main_parser.print_help()
