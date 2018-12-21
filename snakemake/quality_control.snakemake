@@ -191,7 +191,7 @@ rule prinseq_se:
         perl {tools_dir}/prinseq/prinseq-graphs.pl -i {output.graph_data} -html_all -o {output.html}
         '''
 
-rule prinseq_paired:
+rule prinseq_pe:
     input:
         fastq1='{output_dir}/cutadapt/{sample_id}_1.fastq.gz',
         fastq1='{output_dir}/cutadapt/{sample_id}_2.fastq.gz'
