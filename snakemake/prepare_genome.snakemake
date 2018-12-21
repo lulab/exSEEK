@@ -3,7 +3,7 @@ include: 'common.snakemake'
 
 genome_dir = config['genome_dir']
 rna_types = config['rna_types']
-rna_types_gencode = list(filter(lambda x: x not in ('rRNA', 'miRNA', 'piRNA', 'circRNA'), rna_types))
+rna_types_gencode = list(filter(lambda x: x not in ('rRNA', 'miRNA', 'piRNA', 'circRNA', 'spikein_long', 'spikein_small'), rna_types))
 
 aligner = config['aligner']
 use_longest_transcript = config['use_longest_transcript']
