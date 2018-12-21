@@ -1,0 +1,39 @@
+shell.prefix('set -x;')
+include: 'common.snakemake'
+
+rna_types = list(filter(lambda x: x not in ('rRNA', 'spikein'), rna_types))
+
+rule all:
+    input:
+        bigwig=expand('{output_dir}/tbigwig/{sample_id}.{rna_type}.bigWig',
+            output_dir=output_dir, sample_id=sample_ids, rna_type=rna_types)
+        
+rule sort_tbam:
+    input:
+        '{output_dir}/tbam/{sample_id}/{rna_type}.bam'
+    output:
+        '{output_dir}/tbam_sorted/{sample_id}/{rna_type}.bam'
+    params:
+        temp_dir=config['temp_dir']
+    shell:
+        '''samtools sort -T {params.temp_dir} -o {output} {input}
+        '''
+
+rule tbam_to_bedgraph:
+    input:
+        '{output_dir}/tbam_sorted/{sample_id}/{rna_type}.bam'
+    output:
+        '{output_dir}/tbedgraph/{sample_id}.{rna_type}.bedGraph'
+    shell:
+        '''bedtools genomecov -ibam {input} -bg -split | LC_COLLATE=C sort -k1,1 -k2,2n > {output}
+        '''
+
+rule tbedgraph_to_bigwig:
+    input:
+        bedgraph='{output_dir}/tbedgraph/{sample_id}.{rna_type}.bedGraph',
+        chrom_sizes=genome_dir + '/chrom_sizes/{rna_type}'
+    output:
+        '{output_dir}/tbigwig/{sample_id}.{rna_type}.bigWig'
+    shell:
+        '''bedGraphToBigWig {input.bedgraph} {input.chrom_sizes} {output}
+        '''
