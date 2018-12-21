@@ -8,63 +8,57 @@ snakemake --snakefile snakemake/prepare_genome.snakemake --configfile snakemake/
 
 bin/generate_snakemake.py sequential_mapping --rna-types rRNA,miRNA,piRNA,Y_RNA,srpRNA,tRNA,snRNA,snoRNA,lncRNA,mRNA,tucpRNA \
     -o snakemake/sequential_mapping.snakemake
-snakemake --snakefile snakemake/mapping_small.snakemake --configfile snakemake/config.yaml --rerun-incomplete -k \
-    --config adaptor="AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC" data_dir="data/scirep" output_dir="output/scirep" \
+snakemake --snakefile snakemake/mapping_small.snakemake --configfile config/scirep.yaml --rerun-incomplete -k \
     --cluster-config snakemake/cluster.yaml \
     --cluster "bsub -q {cluster.queue} -J {cluster.name} -e {cluster.stderr} -o {cluster.stdout} -R {cluster.resources} -n {cluster.threads}"
 
-snakemake --snakefile snakemake/mapping_small.snakemake \
-    --cluster-config snakemake/cluster.yaml \
-    --configfile snakemake/config.yaml \
-    --cluster "bsub -q {cluster.queue} -J {cluster.name} -e {cluster.stderr} -o {cluster.stdout} -R {cluster.resources} -n {cluster.threads}" \
-    --config adaptor="AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC" data_dir="data/scirep" sample_id_file="metadata/sample_ids.scirep.txt" \
-    output_dir="output/scirep" \
-    --rerun-incomplete -k -j60 
 
-snakemake --snakefile snakemake/expression_matrix.snakemake --configfile snakemake/config.yaml --rerun-incomplete -k \
-    --config adaptor="AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC" data_dir="data/scirep" output_dir="output/scirep"
+snakemake --snakefile snakemake/expression_matrix.snakemake --configfile config/scirep.yaml --rerun-incomplete -k
 
-snakemake --snakefile snakemake/feature_selection.snakemake --configfile snakemake/config.yaml --rerun-incomplete -k \
-    --config adaptor="AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC" data_dir="data/scirep" output_dir="output/scirep" \
+snakemake --snakefile snakemake/feature_selection.snakemake --configfile config/scirep.yaml --rerun-incomplete -k
+
+snakemake --snakefile snakemake/feature_selection.snakemake --configfile config/scirep.yaml --rerun-incomplete -k \
     --cluster-config snakemake/cluster.yaml \
     --cluster "bsub -q {cluster.queue} -J {cluster.name} -e {cluster.stderr} -o {cluster.stdout} -R {cluster.resources} -n {cluster.threads}"
 
-snakemake --snakefile snakemake/call_domains_long.snakemake --configfile snakemake/config.yaml --rerun-incomplete -k \
-    --config adaptor="AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC" data_dir="data/scirep" output_dir="output/scirep" \
+snakemake --snakefile snakemake/call_domains_long.snakemake --configfile config/scirep.yaml --rerun-incomplete -k \
     --cluster-config snakemake/cluster.yaml \
     --cluster "bsub -q {cluster.queue} -J {cluster.name} -e {cluster.stderr} -o {cluster.stdout} -R {cluster.resources} -n {cluster.threads}"
-
+snakemake --snakefile snakemake/bigwig.snakemake --configfile config/scirep.yaml --rerun-incomplete -k \
+    --cluster-config snakemake/cluster.yaml \
+    --cluster "bsub -q {cluster.queue} -J {cluster.name} -e {cluster.stderr} -o {cluster.stdout} -R {cluster.resources} -n {cluster.threads}"
 
 export PATH=$PWD/singularity/wrappers:$PATH
-snakemake --snakefile snakemake/normalization.snakemake --configfile snakemake/config.yaml --rerun-incomplete -k \
-    --config adaptor="AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC" data_dir="data/scirep" output_dir="output/scirep"
+PATH="$PWD/singularity/wrappers:$PATH" snakemake --snakefile snakemake/normalization.snakemake --configfile config/scirep.yaml --rerun-incomplete -k
+
+bin/report.py visualize_domains --sample-ids-file data/scirep/sample_ids.txt \
+    --output-dir output/scirep \
+    --count-matrix output/scirep/count_matrix/domains_combined.txt \
+    --features output/scirep/feature_selection/filter.scimpute_count.Norm_CPM.Batch_RUV.domains_combined/Normal-CRC/random_forest.10.robust/features.txt \
+    --chrom-sizes genome/hg38/chrom_sizes/transcriptome_genome \
+    --output-file tmp/visualize_domains.pdf
+bin/feature_selection.py calculate_clustering_score \
+    --matrix output/scirep/matrix_processing/filter.scimpute_count.Norm_null.domains_combined.txt \
+    --sample-classes data/scirep/sample_classes.txt --transpose
+
+snakemake --snakefile snakemake/evaluate_features.snakemake --configfile config/scirep.yaml
 ```
 
 ## Lulab HCC
 ```bash
 /Share/home/caojingyi/exRNA/process/18.new_hcc_lulab/Snakefile
-snakemake --snakefile snakemake/mapping_small.snakemake --configfile snakemake/config.yaml --rerun-incomplete -k \
+snakemake --snakefile snakemake/mapping_small.snakemake --configfile config/lulab_hcc.yaml --rerun-incomplete -k \
     --cluster-config snakemake/cluster.yaml \
     --cluster "bsub -q {cluster.queue} -J {cluster.name} -e {cluster.stderr} -o {cluster.stdout} -R {cluster.resources} -n {cluster.threads}" \
-    --config adaptor="AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC" data_dir="data/lulab_hcc" output_dir="output/lulab_hcc" -j8
 
-snakemake --snakefile snakemake/mapping_small.snakemake --configfile snakemake/config.yaml --rerun-incomplete -k \
-    --configfile snakemake/config.yaml \
-    --config adaptor="AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC" data_dir="data/lulab_hcc" output_dir="output/lulab_hcc" -j8
+snakemake --snakefile snakemake/mapping_small.snakemake --configfile config/lulab_hcc.yaml --rerun-incomplete -k
+snakemake --snakefile snakemake/expression_matrix.snakemake --configfile config/lulab_hcc.yaml --rerun-incomplete -k
+snakemake --snakefile snakemake/normalization.snakemake --configfile config/lulab_hcc.yaml --rerun-incomplete -k
+snakemake --snakefile snakemake/feature_selection.snakemake --configfile config/lulab_hcc.yaml --rerun-incomplete -k \
+    --cluster-config snakemake/cluster.yaml \
+    --cluster "bsub -q {cluster.queue} -J {cluster.name} -e {cluster.stderr} -o {cluster.stdout} -R {cluster.resources} -n {cluster.threads}"
 
-snakemake --snakefile snakemake/expression_matrix.snakemake --configfile snakemake/config.yaml --rerun-incomplete -k \
-    --configfile snakemake/config.yaml \
-    --config adaptor="AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC" data_dir="data/lulab_hcc" output_dir="output/lulab_hcc" -j8
-
-snakemake --snakefile snakemake/call_domains_long.snakemake --rerun-incomplete -k \
-    --configfile snakemake/config.yaml \
-    --config adaptor="AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC" data_dir="data/lulab_hcc"  output_dir="output/lulab_hcc" -j8
-
-snakemake --snakefile snakemake/normalization.snakemake --rerun-incomplete -k --configfile snakemake/config.yaml \
-    --config adaptor="AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC" data_dir="data/lulab_hcc"  output_dir="output/lulab_hcc" -j8
-
-snakemake --snakefile snakemake/feature_selection.snakemake --rerun-incomplete -k --configfile snakemake/config.yaml \
-    --config adaptor="AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC" data_dir="data/lulab_hcc"  output_dir="output/lulab_hcc" -j8
+snakemake --snakefile snakemake/evaluate_features.snakemake --configfile config/lulab_hcc.yaml
 ```
 
 ## exoRBase
@@ -78,15 +72,35 @@ for f in data/exorbase/fastq/*.fastq;do
     echo data/exorbase_test/fastq/${sample_id}.fastq
     head -n 400000 $f > data/exorbase_test/fastq/${sample_id}.fastq
 done
-snakemake --snakefile snakemake/mapping_long.snakemake --rerun-incomplete -k --configfile snakemake/config.yaml \
-    --config data_dir="data/exorbase_test"  output_dir="output/exorbase_test"
 
-
-snakemake --snakefile snakemake/mapping_long.snakemake --rerun-incomplete -k --configfile snakemake/config.yaml \
-    --config data_dir="data/exorbase"  output_dir="output/exorbase" \
+snakemake --snakefile snakemake/mapping_long.snakemake --rerun-incomplete -k --configfile config/exorbase.yaml \
     --cluster-config snakemake/cluster.yaml \
     --cluster "bsub -q {cluster.queue} -J {cluster.name} -e {cluster.stderr} -o {cluster.stdout} -R {cluster.resources} -n {cluster.threads}" -j60
+snakemake --snakefile snakemake/normalization.snakemake --configfile config/exorbase.yaml --rerun-incomplete -k
+snakemake --snakefile snakemake/feature_selection.snakemake --configfile config/exorbase.yaml --rerun-incomplete -k
 
+```
+
+## TCGA miRNA-seq (CRC)
+```bash
+snakemake --snakefile snakemake/bam_to_fastx.snakemake --rerun-incomplete -k --configfile config/tcga_crc.yaml 
+snakemake --snakefile snakemake/mapping_small.snakemake --rerun-incomplete -k --configfile config/tcga_crc.yaml \
+    --cluster-config snakemake/cluster.yaml \
+    --cluster "bsub -q {cluster.queue} -J {cluster.name} -e {cluster.stderr} -o {cluster.stdout} -R {cluster.resources} -n {cluster.threads}"
+```
+
+## TCGA miRNA-seq (HCC)
+```bash
+snakemake --snakefile snakemake/bam_to_fastx.snakemake --rerun-incomplete -k --configfile config/tcga_hcc.yaml 
+snakemake --snakefile snakemake/mapping_small.snakemake --rerun-incomplete -k --configfile config/tcga_hcc.yaml \
+    --cluster-config snakemake/cluster.yaml \
+    --cluster "bsub -q {cluster.queue} -J {cluster.name} -e {cluster.stderr} -o {cluster.stdout} -R {cluster.resources} -n {cluster.threads}"
+snakemake --snakefile snakemake/bigwig.snakemake --configfile config/tcga_hcc.yaml --rerun-incomplete -k \
+    --cluster-config snakemake/cluster.yaml \
+    --cluster "bsub -q {cluster.queue} -J {cluster.name} -e {cluster.stderr} -o {cluster.stdout} -R {cluster.resources} -n {cluster.threads}"
+snakemake --snakefile snakemake/call_domains_long.snakemake --configfile config/tcga_hcc.yaml --rerun-incomplete -k \
+    --cluster-config snakemake/cluster.yaml \
+    --cluster "bsub -q {cluster.queue} -J {cluster.name} -e {cluster.stderr} -o {cluster.stdout} -R {cluster.resources} -n {cluster.threads}"
 ```
 
 ## Data
@@ -102,4 +116,22 @@ ln -f -s /BioII/lulab_b/shared/projects/exRNA/published_exRNA/exosome_exoRBase/e
 ln -f -s /BioII/lulab_b/shared/projects/exRNA/published_exRNA/exosome_exoRBase/exosome_GSE99985_CHD/fastq/*.fastq data/exorbase/fastq
 ln -f -s /BioII/lulab_b/caojingyi/exoRBase/fastq/*.fastq data/exorbase/fastq
 ls data/exorbase/fastq | cut -d'_' -f1 | sort | uniq > data/exorbase/sample_ids.txt
+```
+
+## Spike-in
+
+### Small RNA-seq
+`/BioII/lulab_b/wangsiqi/exRNA/exRNA-panel/NEB/03.1811_T4PNK/ExiSEQ-spikeIn`
+
+```bash
+cp /BioII/lulab_b/wangsiqi/exRNA/exRNA-panel/NEB/03.1811_T4PNK/ExiSEQ-spikeIn/ExiSEQ-spikeIn.fa genome/hg38/fasta/spikein_small.fa
+samtools faidx genome/hg38/fasta/spikein_small.fa
+```
+
+### Long RNA-seq
+`/BioII/lulab_b/wangsiqi/exRNA/exRNA-panel/pico-smart/exSeek/ERCC-spikeIn`
+
+```bash
+cp /BioII/lulab_b/wangsiqi/exRNA/exRNA-panel/pico-smart/exSeek/ERCC-spikeIn/ERCC92.fa genome/hg38/fasta/spikein_long.fa
+samtools faidx genome/hg38/fasta/spikein_long.fa
 ```
