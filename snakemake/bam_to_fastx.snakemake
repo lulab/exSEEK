@@ -1,0 +1,22 @@
+shell.prefix('set -x;')
+include: 'common.snakemake'
+
+with open(data_dir + '/bam_files.txt', 'r') as f:
+    bam_files = dict(line.strip().split('\t') for line in f)
+
+rule all:
+    input:
+        fasta=expand('{output_dir}/unmapped/{sample_id}/clean.fa.gz',
+            output_dir=output_dir, sample_id=sample_ids)
+
+rule bam_to_fasta:
+    input:
+        bam=lambda wildcards: bam_files[wildcards.sample_id]
+    output:
+        fasta='{output_dir}/unmapped/{sample_id}/clean.fa.gz'
+    params:
+        flags=2816
+    shell:
+        '''samtools fastq -F {params.flags} {input.bam} \
+        | fastq_to_fasta -r -z -o {output}
+        '''
