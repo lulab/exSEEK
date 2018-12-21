@@ -71,8 +71,6 @@ rule read_counts_unmapped:
 
 rule summarize_read_counts:
     input:
-        raw=lambda wildcards: expand('{output_dir}/stats/read_counts_raw/{sample_id}',
-            output_dir=wildcards.output_dir, sample_id=sample_ids),
         mapped=lambda wildcards: expand('{output_dir}/stats/read_counts_mapped/{sample_id}/{rna_type}',
             output_dir=wildcards.output_dir, sample_id=sample_ids, 
             rna_type=rna_types + ['other', 'promoter', 'enhancer', 'intron', 'circRNA', 'repeats']),
@@ -86,11 +84,8 @@ rule summarize_read_counts:
         from collections import OrderedDict
     
         records = OrderedDict()
-        for filename in input.raw:
-            sample_id = os.path.basename(filename)
+        for sample_id in sample_ids:
             records[sample_id] = {}
-            with open(filename, 'r') as f:
-                records[sample_id]['raw'] = int(f.read().strip())
         for filename in input.mapped:
             sample_id, rna_type = filename.split(os.path.sep)[-2:]
             with open(filename, 'r') as f:
@@ -163,17 +158,6 @@ rule gbedgraph_to_bigwig:
         '{output_dir}/bigwig/{sample_id}.{rna_type}.{strand}.bigWig'
     shell:
         '''bedGraphToBigWig {input.bedgraph} {input.chrom_sizes} {output}
-        '''
-
-rule sort_tbam:
-    input:
-        '{output_dir}/tbam/{sample_id}/{rna_type}.bam'
-    output:
-        '{output_dir}/tbam_sorted/{sample_id}/{rna_type}.bam'
-    params:
-        temp_dir=config['temp_dir']
-    shell:
-        '''samtools sort -T {params.temp_dir} -o {output} {input}
         '''
 
 rule collect_alignment_summary_metrics:
