@@ -394,23 +394,104 @@ def _evaluate_preprocess_methods(input_dirs, preprocess_methods, title=None):
 def evaluate_preprocessing_methods(args):
     _evaluate_preprocess_methods(args.input_dirs, args.precessing_methods)
 
+def bigwig_fetch(filename, chrom, start, end, dtype='float'):
+    import subprocess
+    p = subprocess.Popen(['bigWigToBedGraph', filename, 'stdout',
+                      '-chrom={}'.format(chrom), '-start={}'.format(start), '-end={}'.format(end)],
+                    stdout=subprocess.PIPE)
+    data = np.zeros(end - start, dtype=dtype)
+    for line in p.stdout:
+        line = str(line, encoding='ascii')
+        c = line.strip().split('\t')
+        data[(int(c[1]) - start):(int(c[2]) - start)] = float(c[3])
+    return data
+    
 @command_handler
-def fastqc_summary(args):
-    from nbformat.v4 import new_notebook, new_code_cell, new_markdown_cell
-    
-    fastqc_dir = os.path.join(args.input_dir)
-    logger.info('read fastq directory: ' + args.input_dir)
-    
+def visualize_domains(args):
+    import numpy as np
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from matplotlib.backends.backend_pdf import PdfPages
+    import seaborn as sns
+    sns.set_style('whitegrid')
+    import pandas as pd
+    plt.rcParams['figure.dpi'] = 96
+    from tqdm import tqdm
+
+    # read sample ids
+    sample_ids = open(args.sample_ids_file, 'r').read().split()
+    # read features
+    features = pd.read_table(args.features, header=None).iloc[:, 0]
+    feature_info = features.str.split('|', expand=True)
+    feature_info.columns = ['gene_id', 'gene_type', 'gene_name', 'domain_id', 'transcript_id', 'start', 'end']
+    feature_info.index = features.values
+    # read count matrix to get read depth
+    counts = pd.read_table(args.count_matrix, index_col=0)
+    read_depth = counts.sum(axis=0)
+    del counts
+    # read chrom sizes
+    chrom_sizes = pd.read_table(args.chrom_sizes, sep='\t', index_col=0, header=None).iloc[:, 0]
+
+    with PdfPages(args.output_file) as pdf:
+        for feature_name, feature in tqdm(feature_info.iterrows(), unit='feature'):
+            #logger.info('plot feature: {}'.format(feature_name))
+            if feature['gene_type'] == 'genomic':
+                chrom, start, end, strand = feature['gene_id'].split('_')
+                start = int(start)
+                end = int(end)
+                bigwig_file = os.path.join(args.output_dir, 'bigwig', '{{0}}.genome.{0}.bigWig'.format(strand))
+            else:
+                start = int(feature['start'])
+                end = int(feature['end'])
+                chrom = feature.transcript_id
+                bigwig_file = os.path.join(args.output_dir, 'tbigwig', '{{0}}.{0}.bigWig'.format(feature['gene_type']))
+            # interval to display coverage
+            cov_start = max(start - args.flanking, 0)
+            cov_end = min(end + args.flanking, chrom_sizes[feature['transcript_id']])
+            # interval of domains relative to visible region
+            domain_start = start - cov_start
+            domain_end = domain_start + end - start
+            coverage = np.empty((len(sample_ids), cov_end - cov_start), dtype='float')
+            # read coverage from BigWig files
+            for i, sample_id in enumerate(sample_ids):
+                coverage[i] = bigwig_fetch(bigwig_file.format(sample_id), chrom, cov_start, cov_end, dtype='int')
+                # normalize coverage by read depth
+                coverage[i] *= 1e6/read_depth[sample_id]
+                # log2 transformation
+                coverage[i] = np.log2(coverage[i] + 1)
+            
+            # draw heatmap
+            plot_data = pd.DataFrame(coverage)
+            cmap = sns.light_palette('blue', as_cmap=True, n_colors=6)
+            g = sns.clustermap(plot_data, figsize=(20, 8), col_cluster=False, row_colors=None,
+                        cmap='Reds')
+            g.ax_heatmap.set_yticklabels([])
+            g.ax_heatmap.set_yticks([])
+            xticks = np.arange(0, coverage.shape[1], 10)
+            g.ax_heatmap.set_xticks(xticks)
+            g.ax_heatmap.set_xticklabels(xticks, rotation=0)
+            g.ax_heatmap.vlines(x=domain_start, ymin=0, ymax=g.ax_heatmap.get_ylim()[0], linestyle='dashed', linewidth=1.0)
+            g.ax_heatmap.vlines(x=domain_end, ymin=0, ymax=g.ax_heatmap.get_ylim()[0], linestyle='dashed', linewidth=1.0)
+            g.ax_heatmap.set_title(feature_name)
+
+            # save plot
+            pdf.savefig(g.fig)
+            plt.close()
+
+
 if __name__ == '__main__':
     main_parser = argparse.ArgumentParser(description='Preprocessing module')
     subparsers = main_parser.add_subparsers(dest='command')
 
-    parser = subparsers.add_parser('fastqc_summary', 
-        help='create an HTML summary report for fastqc result')
-    parser.add_argument('--input-dir', '-i', type=str, required=True,
-        help='output directory of fastqc')
-    parser.add_argument('--output-prefix', '-o', type=str, default='-',
-        help='prefix of output files')
+    parser = subparsers.add_parser('visualize_domains', help='plot read coverage of domains as heatmaps')
+    parser.add_argument('--sample-ids-file', type=str, required=True, help='e.g. {data_dir}/sample_ids.txt')
+    parser.add_argument('--output-dir', type=str, required=True, help='e.g. output/scirep')
+    parser.add_argument('--features', type=str, required=True, help='list of selected features')
+    parser.add_argument('--chrom-sizes', type=str, required=True)
+    parser.add_argument('--count-matrix', type=str, required=True, help='count matrix')
+    parser.add_argument('--output-file', type=str, required=True, help='output PDF file')
+    parser.add_argument('--flanking', type=int, default=20, help='flanking length for genomic domains')
     
     args = main_parser.parse_args()
     if not args.command:
