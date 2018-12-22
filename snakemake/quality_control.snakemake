@@ -2,7 +2,7 @@ shell.prefix('set -x;')
 include: 'common.snakemake'
 
 def get_all_inputs(wildcards):
-    if config['paired']:
+    if config['paired_end']:
         available_inputs = dict(
             prinseq=expand('{output_dir}/prinseq/{sample_id}.html',
                 output_dir=output_dir, sample_id=sample_ids)
