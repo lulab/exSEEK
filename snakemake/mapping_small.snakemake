@@ -20,7 +20,9 @@ def get_all_inputs(wildcards):
         mapped_read_length=expand('{output_dir}/stats/mapped_read_length_by_sample/{sample_id}',
             output_dir=output_dir, sample_id=sample_ids),
         bigwig=expand('{output_dir}/bigwig/{sample_id}.{rna_type}.{strand}.bigWig',
-            output_dir=output_dir, sample_id=sample_ids, rna_type=['other', 'genome'], strand=['+', '-'])
+            output_dir=output_dir, sample_id=sample_ids, rna_type=['other', 'genome'], strand=['+', '-']),
+        summarize_read_counts_jupyter=expand('{output_dir}/summary/read_counts.html',
+            output_dir=output_dir)
     )
     enabled_inputs = list(available_inputs.keys())
     inputs = []
@@ -99,6 +101,22 @@ rule summarize_read_counts:
         records.columns.name = 'item'
         records.index.name = 'reads_type'
         records.to_csv(output[0], sep='\t', header=True, index=True)
+
+rule summarize_read_counts_jupyter:
+    input:
+        read_counts='{output_dir}/summary/read_counts.txt',
+        jupyter='templates/summarize_read_counts_small.ipynb'
+    output:
+        jupyter='{output_dir}/summary/read_counts.ipynb',
+        html='{output_dir}/summary/read_counts.html'
+    shell:
+        '''cp {input.jupyter} {output.jupyter}
+        jupyter nbconvert --execute --to html \
+            --HTMLExporter.exclude_code_cell=False \
+            --HTMLExporter.exclude_input_prompt=True \
+            --HTMLExporter.exclude_output_prompt=True \
+            {output.jupyter}
+        '''
 
 rule mapped_read_length:
     input:
