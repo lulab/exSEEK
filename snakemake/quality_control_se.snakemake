@@ -34,19 +34,29 @@ rule cutadapt_se:
     params:
         min_read_length=config['min_read_length'],
         min_base_quality=config['min_base_quality'],
-        trim_5p='-u {}'.format(config['trim_5p']) if config['trim_5p'] > 0 else '',
-        trim_3p='-u -{}'.format(config['trim_3p']) if config['trim_3p'] > 0 else '',
-        adaptor='-a {}'.format(config['adaptor']) if len(config['adaptor']) > 0 else '',
-        adaptor_5p='-g {}'.format(config['adaptor_5p']) if len(config['adaptor_5p']) > 0 else ''
+        trim_5p=lambda wildcards: '-u {}'.format(config['trim_5p']) if config['trim_5p'] > 0 else '',
+        trim_3p=lambda wildcards: '-u -{}'.format(config['trim_3p']) if config['trim_3p'] > 0 else '',
+        adaptor=lambda wildcards: '-a {}'.format(config['adaptor']) if len(config['adaptor']) > 0 else '',
+        adaptor_5p=lambda wildcards: '-g {}'.format(config['adaptor_5p']) if len(config['adaptor_5p']) > 0 else '',
+        umi_length=config['umi_length']
     log:
         '{output_dir}/log/cutadapt/{sample_id}'
     threads:
         config['threads_compress']
-    shell:
-        '''cutadapt {params.adaptor} {params.adaptor_5p} {params.trim_5p} {params.trim_3p} \
+    run:
+        if config['umi_tags']:
+            shell('''bin/auto_uncompress {input} \
+            | bin/cut_umi_tags.py -u {params.umi_length} \
+            | cutadapt {params.adaptor} {params.trim_3p} \
+                -m {params.min_read_length} --trim-n -q {params.min_base_quality} - \
+                -o >(pigz -c -p {threads} > {output.trimmed}) > {log} 2>&1
+            ''')
+        else:
+            shell('''bin/auto_uncompress {input} \
+            | cutadapt {params.adaptor} {params.adaptor_5p} {params.trim_5p} {params.trim_3p} \
             -m {params.min_read_length} --trim-n -q {params.min_base_quality} \
-            -o >(pigz -c -p {threads} > {output.trimmed}) {input} > {log} 2>&1
-        '''
+            -o >(pigz -c -p {threads} > {output.trimmed}) - > {log} 2>&1
+            ''')
 
 rule fastq_to_fasta_se:
     input:
@@ -61,7 +71,7 @@ rule fastq_to_fasta_se:
 
 rule fastqc:
     input:
-        data_dir + '/fastq/{sample_id}.fastq'
+        auto_gzip_input(data_dir + '/fastq/{sample_id}.fastq')
     output:
         html='{output_dir}/fastqc/{sample_id}_fastqc.html',
         zip='{output_dir}/fastqc/{sample_id}_fastqc.zip'
