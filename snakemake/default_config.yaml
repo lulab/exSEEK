@@ -56,3 +56,5 @@ star_sjdboverhang: 100
 threads_mapping: 4
 paired_end: false
 small_rna: true
+umi_tags: false
+umi_length: 0
