@@ -1,0 +1,37 @@
+#! /bin/bash
+if [ "$#" -lt 1 ];then
+    echo "Usage: $0 file1 [file2 ...]" >&2
+    exit 1
+fi
+# detect format
+format=""
+for filename in "$@";do
+    if [ "${filename/%.gz}" != "$filename" ];then
+        new_format="gzip"
+    elif [ "${filename/%.xz}" != "$filename" ];then
+        new_format="xz"
+    elif [ "${filename/%.bz2}" != "$filename" ];then
+        new_format="bzip2"
+    else
+        new_format="raw"
+    fi
+    if [ -z "$format" ];then
+        format="$new_format"
+    fi
+    if [ "$new_format" != "$format" ];then
+        echo "Error: different format found in input files" >&2
+        exit 1
+    else
+        format="$new_format"
+    fi
+done
+# uncompress files
+if [ "$format" = "gzip" ];then
+    exec gzip -d -c "$@"
+elif [ "$format" = "bzip2" ];then
+    exec bzip2 -d -c "$@"
+elif [ "$format" = "xz" ];then
+    exec xz -d -c "$@"
+else
+    exec cat "$@"
+fi
