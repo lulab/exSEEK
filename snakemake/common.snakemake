@@ -8,12 +8,25 @@ with open('snakemake/default_config.yaml', 'r') as f:
 default_config.update(config)
 config = default_config
 
-data_dir = config['data_dir']
-genome_dir = config['genome_dir']
-output_dir = config['output_dir']
-rna_types = config['rna_types']
-tools_dir = config['tools_dir']
+def require_variable(variable, condition=None):
+    value = config.get(variable)
+    if value is None:
+        raise ValueError('configuration variable "{}" is required'.format(variable))
+    if (condition == 'input_dir') and (not os.path.isdir(value)):
+        raise ValueError('cannot find input directory {}: {}'.format(variable, value))
+    elif (condition == 'input_file') and (not os.path.isfile(value)):
+        raise ValueError('cannot find input file {}: {}'.format(variable, value))
+    return value
 
+data_dir = require_variable('data_dir', 'input_dir')
+genome_dir = require_variable('genome_dir', 'input_dir')
+output_dir = require_variable('output_dir')
+rna_types = require_variable('rna_types')
+tools_dir = require_variable('tools_dir')
+temp_dir = require_variable('temp_dir')
+#bin_dir = require_variable('bin_dir', 'input_dir')
+
+# read sample ids from file
 with open(os.path.join(data_dir, 'sample_ids.txt'), 'r') as f:
     sample_ids = f.read().split()
 for sample_id in sample_ids:
@@ -39,3 +52,19 @@ def get_preprocess_methods():
                 normalization_method=config['normalization_methods'],
                 batch_removal_method=batch_removal_method)
     return preprocess_methods
+
+def auto_gzip_input(template):
+    def get_filename(wildcards):
+        original_names = expand(template, **wildcards)
+        if all(os.path.exists(f) for f in original_names):
+            return original_names
+        gzip_names = expand(template + '.gz', **wildcards)
+        if all(os.path.exists(f) for f in gzip_names):
+            return gzip_names
+    return get_filename
+
+rule make_temp:
+    output:
+        temp_dir
+    shell:
+        'mkdir -p {output}'
