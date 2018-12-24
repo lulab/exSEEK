@@ -30,49 +30,6 @@ rule count_clean_reads_paired:
         '''gzip -d -c {input} | wc -l | awk '{print int($0/2)}' > {output}
         '''
 
-"""
-rule fastq_to_fasta_paired:
-    input:
-        '{output_dir}/cutadapt/{sample_id}_{pair_index}.fastq.gz'
-    output:
-        '{output_dir}/unmapped/{sample_id}/clean_{pair_index}.fa.gz'
-    threads:
-        config['threads_compress']
-    wildcard_constraints:
-        pair_index='[12]'
-    shell:
-        '''pigz -p {threads} -d -c {input} \
-            | fastq_to_fasta -r -n \
-            | pigz -p {threads} -c > {output}
-        '''
-        
-rule cutadapt_paired:
-    input:
-        fastq1=data_dir + '/fastq/{sample_id}_1.fastq',
-        fastq2=data_dir + '/fastq/{sample_id}_2.fastq'
-    output:
-        fastq1='{output_dir}/cutadapt/{sample_id}_1.fastq.gz',
-        fastq2='{output_dir}/cutadapt/{sample_id}_2.fastq.gz'
-    threads:
-        config['threads']
-    params:
-        quality_5p=config['min_base_quality_5p'],
-        quality_3p=config['min_base_quality_3p'],
-        adaptor1=config['adaptor1'],
-        adaptor2=config['adaptor2'],
-        miniL=config['min_read_length'],
-        quality_base=config['quality_base']
-    log:
-        '{output_dir}/log/cutadapt/{sample_id}'
-    shell:
-        '''cutadapt -j {threads} -q {params.quality_5p},{params.quality_3p} \
-            -a {params.adaptor1} -A {params.adaptor2} \
-            --trim-n -m {params.miniL} \
-            -o >(gzip -c > {output.fastq1}) -p >(gzip -c > {output.fastq2}) \
-            {input.fastq1} {input.fastq2} > {log} 2>&1
-        '''
-"""
-
 rule map_rRNA_paired:
     input:
         reads1='{output_dir}/unmapped/{sample_id}/clean_1.fa.gz',
