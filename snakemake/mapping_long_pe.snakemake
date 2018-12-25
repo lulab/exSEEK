@@ -1,11 +1,9 @@
 include: 'common.snakemake'
 
-map_steps = ['rRNA', 'genome', 'remove_duplicates', 'circRNA']
+map_steps = ['rRNA', 'genome', 'circRNA']
 
 rule all:
     input:
-        #cutadapt_paired=expand('{output_dir}/cutadapt/{sample_id}_{pair_index}.fastq.gz',
-        #    output_dir=output_dir, sample_id=sample_ids, pair_index=[1, 2]),
         map_rRNA_paired=expand('{output_dir}/bam/{sample_id}/rRNA.bam',
             output_dir=output_dir, sample_id=sample_ids),
         map_circRNA_paired=expand('{output_dir}/bam/{sample_id}/circRNA.bam',
@@ -51,8 +49,7 @@ rule map_rRNA_se:
             --outSAMtype BAM Unsorted \
             --outReadsUnmapped Fastx \
             --readFilesCommand gzip -d -c \
-            --outSAMmultNmax 1 \
-            --outMultimapperOrder Random
+            --outSAMmultNmax 1
         mv {params.output_prefix}Aligned.out.bam {output.bam}
         gzip -c {params.output_prefix}Unmapped.out > {output.unmapped}
         rm -f {params.output_prefix}Unmapped.out
@@ -214,7 +211,7 @@ rule count_clean_fragments:
         '''pigz -p {threads} -d -c {input} | wc -l | awk '{{print int($0/2)}}' > {output}
         '''
 
-rule parse_samtools_stats_paired:
+rule parse_samtools_stats_pe:
     input:
         '{output_dir}/samtools_stats/{sample_id}/{map_step}.txt'
     output:

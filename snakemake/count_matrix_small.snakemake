@@ -1,6 +1,5 @@
 include: 'common.snakemake'
 
-count_methods = ['featurecounts', 'htseq', 'transcript']
 count_methods = ['transcript']
 # remove rRNA and spikein
 rna_types = list(filter(lambda x: x not in ('rRNA', 'spikein'), rna_types))
@@ -9,8 +8,7 @@ def get_all_inputs(wildcards):
     available_inputs = dict(
         counts_by_biotype=expand('{output_dir}/counts_by_biotype/transcript/{sample_id}/{rna_type}',
             output_dir=output_dir, sample_id=sample_ids, rna_type=rna_types),
-        count_matrix=expand('{output_dir}/count_matrix/transcript.txt', output_dir=output_dir),
-        domains_combined=expand('{output_dir}/count_matrix/domains_combined.txt', output_dir=output_dir)
+        count_matrix=expand('{output_dir}/count_matrix/transcript.txt', output_dir=output_dir)
     )
     enabled_inputs = list(available_inputs.keys())
     inputs = []
@@ -133,7 +131,7 @@ rule merge_htseq_by_biotype:
         cat {input} | grep -v '^__' > {output}
         '''
 
-rule transcript_tbam:
+rule count_transcript:
     input:
         bam='{output_dir}/tbam/{sample_id}/{rna_type}.bam'
     output:
@@ -141,8 +139,22 @@ rule transcript_tbam:
     params:
         min_mapping_quality=config['min_mapping_quality'],
         strandness=config['strandness']
+    wildcard_constraints:
+        rna_type='(?!miRNA).*'
     shell:
         '''{bin_dir}/count_reads.py count_transcript -i {input.bam} -s {params.strandness} -q {params.min_mapping_quality} -o {output}
+        '''
+
+rule count_mature_mirna:
+    input:
+        bam='{output_dir}/tbam/{sample_id}/miRNA.bam',
+        annotation=genome_dir + '/gff3/miRBase.hsa.gff3'
+    output:
+        '{output_dir}/counts_by_biotype/transcript/{sample_id}/miRNA'
+    params:
+        min_mapping_quality=config['min_mapping_quality']
+    shell:
+        '''{bin_dir}/count_reads.py count_mature_mirna -i {input.bam} -a {input.annotation} -q {params.min_mapping_quality} -o {output}
         '''
 
 rule merge_transcript_by_biotype:
@@ -155,33 +167,3 @@ rule merge_transcript_by_biotype:
         '''cat {input} > {output}
         '''
 
-rule combine_full_length_and_domain:
-    input:
-        full_length='{output_dir}/count_matrix/transcript.txt',
-        domain_long='{output_dir}/count_matrix/domains_long.txt',
-        transcript_table=genome_dir + '/transcript_table/all.txt'
-    output:
-        '{output_dir}/count_matrix/domains_combined.txt'
-    run:
-        import pandas as pd
-
-        transcript_table = pd.read_table(input.transcript_table, sep='\t')
-        transcript_table.drop_duplicates('transcript_id', inplace=True)
-        transcript_table.set_index('transcript_id', drop=False, inplace=True)
-
-        # fill attributes of full length to 7 fields
-        full_length = pd.read_table(input.full_length, sep='\t', index_col=0)
-        full_length_features = full_length.index.to_series().str.split('|', expand=True)
-        full_length_features.columns = ['gene_id', 'gene_type', 'gene_name', 'domain_id', 'transcript_id', 'start', 'end']
-        # select small RNA transcripts
-        full_length_features = full_length_features.query('(gene_type == "miRNA") or (gene_type == "piRNA")')
-        full_length = full_length.loc[full_length_features.index.values]
-        gene_length = (transcript_table['end'] - transcript_table['start']).astype('str')
-
-        domain_long = pd.read_table(input.domain_long, sep='\t', index_col=0)
-        #domain_long_features = domain_long.index.to_series().str.split('|', expand=True)
-        #domain_long_features.columns = ['gene_id', 'gene_type', 'gene_name', 'domain_id', 'transcript_id', 'start', 'end']
-
-        combined = pd.concat([full_length, domain_long], axis=0)
-        combined.index.name = 'feature'
-        combined.to_csv(output[0], sep='\t', index=True, header=True, na_rep='NA')
