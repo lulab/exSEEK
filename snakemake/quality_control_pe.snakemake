@@ -6,9 +6,12 @@ import os
 def get_all_inputs(wildcards):
     available_inputs = dict(
         prinseq=expand('{output_dir}/prinseq/{sample_id}.html',
-            output_dir=output_dir, sample_id=sample_ids)
+            output_dir=output_dir, sample_id=sample_ids),
+        clean_reads=expand('{output_dir}/unmapped/{sample_id}/clean_{pair_index}.fa.gz',
+            output_dir=output_dir, sample_id=sample_ids, pair_index=[1, 2])
     )
-    enabled_inputs = list(available_inputs.keys())
+    enabled_inputs = ['clean_reads']
+    #enabled_inputs = list(available_inputs.keys())
     inputs = []
     for key, l in available_inputs.items():
         if key in enabled_inputs:
@@ -67,10 +70,20 @@ rule prinseq_pe:
         fastq1='{output_dir}/cutadapt/{sample_id}_1.fastq.gz',
         fastq2='{output_dir}/cutadapt/{sample_id}_2.fastq.gz'
     output:
-        graph_data='{output_dir}/prinseq/{sample_id}.gd',
-        html='{output_dir}/prinseq/{sample_id}.html'
+        '{output_dir}/prinseq/{sample_id}.gd'
     shell:
-        '''perl {tools_dir}/prinseq/prinseq-lite.pl -verbose -fastq {input.fastq1} -fastq2 {input.fastq2} \
-            -ns_max_n 0 -graph_data {output.graph_data} -out_good null -out_bad null
-        perl {tools_dir}/prinseq/prinseq-graphs.pl -i {output.graph_data} -html_all -o {output.html}
+        '''perl {tools_dir}/prinseq/prinseq-lite.pl -verbose \
+            -fastq  <({bin_dir}/auto_uncompress {input.fastq1}) \
+            -fastq2 <({bin_dir}/auto_uncompress {input.fastq2}) \
+            -ns_max_n 0 -graph_data {output} -out_good null -out_bad null
+        
+        '''
+
+rule prinseq_graph_pe:
+    input:
+        '{output_dir}/prinseq/{sample_id}.gd'
+    output:
+        '{output_dir}/prinseq/{sample_id}.html'
+    shell:
+        '''perl {tools_dir}/prinseq/prinseq-graphs.pl -i {input} -html_all -o {output}
         '''
