@@ -20,11 +20,11 @@ def require_variable(variable, condition=None):
 
 data_dir = require_variable('data_dir', 'input_dir')
 genome_dir = require_variable('genome_dir', 'input_dir')
+bin_dir = require_variable('bin_dir', 'input_dir')
 output_dir = require_variable('output_dir')
 rna_types = require_variable('rna_types')
 tools_dir = require_variable('tools_dir')
 temp_dir = require_variable('temp_dir')
-#bin_dir = require_variable('bin_dir', 'input_dir')
 
 # read sample ids from file
 with open(os.path.join(data_dir, 'sample_ids.txt'), 'r') as f:
