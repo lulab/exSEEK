@@ -1,0 +1,14 @@
+# file paths
+genome_dir: genome/hg38
+output_dir: output/small_se_example
+data_dir: data/small_se_example
+
+# general parameters
+threads_compress: 1
+
+# mapping parameters
+aligner: bowtie2
+adaptor: AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC
+paired_end: false
+small_rna: true
+count_method: domains_combined

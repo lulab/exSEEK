@@ -1,0 +1,18 @@
+# file paths
+genome_dir: genome/hg38
+output_dir: output/long_pe_example
+temp_dir: tmp
+data_dir: data/long_pe_example
+
+# general parameters
+threads_compress: 1
+threads_mapping: 4
+
+# mapping parameters
+aligner: bowtie2
+adaptor1: AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC
+adaptor2: AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT
+paired_end: true
+small_rna: false
+strandness: forward
+count_method: featurecounts
