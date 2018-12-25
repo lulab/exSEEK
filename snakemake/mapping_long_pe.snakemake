@@ -36,6 +36,7 @@ map_command_pe = '''STAR --genomeDir {params.index} \
             --outReadsUnmapped Fastx \
             --readFilesCommand gzip -d -c \
             --outSAMmultNmax 1 \
+            --seedPerWindowNmax {params.seedPerWindowNmax} \
             --outMultimapperOrder Random
         mv {params.output_prefix}Aligned.out.bam {output.bam}
         gzip -c {params.output_prefix}Unmapped.out.mate1 > {output.unmapped1}
@@ -43,7 +44,7 @@ map_command_pe = '''STAR --genomeDir {params.index} \
         rm -f {params.output_prefix}Unmapped.out.mate1 {params.output_prefix}Unmapped.out.mate2
         '''
 
-rule map_rRNA_paired:
+rule map_rRNA_pe:
     input:
         reads1='{output_dir}/unmapped/{sample_id}/clean_1.fa.gz',
         reads2='{output_dir}/unmapped/{sample_id}/clean_2.fa.gz',
@@ -55,13 +56,14 @@ rule map_rRNA_paired:
         log='{output_dir}/mapping_star/{sample_id}/rRNA/Log.final.out'
     params:
         output_prefix='{output_dir}/mapping_star/{sample_id}/rRNA/',
-        index=genome_dir + '/index/star/rRNA'
+        index=genome_dir + '/index/star/rRNA',
+        seedPerWindowNmax=20
     threads:
         config['threads_mapping']
     run:
         shell(map_command_pe)
 
-rule map_genome_paired:
+rule map_genome_pe:
     input:
         reads1='{output_dir}/unmapped/{sample_id}/rRNA_1.fa.gz',
         reads2='{output_dir}/unmapped/{sample_id}/rRNA_2.fa.gz',
@@ -73,13 +75,14 @@ rule map_genome_paired:
         log='{output_dir}/mapping_star/{sample_id}/genome/Log.final.out'
     params:
         output_prefix='{output_dir}/mapping_star/{sample_id}/genome/',
-        index=genome_dir + '/long_index/star'
+        index=genome_dir + '/long_index/star',
+        seedPerWindowNmax=50
     threads:
         config['threads_mapping']
     run:
         shell(map_command_pe)
     
-rule map_circRNA_paired:
+rule map_circRNA_pe:
     input:
         reads1='{output_dir}/unmapped/{sample_id}/genome_1.fa.gz',
         reads2='{output_dir}/unmapped/{sample_id}/genome_2.fa.gz',
@@ -91,7 +94,8 @@ rule map_circRNA_paired:
         log='{output_dir}/mapping_star/{sample_id}/circRNA/Log.final.out'
     params:
         output_prefix='{output_dir}/mapping_star/{sample_id}/circRNA/',
-        index=genome_dir + '/index/star/circRNA'
+        index=genome_dir + '/index/star/circRNA',
+        seedPerWindowNmax=20
     threads:
         config['threads_mapping']
     run:
