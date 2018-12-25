@@ -7,10 +7,6 @@ import shutil
 import shlex
 import subprocess
 
-def check_inputs(configfile):
-    # check data_dir
-    pass
-
 def quoted_string_join(strs, sep=' '):
     quoted = []
     for s in strs:
@@ -24,7 +20,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='exSeek main program')
 
     parser.add_argument('--step', type=str, required=True, choices=('quality_control', 
-        'mapping', 'count_matrix', 'call_domains'))
+        'mapping', 'count_matrix', 'call_domains', 'normalization', 'feature_selection'))
     parser.add_argument('--dataset', '-d', type=str, required=True,
         help='dataset name')
     parser.add_argument('--config-dir', '-c', type=str, default='config',
@@ -34,12 +30,7 @@ if __name__ == '__main__':
         help='cluster configuration file ({config_dir}/cluster.yaml by default)')
     parser.add_argument('--cluster-command', type=str,
         help='command for submitting job to cluster (default read from {config_dir}/cluster_command.txt')
-    parser.add_argument('--jobs', '-j', type=int, help='number of jobs')
-    parser.add_argument('--dryrun', action='store_true', default=False, 
-        help='do not actually run snakemake')
-    parser.add_argument('--snakemake-args', type=str, 
-        help='other snakemake arguments')
-    args = parser.parse_args()
+    args, extra_args = parser.parse_known_args()
 
     logger = logging.getLogger('exseek')
 
@@ -47,11 +38,11 @@ if __name__ == '__main__':
     root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
     logger.info('root directory: {}'.format(root_dir))
 
-    # check snakemake
+    # find snakemake executable
     snakemake_path = shutil.which('snakemake')
     if snakemake_path is None:
         raise ValueError('cannot find snakemake command')
-    
+
     # snakemake command
     snakemake_args = ['snakemake', '-k', '--rerun-incomplete']
     # check configuration file
@@ -79,33 +70,31 @@ if __name__ == '__main__':
                 raise ValueError('cannot find {}/cluster_command.txt and --cluster-command is not specified'.format(args.config_dir))
             cluster_command = args.cluster_command
         snakemake_args += ['--cluster', cluster_command, '--cluster-config', cluster_config]
+    # find proper version of snakemake
     if args.step == 'quality_control':
-        snakefile = os.path.join(root_dir, 'snakemake', 'quality_control.snakemake')
+        if config['paired_end']:
+            snakefile = os.path.join(root_dir, 'snakemake', 'quality_control_pe.snakemake')
+        else:
+            snakefile = os.path.join(root_dir, 'snakemake', 'quality_control_se.snakemake')
     elif args.step == 'mapping':
         if config['small_rna']:
             snakefile = os.path.join(root_dir, 'snakemake', 'mapping_small.snakemake')
         else:
-            snakefile = os.path.join(root_dir, 'snakemake', 'mapping_long.snakemake')
-    elif args.step == 'count_matrix':
-        snakefile = os.path.join(root_dir, 'snakemake', 'count_matrix.snakemake')
-    elif args.step == 'call_domains':
-        snakefile = os.path.join(root_dir, 'snakemake', 'call_domains.snakemake')
-    elif args.step == 'normalization':
-        snakefile = os.path.join(root_dir, 'snakemake', 'normalization.snakemake')
-    elif args.step == 'feature_selection':
-        snakefile = os.path.join(root_dir, 'snakemake', 'feature_selection.snakemake')
+            if config['paired_end']:
+                snakefile = os.path.join(root_dir, 'snakemake', 'mapping_long_pe.snakemake')
+            else:
+                snakefile = os.path.join(root_dir, 'snakemake', 'mapping_long_se.snakemake')
+    else:
+        snakefile = os.path.join(root_dir, 'snakemake', args.step + '.snakemake')
     snakemake_args += ['--snakefile', snakefile, '--configfile', configfile]
-    # number of jobs
-    if args.jobs is not None:
-        snakemake_args += ['-j', args.jobs]
-    if args.dryrun is not None:
-        snakemake_args += ['--dryrun']
+    # add bin_dir
+    snakemake_args += ['--config', 'bin_dir="{}"'.format(os.path.join(root_dir, 'bin'))]
     # extra args
-    if args.snakemake_args is not None:
-        snakemake_args += shlex.split(args.snakemake_args)
+    snakemake_args += extra_args
     # run snakemake
     snakemake_args = [str(s) for s in snakemake_args]
     logger.info('run snakemake: {}'.format(quoted_string_join(snakemake_args)))
 
-    subprocess.check_call(snakemake_args, shell=False)
+    #subprocess.check_call(snakemake_args, shell=False)
+    os.execv(snakemake_path, snakemake_args)
     
