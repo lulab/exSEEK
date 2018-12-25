@@ -45,8 +45,8 @@ rule cutadapt_se:
         config['threads_compress']
     run:
         if config['umi_tags']:
-            shell('''bin/auto_uncompress {input} \
-            | bin/cut_umi_tags.py -u {params.umi_length} \
+            shell('''{bin_dir}/auto_uncompress {input} \
+            | {bin_dir}/cut_umi_tags.py -u {params.umi_length} \
             | cutadapt {params.adaptor} {params.trim_3p} \
                 -m {params.min_read_length} --trim-n -q {params.min_base_quality} - \
                 -o >(pigz -c -p {threads} > {output.trimmed}) > {log} 2>&1

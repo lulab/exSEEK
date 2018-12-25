@@ -18,7 +18,6 @@ aligner: bowtie2
 adaptor: AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC
 paired_end: false
 small_rna: true
-tools_dir: ./tools
 count_method: domains_combined
 
 evaluate_features_preprocess_methods: [control_markers_0,scirep.de_selected_mx]

@@ -8,7 +8,7 @@ command_handlers = {}
 def command_handler(f):
     command_handlers[f.__name__] = f
     return f
-
+    
 def read_gtf(filename):
     from ioutils import open_file_or_stdin
 
@@ -385,7 +385,7 @@ def calculate_star_parameters(args):
         print(min(18, int(log2(genome_length/n_seqs))))
 
 @command_handler
-def get_mature_mirna_location(args):
+def highlight_mature_mirna_location(args):
     import gzip
     from Bio import SeqIO
     from collections import defaultdict
@@ -436,6 +436,45 @@ def get_mature_mirna_location(args):
             fout.write('{0}\x1B[32;1m{1}\x1B[0m'.format(hairpin_seq[offset:start], hairpin_seq[start:end]))
             offset = end
         fout.write('{}\n'.format(hairpin_seq[offset:]))
+    fout.close()
+
+@command_handler
+def extract_mature_mirna_location(args):
+    from utils import read_gtf, GFFRecord
+    from ioutils import open_file_or_stdin, open_file_or_stdout
+    from collections import OrderedDict, defaultdict
+
+    logger.info('read input GFF file: ' + args.input_file)
+    fin = open_file_or_stdin(args.input_file)
+    logger.info('open output BED file: ' + args.input_file)
+    fout = open_file_or_stdout(args.output_file)
+    # key: precursor_id, value: precursor record
+    precursors = OrderedDict()
+    # key: precursor_id, value: list of mature records
+    matures = defaultdict(list)
+    # read features from GFF file
+    for record in read_gff(fin):
+        if record.feature == 'miRNA_primary_transcript':
+            precursors[record.attr['ID']] = record
+        elif record.feature == 'miRNA':
+            matures[record.attr['Derives_from']].append(record)
+    # get locations of mature miRNAs
+    for precursor_id, precursor in precursors.items():
+        for mature in matures[precursor_id]:
+            if mature.strand == '+':
+                fout.write('{}\t{}\t{}\t{}\t0\t+\n'.format(
+                    precursor.attr['Name'], 
+                    mature.start - precursor.start,
+                    mature.end - precursor.start + 1,
+                    mature.attr['Name']))
+            else:
+                fout.write('{}\t{}\t{}\t{}\t0\t+\n'.format(
+                    precursor.attr['Name'],
+                    precursor.end - mature.end,
+                    precursor.end - mature.start + 1,
+                    mature.attr['Name']
+                ))
+    fin.close()
     fout.close()
 
 @command_handler
@@ -547,7 +586,7 @@ if __name__ == '__main__':
         choices=('genomeSAindexNbases', 'genomeChrBinNbits'),
         help='parameter to calculate')
 
-    parser = subparsers.add_parser('get_mature_mirna_location',
+    parser = subparsers.add_parser('highlight_mature_mirna_location',
         help='get mature miRNA location in precursor miRNA in miRBase')
     parser.add_argument('--mature', type=str, required=True,
         help='FASTA file of mature sequences')
@@ -555,6 +594,13 @@ if __name__ == '__main__':
         help='FASTA file of hairpin sequences')
     parser.add_argument('--output-file', '-o', type=str, default='-')
     parser.add_argument('--species', type=str)
+
+    parser = subparsers.add_parser('extract_mature_mirna_location',
+        help='Extract mature miRNA location in precursor miRNA in miRBase')
+    parser.add_argument('--input-file', '-i', type=str, required=True,
+        help='miRBase GFF3 file')
+    parser.add_argument('--output-file', '-o', type=str, default='-',
+        help='BED file with 6 columns: pre-miRNA, start, end, mature miRNA, 0, +')
 
     parser = subparsers.add_parser('calculate_gene_length',
         help='calculate effective gene length')
@@ -570,4 +616,10 @@ if __name__ == '__main__':
         main_parser.print_help()
         sys.exit(1)
     logger = logging.getLogger('preprocess.' + args.command)
-    command_handlers.get(args.command)(args)
+
+    try:
+        command_handlers.get(args.command)(args)
+    except BrokenPipeError:
+        pass
+    except KeyboardInterrupt:
+        pass

@@ -1,8 +1,6 @@
 shell.prefix('set -x;')
 include: 'common.snakemake'
 
-output_dir = config['output_dir']
-rna_types = config['rna_types']
 rna_types_long = list(filter(lambda x: x not in ('miRNA', 'piRNA', 'rRNA'), rna_types))
 
 piranha_path = '../piranha-exrna-1.2.1/bin'
@@ -73,7 +71,7 @@ rule bin_coverage:
         bin_size=config['bin_size']
     shell:
         '''pigz -d -c {input.bed} \
-            | bin/bin_coverage /dev/stdin {input.chrom_sizes} {output} {params.bin_size}
+            | {bin_dir}/bin_coverage /dev/stdin {input.chrom_sizes} {output} {params.bin_size}
         '''
 
 rule call_domains:
@@ -178,7 +176,7 @@ rule summarize_domains:
     output:
         directory('{output_dir}/summary/call_domains')
     shell:
-        '''bin/report.py summarize_domains -i {input}
+        '''{bin_dir}/report.py summarize_domains -i {input}
         '''
 
 rule domain_count_matrix:
@@ -259,5 +257,5 @@ rule normalize_matrix:
     output:
         '{output_dir}/normalized_matrix/{normalize_method}/domains_{pvalue}.txt'
     shell:
-        '''bin/normalize.py -i {input} -m {wildcards.normalize_method} -o {output}
+        '''{bin_dir}/normalize.py -i {input} -m {wildcards.normalize_method} -o {output}
         '''

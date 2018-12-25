@@ -103,6 +103,36 @@ snakemake --snakefile snakemake/call_domains_long.snakemake --configfile config/
     --cluster "bsub -q {cluster.queue} -J {cluster.name} -e {cluster.stderr} -o {cluster.stdout} -R {cluster.resources} -n {cluster.threads}"
 ```
 
+## GSE113994 (Healthy, cfRNA, PNAS 2018)
+```bash
+snakemake --snakefile snakemake/quality_control.snakemake --rerun-incomplete -k --configfile config/GSE113994.yaml \
+    --cluster-config snakemake/cluster.yaml \
+    --cluster "bsub -q {cluster.queue} -J {cluster.name} -e {cluster.stderr} -o {cluster.stdout} -R {cluster.resources} -n {cluster.threads}"
+snakemake --snakefile snakemake/mapping_small.snakemake --rerun-incomplete -k --configfile config/GSE113994.yaml \
+    --cluster-config snakemake/cluster.yaml \
+    --cluster "bsub -q {cluster.queue} -J {cluster.name} -e {cluster.stderr} -o {cluster.stdout} -R {cluster.resources} -n {cluster.threads}"
+```
+
+## GSE45722 (Healthy, exosome, BMC Genomics 2013)
+```bash
+snakemake --snakefile snakemake/quality_control.snakemake --rerun-incomplete -k --configfile config/GSE45722.yaml \
+    --cluster-config snakemake/cluster.yaml \
+    --cluster "bsub -q {cluster.queue} -J {cluster.name} -e {cluster.stderr} -o {cluster.stdout} -R {cluster.resources} -n {cluster.threads}" -j40
+snakemake --snakefile snakemake/mapping_small.snakemake --rerun-incomplete -k --configfile config/GSE45722.yaml \
+    --cluster-config snakemake/cluster.yaml \
+    --cluster "bsub -q {cluster.queue} -J {cluster.name} -e {cluster.stderr} -o {cluster.stdout} -R {cluster.resources} -n {cluster.threads}" -j40
+```
+
+## GSE114711 (Healthy, exosome, Scientific Reports 2018)
+```bash
+snakemake --snakefile snakemake/quality_control.snakemake --rerun-incomplete -k --configfile config/GSE114711.yaml \
+    --cluster-config snakemake/cluster.yaml \
+    --cluster "bsub -q {cluster.queue} -J {cluster.name} -e {cluster.stderr} -o {cluster.stdout} -R {cluster.resources} -n {cluster.threads}" -j40
+snakemake --snakefile snakemake/mapping_small.snakemake --rerun-incomplete -k --configfile config/GSE114711.yaml \
+    --cluster-config snakemake/cluster.yaml \
+    --cluster "bsub -q {cluster.queue} -J {cluster.name} -e {cluster.stderr} -o {cluster.stdout} -R {cluster.resources} -n {cluster.threads}" -j40
+```
+
 ## Data
 
 ### exoRBase
@@ -116,6 +146,7 @@ ln -f -s /BioII/lulab_b/shared/projects/exRNA/published_exRNA/exosome_exoRBase/e
 ln -f -s /BioII/lulab_b/shared/projects/exRNA/published_exRNA/exosome_exoRBase/exosome_GSE99985_CHD/fastq/*.fastq data/exorbase/fastq
 ln -f -s /BioII/lulab_b/caojingyi/exoRBase/fastq/*.fastq data/exorbase/fastq
 ls data/exorbase/fastq | cut -d'_' -f1 | sort | uniq > data/exorbase/sample_ids.txt
+ln -f -s /BioII/zhuyumin/exLocator/exosome_SR2018_GSE114711/1.fastq/*.fastq data/GSE114711/fastq
 ```
 
 ## Spike-in

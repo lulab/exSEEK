@@ -1,6 +1,8 @@
 shell.prefix('set -x;')
 include: 'common.snakemake'
 
+import os
+
 def get_all_inputs(wildcards):
     if config['paired_end']:
         available_inputs = dict(
@@ -14,7 +16,9 @@ def get_all_inputs(wildcards):
             summarize_fastqc=expand('{output_dir}/summary/fastqc.txt',
                 output_dir=output_dir),
             summarize_fastqc_html=expand('{output_dir}/summary/fastqc.html',
-                output_dir=output_dir)
+                output_dir=output_dir),
+            clean=expand('{output_dir}/unmapped/{sample_id}/clean.fa.gz',
+                output_dir=output_dir, sample_id=sample_ids)
         )
     enabled_inputs = list(available_inputs.keys())
     inputs = []
@@ -27,34 +31,94 @@ rule all:
     input:
         get_all_inputs
 
-rule cutadapt:
+def get_input_fastq_se(wildcards):
+    fastq = expand(data_dir + '/fastq/{sample_id}.fastq', sample_id=wildcards.sample_id)
+    fastq_gz = expand(data_dir + '/fastq/{sample_id}.fastq.gz', sample_id=wildcards.sample_id)
+
+    if all(os.path.exists(f) for f in fastq_gz):
+        return fastq_gz
+    else:
+        return fastq
+
+def auto_gzip_input(template):
+    def get_filename(wildcards):
+        original_names = expand(template, **wildcards)
+        if all(os.path.exists(f) for f in original_names):
+            return original_names
+        gzip_names = expand(template + '.gz', **wildcards)
+        if all(os.path.exists(f) for f in gzip_names):
+            return gzip_names
+    return get_filename
+
+rule cutadapt_se:
     input:
-        data_dir + '/fastq/{sample_id}.fastq'
+        auto_gzip_input(data_dir + '/fastq/{sample_id}.fastq')
     output:
-        trimmed='{output_dir}/cutadapt/{sample_id}.fastq'
+        trimmed='{output_dir}/cutadapt/{sample_id}.fastq.gz'
     params:
         adaptor=config['adaptor'],
-        min_read_length=config['min_read_length']
+        min_read_length=config['min_read_length'],
+        min_base_quality=config['min_base_quality']
     log:
         '{output_dir}/log/cutadapt/{sample_id}'
     threads:
         config['threads_compress']
     shell:
-        '''cutadapt -a {params.adaptor} -m {params.min_read_length} --trim-n -q {min_base_quality} \
-            -o {output.trimmed} {input}
+        '''cutadapt -a {params.adaptor} -m {params.min_read_length} --trim-n -q {params.min_base_quality} \
+            -o >(pigz -c -p {threads} > {output.trimmed}) {input} > {log} 2>&1
         '''
 
-rule fastq_to_fasta:
+rule fastq_to_fasta_se:
     input:
-        '{output_dir}/cutadapt/{sample_id}.fastq'
+        '{output_dir}/cutadapt/{sample_id}.fastq.gz'
     output:
         '{output_dir}/unmapped/{sample_id}/clean.fa.gz'
     threads:
         config['threads_compress']
     shell:
-        '''fastq_to_fasta -r -i {input} | pigz -p {threads} -c > {output}
+        '''pigz -d -c -p {threads} {input} | fastq_to_fasta -r | pigz -p {threads} -c > {output}
         '''
-        
+
+rule fastq_to_fasta_pe:
+    input:
+        '{output_dir}/cutadapt/{sample_id}_{pair_index}.fastq.gz'
+    output:
+        '{output_dir}/unmapped/{sample_id}/clean_{pair_index}.fa.gz'
+    threads:
+        config['threads_compress']
+    wildcard_constraints:
+        pair_index='[12]'
+    shell:
+        '''pigz -p {threads} -d -c {input} \
+            | fastq_to_fasta -r -n \
+            | pigz -p {threads} -c > {output}
+        '''
+
+rule cutadapt_pe:
+    input:
+        fastq1=auto_gzip_input(data_dir + '/fastq/{sample_id}_1.fastq'),
+        fastq2=auto_gzip_input(data_dir + '/fastq/{sample_id}_2.fastq')
+    output:
+        fastq1='{output_dir}/cutadapt/{sample_id}_1.fastq.gz',
+        fastq2='{output_dir}/cutadapt/{sample_id}_2.fastq.gz'
+    threads:
+        config['threads']
+    params:
+        quality_5p=config['min_base_quality_5p'],
+        quality_3p=config['min_base_quality_3p'],
+        adaptor1=lambda wildcards: '-a ' + config['adaptor1'] if len(config['adaptor1']) > 0 else '',
+        adaptor2=lambda wildcards: '-A ' + config['adaptor2'] if len(config['adaptor2']) > 0 else '',
+        miniL=config['min_read_length'],
+        quality_base=config['quality_base']
+    log:
+        '{output_dir}/log/cutadapt/{sample_id}'
+    shell:
+        '''cutadapt -j {threads} -q {params.quality_5p},{params.quality_3p} \
+            {params.adaptor1} {params.adaptor2} --trim-n -m {params.miniL} \
+            -o >(gzip -c > {output.fastq1}) -p >(gzip -c > {output.fastq2}) \
+            {input.fastq1} {input.fastq2} > {log} 2>&1
+        '''
+
 rule fastqc:
     input:
         data_dir + '/fastq/{sample_id}.fastq'
@@ -194,7 +258,7 @@ rule prinseq_se:
 rule prinseq_pe:
     input:
         fastq1='{output_dir}/cutadapt/{sample_id}_1.fastq.gz',
-        fastq1='{output_dir}/cutadapt/{sample_id}_2.fastq.gz'
+        fastq2='{output_dir}/cutadapt/{sample_id}_2.fastq.gz'
     output:
         graph_data='{output_dir}/prinseq/{sample_id}.gd',
         html='{output_dir}/prinseq/{sample_id}.html'

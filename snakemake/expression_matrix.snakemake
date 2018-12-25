@@ -142,7 +142,7 @@ rule transcript_tbam:
         min_mapping_quality=config['min_mapping_quality'],
         strandness=config['strandness']
     shell:
-        '''bin/count_reads.py count_transcript -i {input.bam} -s {params.strandness} -q {params.min_mapping_quality} -o {output}
+        '''{bin_dir}/count_reads.py count_transcript -i {input.bam} -s {params.strandness} -q {params.min_mapping_quality} -o {output}
         '''
 
 rule merge_transcript_by_biotype:

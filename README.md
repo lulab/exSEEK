@@ -37,10 +37,10 @@ snakemake --snakefile snakemake/prepare_genome.snakemake \
 | `${input_dir}/fastq/${sample_id}.fastq` | Read files (single-end sequencing) |
 | `${input_dir}/fastq/${sample_id}_1.fastq`, `${input_dir}/fastq/${sample_id}_2.fastq` | Read files (paired-end sequencing) |
 | `${input_dir}/sample_ids.txt` | A text file with one sample ID per line. |
-| `${input_dir}/sample_classes.txt` | A tab-deliminated file (with header) with two columns: sample_id, label |
-| `${input_dir}/batch_info.txt` | A comma-deliminated file (with header) with at least two columns: sample_id, batch1, batch2, ... |
-| `${input_dir}/reference_genes.txt` | A text file with reference gene IDs. |
-| `${input_dir}/compare_groups.yaml` | A YAML file defining positive and negative classes. |
+| `${input_dir}/sample_classes.txt` | A tab-deliminated file (with header) with two columns: sample_id, label (optional) |
+| `${input_dir}/batch_info.txt` | A comma-deliminated file (with header) with at least two columns: sample_id, batch1, batch2, ... (optional) |
+| `${input_dir}/compare_groups.yaml` | A YAML file defining positive and negative classes. (optional) |
+| `${config_dir}/${dataset}.yaml` | A YAML file for configuration parameters for the dataset |
 
 **compare_groups.yaml**
 
@@ -53,7 +53,7 @@ Normal-CRC: ["Healthy Control", "Colorectal Cancer"]
 
 All parameters are specified in a configuration file in [YAML](https://en.wikipedia.org/wiki/YAML) format.
 
-An example configuration file is (snakemake/config.yaml).
+An example configuration file is (snakemake/default_config.yaml).
 
 The parameter values in the configuration file can also be overrided through the `--config` option in [snakemake](https://snakemake.readthedocs.io/en/stable/executable.html).
 
@@ -237,6 +237,7 @@ snakemake --snakefile snakemake/call_domains_long.snakemake \
 ### Output files
 
 | File name | Description |
+| --------- | ----------- |
 | `${output_dir}/normalized_matrix/${normalization_method}.${imputation_method}.${batch_removal_method}.txt` |
 | `${output_dir}/matrix_processing/normalization/${normalization_method}.txt` |
 | `${output_dir}/matrix_processing/imputation/${normalization_method}.${imputation_method}.txt` |

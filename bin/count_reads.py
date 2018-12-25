@@ -106,7 +106,76 @@ def count_circrna(args):
     logger.info('write counts to file: ' + args.output_file)
     with open_file_or_stdout(args.output_file) as fout:
         counts.to_csv(fout, sep='\t', header=None, index=True, na_rep='NA')
-                
+
+@command_handler
+def count_mature_mirna(args):
+    from collections import OrderedDict, defaultdict
+    from ioutils import open_file_or_stdin, open_file_or_stdout
+    import pysam
+    from utils import read_gff
+
+    logger.info('read input GFF file: ' + args.annotation)
+    fin = open(args.annotation, 'r')
+    # key: precursor_id, value: precursor record
+    precursors = OrderedDict()
+    # key: precursor_id, value: list of mature records
+    matures = defaultdict(list)
+    mature_names = []
+    # read features from GFF file
+    for record in read_gff(fin):
+        if record.feature == 'miRNA_primary_transcript':
+            precursors[record.attr['ID']] = record
+        elif record.feature == 'miRNA':
+            matures[record.attr['Derives_from']].append(record)
+            mature_names.append(record.attr['Name'])
+    fin.close()
+    # get locations of mature miRNAs
+    # key: precursor_name, key: dict of (mature_name, (start, end))
+    mature_locations = defaultdict(dict)
+    for precursor_id, precursor in precursors.items():
+        precursor_name = precursor.attr['Name']
+        for mature in matures[precursor_id]:
+            if mature.strand == '+':
+                mature_locations[precursor_name][mature.attr['Name']] = (
+                    mature.start - precursor.start,
+                    mature.end - precursor.start + 1)
+            else:
+                mature_locations[precursor_name][mature.attr['Name']]  = (
+                    precursor.end - mature.end,
+                    precursor.end - mature.start + 1)
+
+    logger.info('read input BAM/SAM file: ' + args.input_file)
+    sam = pysam.AlignmentFile(args.input_file, "rb")
+    counts = defaultdict(int)
+    min_mapping_quality = args.min_mapping_quality
+    for read in sam:
+        if read.is_unmapped:
+            continue
+        if read.mapping_quality < min_mapping_quality:
+            continue
+        if read.is_reverse:
+            continue
+        # find mature miRNA with maximum overlap with the read
+        max_overlap = 0
+        matched_mature_name = None
+        for mature_name, mature_location in mature_locations[read.reference_name].items():
+            # get overlap
+            overlap = (mature_location[1] - mature_location[0]) \
+                + (read.reference_end - read.reference_start) \
+                - (max(read.reference_end, mature_location[1]) - min(read.reference_start, mature_location[0]))
+            if overlap > max_overlap:
+                max_overlap = overlap
+                matched_mature_name = mature_name
+        if max_overlap <= 0:
+            continue
+        # count the read
+        counts[matched_mature_name] += 1
+    
+    logger.info('open output file: ' + args.output_file)
+    with open_file_or_stdout(args.output_file) as f:
+        for mature_name in mature_names:
+            f.write('{}\t{}\n'.format(mature_name, counts[mature_name]))
+         
 if __name__ == '__main__':
     main_parser = argparse.ArgumentParser(description='Count reads in BAM files')
     subparsers = main_parser.add_subparsers(dest='command')
@@ -130,6 +199,17 @@ if __name__ == '__main__':
         help='only count reads with mapping quality greater than this number')
     parser.add_argument('--output-file', '-o', type=str, default='-', 
         help='output tab-deliminated file. Two columns: gene_id, count')
+    
+    parser = subparsers.add_parser('count_mature_mirna',
+        help='count reads mapped to mature miRNA')
+    parser.add_argument('--input-file', '-i', type=str, required=True, 
+        help='input BAM/SAM file mapped to miRBase hairpin sequences')
+    parser.add_argument('--annotation', '-a', type=str, required=True,
+        help='GFF3 file containing mature miRNA locations in precursor miRNA')
+    parser.add_argument('--min-mapping-quality', '-q', type=int, default=0,
+        help='only count reads with mapping quality greater than this number')
+    parser.add_argument('--output-file', '-o', type=str, default='-',
+        help='output file')
     
     args = main_parser.parse_args()
     if args.command is None:

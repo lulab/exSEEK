@@ -36,7 +36,7 @@ rule transcript_counts_rna_type:
     output:
         'output/{dataset}/transcript_counts_rna_type/{sample_id}/{rna_type}.txt'
     shell:
-        '''bin/preprocess.py transcript_counts -i {input.bam} -o {output}
+        '''{bin_dir}/preprocess.py transcript_counts -i {input.bam} -o {output}
         '''
 
 rule transcript_counts_merge:
@@ -142,7 +142,7 @@ rule gtf_to_transcript_table:
     params:
         feature=lambda wildcards: {True: "exon", False: "transcript"}[wildcards.rna_type in ('tRNA', 'tucpRNA', 'piRNA')]
     shell:
-        '''bin/preprocess.py gtf_to_transcript_table --feature {params.feature} \
+        '''{bin_dir}/preprocess.py gtf_to_transcript_table --feature {params.feature} \
             --gene-type {wildcards.rna_type} \
             --transcript-type {wildcards.rna_type} \
             -i {input} -o {output}

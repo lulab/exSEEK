@@ -25,7 +25,7 @@ rule preprocess_features:
     params:
         scaler=config['scale_method']
     shell:
-        '''bin/feature_selection.py preprocess_features -i {input} --scaler {params.scaler} \
+        '''{bin_dir}/feature_selection.py preprocess_features -i {input} --scaler {params.scaler} \
             --use-log --transpose -o {output}
         '''
         
@@ -41,7 +41,7 @@ rule evaluate_features:
         positive_class=lambda wildcards: compare_groups[wildcards.compare_group][1],
         negative_class=lambda wildcards: compare_groups[wildcards.compare_group][0],
     shell:
-        '''bin/feature_selection.py evaluate -i {input.matrix} \
+        '''{bin_dir}/feature_selection.py evaluate -i {input.matrix} \
             --sample-classes {input.sample_classes} \
             --positive-class '{params.positive_class}' --negative-class '{params.negative_class}' \
             --method {wildcards.classifier} \

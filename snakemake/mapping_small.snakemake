@@ -124,7 +124,7 @@ rule mapped_read_length:
     output:
         '{output_dir}/stats/mapped_read_length/{sample_id}/{rna_type}'
     shell:
-        '''bin/statistics.py read_length_hist --max-length 600 -i {input} -o {output}
+        '''{bin_dir}/statistics.py read_length_hist --max-length 600 -i {input} -o {output}
         '''
 
 rule merge_mapped_read_length:
@@ -253,7 +253,7 @@ rule map_circRNA:
         '''pigz -d -c {input.reads} \
         | bowtie2 -f -p {threads} --norc --sensitive --no-unal \
             --un-gz {output.unmapped_aligner} -x {params.index} - -S - \
-        | bin/preprocess.py filter_circrna_reads --filtered-file >(samtools view -b -o {output.bam_filtered}) \
+        | {bin_dir}/preprocess.py filter_circrna_reads --filtered-file >(samtools view -b -o {output.bam_filtered}) \
         | samtools view -b -o {output.bam}
 
         {{

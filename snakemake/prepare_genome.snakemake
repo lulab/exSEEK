@@ -249,7 +249,7 @@ rule gtf_to_transcript_table:
     output:
         '{genome_dir}/transcript_table/{rna_type}.txt'
     shell:
-        '''bin/preprocess.py gtf_to_transcript_table --feature exon \
+        '''{bin_dir}/preprocess.py gtf_to_transcript_table --feature exon \
             --gene-type {wildcards.rna_type} \
             --transcript-type {wildcards.rna_type} \
             -i {input} -o {output}
@@ -270,7 +270,7 @@ rule gtf_longest_transcript:
     output:
         '{genome_dir}/gtf_longest_transcript/{rna_type}.gtf'
     shell:
-        '''bin/preprocess.py extract_longest_transcript -i {input} -o {output}
+        '''{bin_dir}/preprocess.py extract_longest_transcript -i {input} -o {output}
         '''
 
 rule extract_transcript_fasta:

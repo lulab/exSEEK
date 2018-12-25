@@ -31,7 +31,7 @@ rule preprocess_features:
         remove_zero_features=0.2,
         rpkm_top={True: '--rpkm-top 2000', False: '--expr-top 2000'}[config['small_rna']]
     shell:
-        '''bin/feature_selection.py preprocess_features -i {input} --scaler {params.scaler} \
+        '''{bin_dir}/feature_selection.py preprocess_features -i {input} --scaler {params.scaler} \
             --use-log --transpose {params.rpkm_top} --remove-zero-features {params.remove_zero_features} -o {output}
         '''
     
@@ -50,7 +50,7 @@ rule select_features:
         n_splits=config['cross_validation_splits'],
         splitter=config['splitter']
     shell:
-        '''bin/feature_selection.py evaluate -i {input.matrix} \
+        '''{bin_dir}/feature_selection.py evaluate -i {input.matrix} \
             --sample-classes {input.sample_classes} \
             --positive-class '{params.positive_class}' --negative-class '{params.negative_class}' \
             --method {wildcards.classifier} --n-select {wildcards.n_select} \
@@ -61,22 +61,4 @@ rule select_features:
             -o {output}
         '''
 
-rule evaluate_features:
-    input:
-        matrix='{output_dir}/preprosess_features/{preprocess_method}.{count_method}.txt',
-        sample_classes=data_dir+ '/sample_classes.txt'
-    output:
-        directory('{output_dir}/evaluate_markers/{preprocess_method}.{count_method}/{compare_group}/{feature_set}')
-    params:
-        n_splits=config['cross_validation_splits'],
-        splitter=config['splitter']
-    shell:
-        '''bin/feature_selection.py evaluate -i {input.matrix} \
-            --sample-classes {input.sample_classes} \
-            --positive-class '{params.positive_class}' --negative-class '{params.negative_class}' \
-            --method {wildcards.classifier} \
-            --splitter {params.splitter} \
-            --n-splits {params.n_splits} \
-            --compute-sample-weight \
-            -o {output}
-        '''
+

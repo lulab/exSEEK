@@ -35,6 +35,7 @@ conda install -y bedtools samtools star subread bowtie2
 conda install -y rsem bamtools cutadapt picard gffread gffcompare
 conda install -y ucsc-bedtogenepred ucsc-genepredtogtf ucsc-bedgraphtobigwig ucsc-bigwigtobedgraph
 conda install -y htseq fastx_toolkit biopython rpy2
+conda install -y flexbar
 ```
 
 ## Install Ubuntu packages
@@ -50,7 +51,7 @@ Install by running the following code in an R interactive session:
 options("repos" = c(CRAN="https://mirrors.tuna.tsinghua.edu.cn/CRAN/"))
 options(BioC_mirror="https://mirrors.tuna.tsinghua.edu.cn/bioconductor")
 # From CRAN
-install.packages(c('devtools', 'sva', 'VGAM', 'argparse', 'magrittr', 'readr', 'mvoutlier'))
+install.packages(c('devtools', 'sva', 'VGAM', 'argparse', 'magrittr', 'readr', 'mvoutlier', 'ggpubr'))
 # From Bioconductor
 source('https://bioconductor.org/biocLite.R')
 biocLite(c('SingleCellExperiment', 'scater', 'scran', 'SCnorm',
