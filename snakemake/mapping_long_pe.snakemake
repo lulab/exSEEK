@@ -255,16 +255,16 @@ rule summarize_fragment_counts:
     run:
         import pandas as pd
         # read fragment counts for each mapping step
-        matrix = pd.DataFrame(index=map_steps + ['clean'], columns=sample_ids)
+        fragment_counts = pd.DataFrame(index=map_steps + ['clean'], columns=sample_ids)
         for filename in input.fragment_counts:
             c = filename.split('/')
             sample_id = c[-2]
             map_step = c[-1]
             with open(filename, 'r') as f:
-                matrix.loc[map_step, sample_id] = int(f.read().strip())
-        matrix = matrix.astype('int')
-        matrix.columns.name = 'sample_id'
-        matrix.index.name = 'rna_type'
+                fragment_counts.loc[map_step, sample_id] = int(f.read().strip())
+        fragment_counts = fragment_counts.astype('int')
+        fragment_counts.columns.name = 'sample_id'
+        fragment_counts.drop(index='circRNA', inplace=True)
 
         # read count matrix
         count_matrix = pd.read_table(input.count_matrix, sep='\t', index_col=0)
@@ -274,7 +274,8 @@ rule summarize_fragment_counts:
         counts_by_rnatype = count_matrix.groupby('gene_type')[sample_ids].sum()
         counts_by_rnatype = counts_by_rnatype.loc[:, sample_ids]
 
-        matrix = pd.concat([matrix, counts_by_rnatype], axis=0)
+        matrix = pd.concat([fragment_counts, counts_by_rnatype], axis=0)
+        matrix.index.name = 'rna_type'
         matrix.to_csv(output[0], sep='\t', header=True, index=True, na_rep='NA')
 
 def get_count_matrix_input_counts(wildcards):
