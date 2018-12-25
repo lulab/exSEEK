@@ -53,7 +53,7 @@ Normal-CRC: ["Healthy Control", "Colorectal Cancer"]
 
 All parameters are specified in a configuration file in [YAML](https://en.wikipedia.org/wiki/YAML) format.
 
-An example configuration file is (snakemake/default_config.yaml).
+The default configuration file is (snakemake/default_config.yaml).
 
 The parameter values in the configuration file can also be overrided through the `--config` option in [snakemake](https://snakemake.readthedocs.io/en/stable/executable.html).
 
@@ -64,13 +64,10 @@ The following parameters should be changed:
 | `genome_dir` | Directory for genome and annotation files | `genome/hg38` |
 | `data_dir` | Directory for input files | `data/scirep` |
 | `temp_dir` | Temporary directory | `tmp` |
-| `sample_id_file` | A text file containing sample IDs | `data/scirep/sample_ids.txt` |
 | `output_dir` | Directory for all output files | `output/scirep` |
 | `tools_dir` | Directory for third-party tools |
 | `aligner` | Mapping software | `bowtie2` |
 | `adaptor` | 3' adaptor sequence for single-end RNA-seq | `AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC` |
-| `python2` | Path to Python 2 | `/apps/anaconda2/bin/python` |
-| `python3` | Path to Python 3 | `/apps/anaconda2/bin/python` |
 
 ### Command line arguments for snakemake
 
@@ -87,13 +84,13 @@ Please refer the [link](https://snakemake.readthedocs.io/en/stable/snakefiles/co
 
 ### IBM LSF
 
-**Configuration file**: `snakemake/cluster.yaml`
+**cluster configuration**: `config/cluster.yaml`
 
 Here is an example configuration:
 
 ```yaml
 __default__:
-  queue: Z-LU
+  queue: queue
   name: {rule}.{wildcards}
   stderr: logs/cluster/{rule}/{wildcards}.stderr
   stdout: logs/cluster/{rule}/{wildcards}.stdout
@@ -101,35 +98,36 @@ __default__:
   resources: span[hosts=1]
 ```
 
+**cluster command**: `config/cluster_command.txt`
+
+```
+bsub -q {cluster.queue} -J {cluster.name} -e {cluster.stderr} -o {cluster.stdout} -R {cluster.resources} -n {cluster.threads}
+```
+
 **Commonly used parameters**
 
 | Parameter | Description |
 | ------ | ----------- |
 | `__default__` | Rule name (`__default__`) for default configuration) | 
-| `queue` | Queue name |
+| `queue` | Queue name (required) |
 | `name` | Job name |
 | `stderr` | Log file for standard error |
 | `stdout` | Log file for standard output |
 | `threads` | Number of parallel threads for a job |
 | `resources` | Resource requirements. `span[hosts=1]` prevents parallel jobs from being submitted to different nodes |
 
+Refer to the snakemake [documentation](https://snakemake.readthedocs.io/en/stable/).
+
 **Run snakemake**
 ```bash
-snakemake --snakefile snakemake/${snakefile} \
-    --configfile snakemake/config.yaml \
-    --cluster 'bsub -q {cluster.queue} -J {cluster.name} -e {cluster.stderr} \
--o {cluster.stdout} -R {cluster.resources} -n {cluster.threads}' \
-    --cluster-config snakemake/cluster.yaml \
-    --rerun-incomplete -k -j40
+${exseek_path}/bin/exseek.py --step ${step} --dataset ${dataset} --cluster -j40
 ```
 **Note**: replace `${snakefile}` with a Snakefile.
 
 ## Quality control
 
 ```bash
-snakemake --snakefile snakemake/quality_control.snakemake \
-    --configfile snakemake/config.yaml \
-    --rerun-incomplete -k
+${exseek_path}/bin/exseek.py --step quality_control --dataset ${dataset}
 ```
 
 ## Mapping (small RNA-seq)
@@ -141,9 +139,7 @@ bin/generate_snakemake.py sequential_mapping --rna-types rRNA,miRNA,piRNA,Y_RNA,
 ```
 
 ```bash
-snakemake --snakefile snakemake/mapping_small.snakemake \
-    --configfile snakemake/config.yaml \
-    --rerun-incomplete -k
+exseek.py --step mapping --dataset ${dataset}
 ```
 
 ### Output files
@@ -162,11 +158,16 @@ snakemake --snakefile snakemake/mapping_small.snakemake \
 | `${output_dir}/summary/read_counts.txt` | Summary table for read counts |
 | `${output_dir}/stats/mapped_read_length_by_sample/${sample_id}` | Length distribution of mapped reads |
 
+## Quality control, adaptor removal and trimming
+
+```bash
+snakemake 
+```
+
 ## Mapping (long RNA-seq)
 
 ```bash
-snakemake --rerun-incomplete -k --snakefile snakemake/mapping_long.snakemake \
-    --configfile config/${dataset}.yaml
+${exseek_path}/bin/exseek.py --step mapping --dataset ${dataset}
 ```
 
 ### Output files
@@ -184,11 +185,9 @@ snakemake --rerun-incomplete -k --snakefile snakemake/mapping_long.snakemake \
 | `${output_dir}/stats/mapped_read_length_by_sample/${sample_id}` | Length distribution of mapped reads |
 | `${output_dir}/stats/mapped_insert_size_by_sample/${sample_id}` | Length distribution of mapped reads |
 
-## Generate expression matrix
+## Generate count matrix
 ```bash
-snakemake --snakefile snakemake/expression_matrix.snakemake \
-    --configfile snakemake/config.yaml \
-    --rerun-incomplete -k
+${exseek_path}/bin/exseek.py --step count_matrix --dataset ${dataset}
 ```
 
 ### Output files
@@ -210,9 +209,7 @@ snakemake --snakefile snakemake/expression_matrix.snakemake \
 ## Call domains for long RNA
 
 ```bash
-snakemake --snakefile snakemake/call_domains_long.snakemake \
-    --configfile snakemake/config.yaml \
-    --rerun-incomplete -k
+${exseek_path}/bin/exseek.py --step call_domains --dataset ${dataset}
 ```
 
 ### Output files
@@ -233,6 +230,10 @@ snakemake --snakefile snakemake/call_domains_long.snakemake \
 * Feature name: `gene_id|gene_type|gene_name|domain_id|transcript_id|start|end`
 
 ## Normalization
+
+```bash
+${exseek_path}/bin/exseek.py --step normalization --dataset ${dataset}
+```
 
 ### Output files
 
