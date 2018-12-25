@@ -18,7 +18,7 @@ count_method: domains_combined
 filtercount: 10
 filtersample: 0.2
 imputation_methods: ["scimpute_count", "viper_count", "null"]
-normalization_methods: ["SCnorm", "TMM", "RLE", "CPM", "CPM_top", "CPM_rm", "null"]
+normalization_methods: ["SCnorm", "TMM", "RLE", "CPM", "CPM_top", "CPM_rm"]
 batch_removal_methods: ["null", "Combat", "RUV"]
 batch_indices: [1, 2, 3]
     
