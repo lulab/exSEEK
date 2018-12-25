@@ -12,7 +12,9 @@ def get_all_inputs(wildcards):
         summarize_fastqc_html=expand('{output_dir}/summary/fastqc.html',
             output_dir=output_dir),
         clean=expand('{output_dir}/unmapped/{sample_id}/clean.fa.gz',
-            output_dir=output_dir, sample_id=sample_ids)
+            output_dir=output_dir, sample_id=sample_ids),
+        summarize_cutadapt=expand('{output_dir}/summary/cutadapt.html',
+            output_dir=output_dir)
         )
     enabled_inputs = list(available_inputs.keys())
     inputs = []
@@ -56,6 +58,56 @@ rule cutadapt_se:
             -m {params.min_read_length} --trim-n -q {params.min_base_quality} \
             -o >(pigz -c -p {threads} > {output.trimmed}) {input} > {log} 2>&1
             ''')
+
+rule summarize_cutadapt_se:
+    input:
+        lambda wildcards: expand('{output_dir}/log/cutadapt/{sample_id}',
+            output_dir=wildcards.output_dir, sample_id=sample_ids)
+    output:
+        '{output_dir}/summary/cutadapt.txt'
+    run:
+        import pandas as pd
+        
+        def parse_number(s):
+            return int(''.join(s.split(',')))
+
+        columns = ['sample_id', 'total_reads', 'reads_with_adapters', 'reads_too_short', 'reads_kept',
+            'total_bp', 'bp_quality_trimmed', 'bp_kept']
+        summary = []
+        for filename in input:
+            sample_id = os.path.basename(filename)
+            record = {'sample_id': sample_id}
+            with open(filename, 'r') as fin:
+                for line in fin:
+                    line = line.strip()
+                    if line.startswith('Total reads processed:'):
+                        record['total_reads'] = parse_number(line.split()[-1])
+                    elif line.startswith('Reads with adapters:'):
+                        record['reads_with_adapters'] = parse_number(line.split()[-2])
+                    elif line.startswith('Reads that were too short:'):
+                        record['reads_too_short'] = parse_number(line.split()[-2])
+                    elif line.startswith('Reads written (passing filters):'):
+                        record['reads_kept'] = parse_number(line.split()[-2])
+                    elif line.startswith('Total basepairs processed:'):
+                        record['total_bp'] = parse_number(line.split()[-2])
+                    elif line.startswith('Quality-trimmed:'):
+                        record['bp_quality_trimmed'] = parse_number(line.split()[-3])
+                    elif line.startswith('Total written (filtered):'):
+                        record['bp_kept'] = parse_number(line.split()[-3])
+            summary.append(record)
+        summary = pd.DataFrame.from_records(summary)
+        summary = summary.reindex(columns=columns)
+        summary.to_csv(output[0], sep='\t', na_rep='NA', index=False, header=True)
+
+rule summarize_cutadapt_jupyter_se:
+    input:
+        summary='{output_dir}/summary/cutadapt.txt',
+        jupyter=root_dir + '/templates/summarize_cutadapt_se.ipynb'
+    output:
+        jupyter='{output_dir}/summary/cutadapt.ipynb',
+        html='{output_dir}/summary/cutadapt.html'
+    run:
+        shell(nbconvert_command)
 
 rule fastq_to_fasta_se:
     input:
@@ -130,67 +182,15 @@ rule summarize_fastqc:
         summary.index.name = 'sample_id'
         summary.to_csv(output[0], sep='\t', index=True, header=True) 
 
-rule summarize_fastqc_ipynb:
+rule summarize_fastqc_jupyter:
     input:
-        '{output_dir}/summary/fastqc.txt'
+        fastqc='{output_dir}/summary/fastqc.txt',
+        jupyter=root_dir + '/templates/fastqc.ipynb'
     output:
-        ipynb='{output_dir}/summary/fastqc.ipynb'
+        jupyter='{output_dir}/summary/fastqc.ipynb',
+        html='{output_dir}/summary/fastqc.html'
     run:
-        import nbformat
-        from nbformat.v4 import new_notebook, new_code_cell, new_markdown_cell
-        nb = new_notebook()
-        nb['cells'].append(new_code_cell(r"""import pandas as pd
-import numpy as np"""))
-
-        nb['cells'].append(new_code_cell(r"""summary = pd.read_table('fastqc.txt', sep='\t')"""))
-        nb['cells'].append(new_code_cell(r"""summary.set_index('sample_id', inplace=True, drop=False)
-qc_status = summary.iloc[:, 9:].copy()
-qc_status.fillna('NA')
-qc_status = qc_status.astype('str')
-sample_ids = qc_status.index.values
-sections = qc_status.columns.values
-def style_func(val):
-    status, row, col = val.split('|')
-    row, col = int(row), int(col)
-    color = {'pass': 'green', 'fail': 'red', 'warn': 'orange'}.get(status, 'gray')
-    return '<a href="../fastqc/{sample_id}_fastqc.html#M{section}" style="color: {color}">{status}</a>'.format(
-        sample_id=sample_ids[row], color=color, status=status, section=col)
-
-pd.DataFrame(qc_status.values \
-             + '|' + np.arange(qc_status.shape[0]).astype('str')[:, np.newaxis] \
-             + '|' + np.arange(qc_status.shape[1]).astype('str')[np.newaxis, :],
-             index=qc_status.index, columns=qc_status.columns) \
-    .style.format(style_func)"""))
-        nb['metadata']['kernel_spec'] = {
-            'display_name': 'Python 3',
-            'language': 'python', 
-            'name': 'python3'
-        }
-        nb['metadata']['laugnage_info'] = {
-            'codemirror_mode': {
-                'name': 'ipython',
-                'version': 3
-            },
-            'name': 'python', 
-            'file_extension': '.py', 
-            'mimetype': 'text/x-python',
-            'nbconvert_exporter': 'python',
-            'version': '3.6'
-        }
-        nbformat.write(nb, output.ipynb)
-
-rule summarize_fastqc_html:
-    input:
-        '{output_dir}/summary/fastqc.ipynb'
-    output:
-        '{output_dir}/summary/fastqc.html'
-    shell:
-        '''jupyter nbconvert --execute --to html \
-            --HTMLExporter.exclude_code_cell=False \
-            --HTMLExporter.exclude_input_prompt=True \
-            --HTMLExporter.exclude_output_prompt=True \
-            {input}
-        '''
+        shell(nbconvert_command)
 
 rule prinseq_se:
     input:
