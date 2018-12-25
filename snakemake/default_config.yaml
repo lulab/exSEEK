@@ -40,14 +40,16 @@ batch_removal_methods: ["null", "Combat", "RUV"]
 # Column index of batch effect in batch_info.txt to considier for Combat
 batch_indices: []
     
+# Root directory
+root_dir: "."
 # Directory for sequences and annotations
-genome_dir: genome/hg38
+genome_dir: "genome/hg38"
 # Temporary directory (e.g. samtools sort, sort)
-temp_dir: tmp
+temp_dir: "tmp"
 # Directory for third-party tools
-tools_dir: tools
+tools_dir: "tools"
 # Directory for exSeek scripts
-bin_dir: bin
+bin_dir: "bin"
 
 # Number of threads for uncompression and compression
 threads_compress: 1
