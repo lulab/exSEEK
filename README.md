@@ -17,18 +17,9 @@ git clone https://github.com/lulab/exSeek-dev.git
 
 ## Prepare genome and annotations
 
-**Processed files**: `/BioII/lulab_b/shared/genomes/hg38`
-
-### Download and process genome sequences
+Download preprocessed genome annotations to `genome/hg38`
 
 Refer to the [documentation](docs/genome_and_annotations.md) for details.
-
-### Extract GTFs and generate mapping indexes
-```bash
-snakemake --snakefile snakemake/prepare_genome.snakemake \
-    --configfile snakemake/config.yaml \
-    --rerun-incomplete -k
-```
 
 ## Input files
 
