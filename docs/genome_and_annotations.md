@@ -88,6 +88,8 @@ echo -e 'chrom\tstart\tend\tname\tscore\tstrand\tgene_id\ttranscript_id\tgene_na
 awk 'BEGIN{OFS="\t";FS="\t"}FNR==NR{split($0,a,"|");gene_name[a[1]]=a[2];next}{print $1,0,$2,a[1],0,"+",$1,$1,gene_name[$1],gene_name[$1],"rRNA","rRNA","RefSeq"}' \
     genome/hg38/source/refSeq_rRNA.ids.txt genome/hg38/fasta/rRNA.fa.fai
 } > genome/hg38/transcript_table/rRNA.txt
+# get transcript sizes
+cut -f1,2 genome/hg38/fasta/rRNA.fa.fai > genome/hg38/chrom_sizes/rRNA
 # build STAR index (small genome)
 STAR --runMode genomeGenerate --genomeSAindexNbases 5 --genomeDir genome/hg38/index/star/rRNA/ --genomeFastaFiles genome/hg38/fasta/rRNA.fa
 ```
@@ -226,17 +228,25 @@ wget -O genome/hg38/source/miRBase.hsa.gff3 ftp://mirbase.org/pub/mirbase/CURREN
 wget -O genome/hg38/source/miRBase.hairpin.fa.gz ftp://mirbase.org/pub/mirbase/CURRENT/hairpin.fa.gz
 wget -O genome/hg38/source/miRBase.mature.fa.gz ftp://mirbase.org/pub/mirbase/CURRENT/mature.fa.gz
 
+cp genome/hg38/source/miRBase.hsa.gff3 genome/hg38/gtf/miRBase.gff3
 # extract human pre-miRNA
 zcat genome/hg38/source/miRBase.hairpin.fa.gz \
     | awk '/^>/{if($0 ~ />hsa-/) {keep=1; print $1} else{keep=0}; next}{if(keep==1){gsub(/U/, "T");print}}' \
     > genome/hg38/fasta/miRNA.fa
 samtools faidx genome/hg38/fasta/miRNA.fa
+# extract human mature miRNA
+zcat genome/hg38/source/miRBase.mature.fa.gz \
+    | awk '/^>/{if($0 ~ />hsa-/) {keep=1; print $1} else{keep=0}; next}{if(keep==1){gsub(/U/, "T");print}}' \
+    > genome/hg38/fasta/miRNA_mature.fa
+samtools faidx genome/hg38/fasta/miRNA_mature.fa
 # generate transcript table
 {
 echo -e 'chrom\tstart\tend\tname\tscore\tstrand\tgene_id\ttranscript_id\tgene_name\ttranscript_name\tgene_type\ttranscript_type\tsource'
 awk 'BEGIN{OFS="\t";FS="\t"}{print $1,0,$2,$1,0,"+",$1,$1,$1,$1,"miRNA","miRNA","miRBase"}' \
     genome/hg38/fasta/miRNA.fa.fai
 } > genome/hg38/transcript_table/miRNA.txt
+# get transcript sizes
+cut -f1,2 genome/hg38/fasta/miRNA.fa.fai > genome/hg38/chrom_sizes/miRNA
 ```
 
 ### Intron
@@ -298,7 +308,7 @@ gunzip -c genome/hg38/source/rmsk.bed.gz | bedtools sort > genome/hg38/bed/rmsk.
 wget -O genome/hg38/source/circbase.hg19.fa.gz http://www.circbase.org/download/human_hg19_circRNAs_putative_spliced_sequence.fa.gz
 zcat genome/hg38/source/circbase.hg19.fa.gz | bin/preprocess.py extract_circrna_junction -s 150 -o genome/hg38/fasta/circRNA.fa
 samtools faidx genome/hg38/fasta/circRNA.fa
-STAR --runMode genomeGenerate --genomeSAindexNbases 10 --genomeChrBinNbits 7 --genomeDir genome/hg38/index/star/rRNA/ --genomeFastaFiles genome/hg38/fasta/rRNA.fa
+STAR --runMode genomeGenerate --genomeSAindexNbases 10 --genomeChrBinNbits 7 --genomeDir genome/hg38/index/star/circRNA/ --genomeFastaFiles genome/hg38/fasta/circRNA.fa
 ```
 
 ### Merge transcript table
