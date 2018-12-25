@@ -23,7 +23,7 @@ def get_all_inputs(wildcards):
         extract_gtf=expand('{genome_dir}/gtf_by_biotype/{rna_type}.gtf',
             genome_dir=genome_dir, rna_type=rna_types),
         gtf_to_transcript_table=expand('{genome_dir}/transcript_table/{rna_type}.txt',
-            genome_dir=genome_dir, rna_type=rna_types),
+            genome_dir=genome_dir, rna_type=rna_types + ['all']),
         gtf_to_bed=expand('{genome_dir}/bed_by_biotype/{rna_type}.bed',
             genome_dir=genome_dir, rna_type=rna_types),
         gtf_longest_transcript=expand('{genome_dir}/gtf_longest_transcript/{rna_type}.gtf',
@@ -36,9 +36,9 @@ def get_all_inputs(wildcards):
             genome_dir=genome_dir),
         long_index_star=expand('{genome_dir}/long_index/star/Genome', genome_dir=genome_dir),
         bowtie2_index=expand('{genome_dir}/index/bowtie2/{rna_type}.1.bt2',
-            genome_dir=genome_dir, rna_type=['circRNA', 'rRNA', 'miRNA']),
+            genome_dir=genome_dir, rna_type=['circRNA', 'rRNA', 'miRNA', 'mature_miRNA']),
         star_index=expand('{genome_dir}/index/star/{rna_type}/SA',
-            genome_dir=genome_dir, rna_type=['circRNA', 'rRNA', 'miRNA']),
+            genome_dir=genome_dir, rna_type=['circRNA', 'rRNA', 'miRNA', 'mature_miRNA']),
         chrom_sizes=expand('{genome_dir}/chrom_sizes/transcriptome', genome_dir=genome_dir),
         chrom_sizes2=expand('{genome_dir}/chrom_sizes/transcriptome_genome', genome_dir=genome_dir)
     )
@@ -86,18 +86,28 @@ rule transcript_index_star:
         Genome='{genome_dir}/index/star/{rna_type}/Genome',
         SA='{genome_dir}/index/star/{rna_type}/SA'
     params:
-        output_prefix='{genome_dir}/index/star/{rna_type}',
-        small_genome=lambda wildcards: '--genomeSAindexNbases'
+        output_prefix='{genome_dir}/index/star/{rna_type}'
     threads:
         config['threads_mapping']
-    shell:
-        '''STAR --runThreadN {threads} \
+    run:
+        from math import log2
+        # calculate star parameters
+        genome_length = 0
+        n_seqs = 0
+        with open(input.fai, 'r') as f:
+            for line in f:
+                genome_length += int(line.split('\t')[1])
+                n_seqs += 1
+        genomeSAindexNbases = min(14, int(log2(genome_length)//2) - 1)
+        genomeChrBinNbits = min(18, int(log2(genome_length/n_seqs)))
+
+        shell('''STAR --runThreadN {threads} \
             --runMode genomeGenerate \
-            --genomeSAindexNbases ${sa_size} \
+            --genomeSAindexNbases {genomeSAindexNbases} \
             --genomeDir {params.output_prefix} \
             --genomeFastaFiles {input.fasta} \
-            --genomeChrBinNbits $(chr_bin_nbits)
-        '''
+            --genomeChrBinNbits {genomeChrBinNbits}
+        ''')
 
 rule genome_index_bowtie2:
     input:
@@ -248,11 +258,23 @@ rule gtf_to_transcript_table:
         '{genome_dir}/gtf_by_biotype/{rna_type}.gtf'
     output:
         '{genome_dir}/transcript_table/{rna_type}.txt'
+    wildcard_constraints:
+        rna_type='(?!all).*'
     shell:
         '''{bin_dir}/preprocess.py gtf_to_transcript_table --feature exon \
             --gene-type {wildcards.rna_type} \
             --transcript-type {wildcards.rna_type} \
             -i {input} -o {output}
+        '''
+
+rule merge_transcript_table:
+    input:
+        lambda wildcards: expand('{genome_dir}/transcript_table/{rna_type}.txt',
+            genome_dir=wildcards.genome_dir, rna_type=rna_types)
+    output:
+        '{genome_dir}/transcript_table/all.txt'
+    shell:
+        '''cat {input} > {output}
         '''
 
 rule gtf_to_bed:
