@@ -46,6 +46,8 @@ genome_dir: genome/hg38
 temp_dir: tmp
 # Directory for third-party tools
 tools_dir: tools
+# Directory for exSeek scripts
+bin_dir: bin
 
 # Number of threads for uncompression and compression
 threads_compress: 1
