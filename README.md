@@ -46,6 +46,8 @@ All parameters are specified in a configuration file in [YAML](https://en.wikipe
 
 The default configuration file is (snakemake/default_config.yaml).
 
+Example configuration files can be found in `config/`.
+
 The parameter values in the configuration file can also be overrided through the `--config` option in [snakemake](https://snakemake.readthedocs.io/en/stable/executable.html).
 
 The following parameters should be changed:
@@ -53,61 +55,15 @@ The following parameters should be changed:
 | Parameter | Description | Example |
 | ------ | ----------- | ------- |
 | `genome_dir` | Directory for genome and annotation files | `genome/hg38` |
-| `data_dir` | Directory for input files | `data/scirep` |
+| `data_dir` | Directory for input files | `data/dataset` |
 | `temp_dir` | Temporary directory | `tmp` |
-| `output_dir` | Directory for all output files | `output/scirep` |
-| `tools_dir` | Directory for third-party tools |
+| `output_dir` | Directory for all output files | `output/dataset` |
 | `aligner` | Mapping software | `bowtie2` |
 | `adaptor` | 3' adaptor sequence for single-end RNA-seq | `AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC` |
 
-### Command line arguments for snakemake
-
-| Option | Description |
-| ------ | ----------- |
-| --config | Additional configuration parameters |
-| -j | Number of parallel jobs |
-| --dryrun | Do not execute |
-| -k | Do not stop when an independent job fails |
-
-## Submit jobs to a computer cluster using snakemake
 
 Please refer the [link](https://snakemake.readthedocs.io/en/stable/snakefiles/configuration.html#cluster-configuration) for descriptions of cluster configuration file.
 
-### IBM LSF
-
-**cluster configuration**: `config/cluster.yaml`
-
-Here is an example configuration:
-
-```yaml
-__default__:
-  queue: queue
-  name: {rule}.{wildcards}
-  stderr: logs/cluster/{rule}/{wildcards}.stderr
-  stdout: logs/cluster/{rule}/{wildcards}.stdout
-  threads: {threads}
-  resources: span[hosts=1]
-```
-
-**cluster command**: `config/cluster_command.txt`
-
-```
-bsub -q {cluster.queue} -J {cluster.name} -e {cluster.stderr} -o {cluster.stdout} -R {cluster.resources} -n {cluster.threads}
-```
-
-**Commonly used parameters**
-
-| Parameter | Description |
-| ------ | ----------- |
-| `__default__` | Rule name (`__default__`) for default configuration) | 
-| `queue` | Queue name (required) |
-| `name` | Job name |
-| `stderr` | Log file for standard error |
-| `stdout` | Log file for standard output |
-| `threads` | Number of parallel threads for a job |
-| `resources` | Resource requirements. `span[hosts=1]` prevents parallel jobs from being submitted to different nodes |
-
-Refer to the snakemake [documentation](https://snakemake.readthedocs.io/en/stable/).
 
 **Run snakemake**
 ```bash
