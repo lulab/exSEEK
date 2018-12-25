@@ -2,6 +2,9 @@ shell.prefix('set -x;')
 import os
 import yaml
 
+
+
+
 with open('snakemake/default_config.yaml', 'r') as f:
     default_config = yaml.load(f)
 
@@ -18,6 +21,7 @@ def require_variable(variable, condition=None):
         raise ValueError('cannot find input file {}: {}'.format(variable, value))
     return value
 
+root_dir = require_variable('root_dir', 'input_dir')
 data_dir = require_variable('data_dir', 'input_dir')
 genome_dir = require_variable('genome_dir', 'input_dir')
 bin_dir = require_variable('bin_dir', 'input_dir')
@@ -62,6 +66,14 @@ def auto_gzip_input(template):
         if all(os.path.exists(f) for f in gzip_names):
             return gzip_names
     return get_filename
+
+nbconvert_command = '''cp {input.jupyter} {output.jupyter}
+jupyter nbconvert --execute --to html \
+    --HTMLExporter.exclude_code_cell=False \
+    --HTMLExporter.exclude_input_prompt=True \
+    --HTMLExporter.exclude_output_prompt=True \
+    {output.jupyter}
+'''
 
 rule make_temp:
     output:
