@@ -52,10 +52,9 @@ rule cutadapt_se:
                 -o >(pigz -c -p {threads} > {output.trimmed}) > {log} 2>&1
             ''')
         else:
-            shell('''bin/auto_uncompress {input} \
-            | cutadapt {params.adaptor} {params.adaptor_5p} {params.trim_5p} {params.trim_3p} \
+            shell('''cutadapt {params.adaptor} {params.adaptor_5p} {params.trim_5p} {params.trim_3p} \
             -m {params.min_read_length} --trim-n -q {params.min_base_quality} \
-            -o >(pigz -c -p {threads} > {output.trimmed}) - > {log} 2>&1
+            -o >(pigz -c -p {threads} > {output.trimmed}) {input} > {log} 2>&1
             ''')
 
 rule fastq_to_fasta_se:
