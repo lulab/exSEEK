@@ -1,6 +1,5 @@
 include: 'common.snakemake'
 
-count_methods = ['transcript']
 # remove rRNA and spikein
 rna_types = list(filter(lambda x: x not in ('rRNA', 'spikein'), rna_types))
 
@@ -148,7 +147,7 @@ rule count_transcript:
 rule count_mature_mirna:
     input:
         bam='{output_dir}/tbam/{sample_id}/miRNA.bam',
-        annotation=genome_dir + '/gff3/miRBase.hsa.gff3'
+        annotation=genome_dir + '/gff3/miRBase.gff3'
     output:
         '{output_dir}/counts_by_biotype/transcript/{sample_id}/miRNA'
     params:
