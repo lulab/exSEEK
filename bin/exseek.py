@@ -20,7 +20,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='exSeek main program')
 
     parser.add_argument('--step', type=str, required=True, choices=('quality_control', 
-        'mapping', 'count_matrix', 'call_domains', 'normalization', 'feature_selection'))
+        'mapping', 'count_matrix', 'call_domains', 'normalization', 'feature_selection', 'update_sequential_mapping'))
     parser.add_argument('--dataset', '-d', type=str, required=True,
         help='dataset name')
     parser.add_argument('--config-dir', '-c', type=str, default='config',
@@ -70,6 +70,14 @@ if __name__ == '__main__':
                 raise ValueError('cannot find {}/cluster_command.txt and --cluster-command is not specified'.format(args.config_dir))
             cluster_command = args.cluster_command
         snakemake_args += ['--cluster', cluster_command, '--cluster-config', cluster_config]
+    
+    def update_sequential_mapping():
+        snakefile = os.path.join(root_dir, 'snakemake', 'sequential_mapping.snakemake')
+        logger.info('generate sequential_mapping.snakemake')
+        subprocess.check_call([root_dir + '/bin/generate_snakemake.py', 'sequential_mapping',
+                '--rna-types', ','.join(config['rna_types']), 
+                '-o', snakefile], shell=False)
+        
     # find proper version of snakemake
     if args.step == 'quality_control':
         if config['paired_end']:
@@ -78,17 +86,28 @@ if __name__ == '__main__':
             snakefile = os.path.join(root_dir, 'snakemake', 'quality_control_se.snakemake')
     elif args.step == 'mapping':
         if config['small_rna']:
+            if not os.path.exists(os.path.join(root_dir, 'snakemake', 'sequential_mapping.snakemake')):
+                update_sequential_mapping()
             snakefile = os.path.join(root_dir, 'snakemake', 'mapping_small.snakemake')
         else:
             if config['paired_end']:
                 snakefile = os.path.join(root_dir, 'snakemake', 'mapping_long_pe.snakemake')
             else:
                 snakefile = os.path.join(root_dir, 'snakemake', 'mapping_long_se.snakemake')
+    elif args.step == 'count_matrix':
+        if config['small_rna']:
+            snakefile = os.path.join(root_dir, 'snakemake', 'count_matrix_small.snakemake')
+        else:
+            snakefile = os.path.join(root_dir, 'snakemake', 'count_matrix_long.snakemake')
+    elif args.step == 'update_sequential_mapping':
+        if config['small_rna']:
+            update_sequential_mapping()
+        sys.exit(0)
     else:
         snakefile = os.path.join(root_dir, 'snakemake', args.step + '.snakemake')
     snakemake_args += ['--snakefile', snakefile, '--configfile', configfile]
     # add bin_dir
-    snakemake_args += ['--config', 'bin_dir="{}"'.format(os.path.join(root_dir, 'bin'))]
+    snakemake_args += ['--config', 'root_dir="{}"'.format(root_dir), 'bin_dir="{}"'.format(os.path.join(root_dir, 'bin'))]
     # extra args
     snakemake_args += extra_args
     # run snakemake
