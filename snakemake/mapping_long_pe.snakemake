@@ -28,33 +28,6 @@ rule count_clean_reads_paired:
         '''gzip -d -c {input} | wc -l | awk '{print int($0/2)}' > {output}
         '''
 
-rule map_rRNA_se:
-    input:
-        reads='{output_dir}/unmapped/{sample_id}/clean.fa.gz',
-        index=genome_dir + '/index/star/rRNA/SA'
-    output:
-        bam='{output_dir}/bam/{sample_id}/rRNA.bam',
-        unmapped='{output_dir}/unmapped/{sample_id}/rRNA.fa.gz',
-        log='{output_dir}/mapping_star/{sample_id}/rRNA/Log.final.out'
-    params:
-        output_prefix='{output_dir}/mapping_star/{sample_id}/rRNA/',
-        index=genome_dir + '/index/star/rRNA'
-    threads:
-        config['threads_mapping']
-    shell:
-        '''STAR --genomeDir {params.index} \
-            --readFilesIn {input.reads} \
-            --runThreadN {threads} \
-            --outFileNamePrefix {params.output_prefix} \
-            --outSAMtype BAM Unsorted \
-            --outReadsUnmapped Fastx \
-            --readFilesCommand gzip -d -c \
-            --outSAMmultNmax 1
-        mv {params.output_prefix}Aligned.out.bam {output.bam}
-        gzip -c {params.output_prefix}Unmapped.out > {output.unmapped}
-        rm -f {params.output_prefix}Unmapped.out
-        '''
-
 map_command_pe = '''STAR --genomeDir {params.index} \
             --readFilesIn {input.reads1} {input.reads2} \
             --runThreadN {threads} \
