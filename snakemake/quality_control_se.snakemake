@@ -11,11 +11,13 @@ def get_all_inputs(wildcards):
             output_dir=output_dir),
         summarize_fastqc_html=expand('{output_dir}/summary/fastqc.html',
             output_dir=output_dir),
+        summarize_fastqc_clean_html=expand('{output_dir}/summary/fastqc_clean.html',
+            output_dir=output_dir),
         clean=expand('{output_dir}/unmapped/{sample_id}/clean.fa.gz',
             output_dir=output_dir, sample_id=sample_ids),
         summarize_cutadapt=expand('{output_dir}/summary/cutadapt.html',
             output_dir=output_dir)
-        )
+    )
     enabled_inputs = list(available_inputs.keys())
     inputs = []
     for key, l in available_inputs.items():
@@ -132,7 +134,22 @@ rule fastqc:
     log:
         '{output_dir}/log/fastqc/{sample_id}'
     shell:
-        '''fastqc -q -o {params.output_prefix} -d {params.temp_dir} {input}
+        '''fastqc -q -o {params.output_prefix} -d {params.temp_dir} {input} > {log} 2>&1
+        '''
+
+rule fastqc_clean:
+    input:
+        '{output_dir}/cutadapt/{sample_id}.fastq.gz'
+    output:
+        html='{output_dir}/fastqc_clean/{sample_id}_fastqc.html',
+        zip='{output_dir}/fastqc_clean/{sample_id}_fastqc.zip'
+    params:
+        output_prefix='{output_dir}/fastqc_clean/',
+        temp_dir=config['temp_dir']
+    log:
+        '{output_dir}/log/fastqc_clean/{sample_id}'
+    shell:
+        '''fastqc -q -o {params.output_prefix} -d {params.temp_dir} {input} > {log} 2>&1
         '''
 
 def parse_fastqc_data(fp):
@@ -154,13 +171,15 @@ def parse_fastqc_data(fp):
     for key, val in qc_status.items():
         basic_statistics[key] = val
     return basic_statistics
-        
+
 rule summarize_fastqc:
     input:
-        zip=lambda wildcards: expand('{output_dir}/fastqc/{sample_id}_fastqc.zip',
-            output_dir=wildcards.output_dir, sample_id=sample_ids)
+        zip=lambda wildcards: expand('{output_dir}/{fastqc_step}/{sample_id}_fastqc.zip',
+            output_dir=wildcards.output_dir, fastqc_step=wildcards.fastqc_step, sample_id=sample_ids)
     output:
-        '{output_dir}/summary/fastqc.txt'
+        '{output_dir}/summary/{fastqc_step}.txt'
+    wildcard_constraints:
+        fastqc_step='fastqc.*'
     run:
         import pandas as pd
         from zipfile import ZipFile
@@ -184,22 +203,32 @@ rule summarize_fastqc:
 
 rule summarize_fastqc_jupyter:
     input:
-        fastqc='{output_dir}/summary/fastqc.txt',
+        fastqc='{output_dir}/summary/{fastqc_step}.txt',
         jupyter=root_dir + '/templates/fastqc.ipynb'
     output:
-        jupyter='{output_dir}/summary/fastqc.ipynb',
-        html='{output_dir}/summary/fastqc.html'
+        jupyter='{output_dir}/summary/{fastqc_step}.ipynb',
+        html='{output_dir}/summary/{fastqc_step}.html'
+    wildcard_constraints:
+        fastqc_step='fastqc.*'
     run:
         shell(nbconvert_command)
 
-rule prinseq_se:
+
+rule prinseq_clean_se:
     input:
         fastq='{output_dir}/cutadapt/{sample_id}.fastq.gz'
     output:
-        graph_data='{output_dir}/prinseq/{sample_id}.gd',
-        html='{output_dir}/prinseq/{sample_id}.html'
+        graph_data='{output_dir}/prinseq_clean/{sample_id}.gd'
     shell:
         '''perl {tools_dir}/prinseq/prinseq-lite.pl -verbose -fastq <(zcat {input.fastq}) \
             -ns_max_n 0 -graph_data {output.graph_data} -out_good null -out_bad null
-        perl {tools_dir}/prinseq/prinseq-graphs.pl -i {output.graph_data} -html_all -o {output.html}
+        '''
+
+rule prinseq_graph_clean_se:
+    input:
+        '{output_dir}/prinseq_clean/{sample_id}.gd'
+    output:
+        '{output_dir}/prinseq_clean/{sample_id}.html'
+    shell:
+        '''perl {tools_dir}/prinseq/prinseq-graphs.pl -i {input} -html_all -o {output}
         '''
