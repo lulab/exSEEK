@@ -65,11 +65,39 @@ The following parameters should be changed:
 Please refer the [link](https://snakemake.readthedocs.io/en/stable/snakefiles/configuration.html#cluster-configuration) for descriptions of cluster configuration file.
 
 
-**Run snakemake**
-```bash
-${exseek_path}/bin/exseek.py --step ${step} --dataset ${dataset} --cluster -j40
+## Run exSeek
+
 ```
-**Note**: replace `${snakefile}` with a Snakefile.
+usage: exseek.py [-h] --step
+                 {quality_control,mapping,count_matrix,call_domains,normalization,feature_selection}
+                 --dataset DATASET [--config-dir CONFIG_DIR] [--cluster]
+                 [--cluster-config CLUSTER_CONFIG]
+                 [--cluster-command CLUSTER_COMMAND]
+
+exSeek main program
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --step {quality_control,mapping,count_matrix,call_domains,normalization,feature_selection}
+  --dataset DATASET, -d DATASET
+                        dataset name
+  --config-dir CONFIG_DIR, -c CONFIG_DIR
+                        directory for configuration files
+  --cluster             submit to cluster
+  --cluster-config CLUSTER_CONFIG
+                        cluster configuration file ({config_dir}/cluster.yaml
+                        by default)
+  --cluster-command CLUSTER_COMMAND
+                        command for submitting job to cluster (default read
+                        from {config_dir}/cluster_command.txt
+```
+
+**Note**
+
+* Other arguments are passed to `snakemake`
+* Specify number of processes to run in parallel with `-j`
+
+
 
 ## Quality control
 
@@ -79,16 +107,17 @@ ${exseek_path}/bin/exseek.py --step quality_control --dataset ${dataset}
 
 ## Mapping (small RNA-seq)
 
-### Generate snakemake rules for sequential mapping
-```bash
-bin/generate_snakemake.py sequential_mapping --rna-types rRNA,miRNA,piRNA,Y_RNA,srpRNA,tRNA,snRNA,snoRNA,lncRNA,mRNA,tucpRNA \
-    -o snakemake/mapping_small/sequential_mapping.snakemake
-```
 
 ```bash
 exseek.py --step mapping --dataset ${dataset}
 ```
 
+**Note**
+
+If you changed mapping order in the `rna_types` config variable, you should update the snakefile with the command:
+```bash
+exseek.py --step update_sequential_mapping --dataset ${dataset}
+```
 
 ## Quality control, adaptor removal and trimming
 
