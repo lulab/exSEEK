@@ -99,3 +99,5 @@ small_rna: true
 umi_tags: false
 # Length of the UMI barcode
 umi_length: 0
+# Evaluate published biomarkers
+evaluate_features_preprocess_methods: []
