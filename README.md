@@ -67,18 +67,23 @@ Please refer the [link](https://snakemake.readthedocs.io/en/stable/snakefiles/co
 
 ## Run exSeek
 
+Run `exseek.py --help` to get basic usage:
+
 ```
-usage: exseek.py [-h] --step
-                 {quality_control,mapping,count_matrix,call_domains,normalization,feature_selection}
-                 --dataset DATASET [--config-dir CONFIG_DIR] [--cluster]
+usage: exseek.py [-h] --dataset DATASET [--config-dir CONFIG_DIR] [--cluster]
                  [--cluster-config CLUSTER_CONFIG]
                  [--cluster-command CLUSTER_COMMAND]
+                 [--singularity SINGULARITY]
+                 [--singularity-wrapper-dir SINGULARITY_WRAPPER_DIR]
+                 {quality_control,prepare_genome,mapping,count_matrix,call_domains,normalization,feature_selection,update_sequential_mapping,update_singularity_wrappers}
 
 exSeek main program
 
+positional arguments:
+  {quality_control,prepare_genome,mapping,count_matrix,call_domains,normalization,feature_selection,update_sequential_mapping,update_singularity_wrappers}
+
 optional arguments:
   -h, --help            show this help message and exit
-  --step {quality_control,mapping,count_matrix,call_domains,normalization,feature_selection}
   --dataset DATASET, -d DATASET
                         dataset name
   --config-dir CONFIG_DIR, -c CONFIG_DIR
@@ -90,6 +95,10 @@ optional arguments:
   --cluster-command CLUSTER_COMMAND
                         command for submitting job to cluster (default read
                         from {config_dir}/cluster_command.txt
+  --singularity SINGULARITY
+                        singularity image file
+  --singularity-wrapper-dir SINGULARITY_WRAPPER_DIR
+                        directory for singularity wrappers
 ```
 
 **Note**
@@ -102,27 +111,27 @@ optional arguments:
 ## Quality control
 
 ```bash
-${exseek_path}/bin/exseek.py --step quality_control --dataset ${dataset}
+${exseek_path}/bin/exseek.py quality_control --dataset ${dataset}
 ```
 
 ## Mapping (small RNA-seq)
 
 
 ```bash
-exseek.py --step mapping --dataset ${dataset}
+exseek.py mapping --dataset ${dataset}
 ```
 
 **Note**
 
 If you changed mapping order in the `rna_types` config variable, you should update the snakefile with the command:
 ```bash
-exseek.py --step update_sequential_mapping --dataset ${dataset}
+exseek.py update_sequential_mapping --dataset ${dataset}
 ```
 
 ## Quality control, adaptor removal and trimming
 
 ```bash
-${exseek_path}/bin/exseek.py --step quality_control --dataset ${dataset}
+${exseek_path}/bin/exseek.py quality_control --dataset ${dataset}
 ```
 
 Description of output files: [output_files](docs/output_files.md)
@@ -130,7 +139,7 @@ Description of output files: [output_files](docs/output_files.md)
 ## Mapping (long RNA-seq)
 
 ```bash
-${exseek_path}/bin/exseek.py --step mapping --dataset ${dataset}
+${exseek_path}/bin/exseek.py mapping --dataset ${dataset}
 ```
 
 Description of output files: [output_files](docs/output_files.md)
@@ -138,7 +147,7 @@ Description of output files: [output_files](docs/output_files.md)
 
 ## Generate count matrix
 ```bash
-${exseek_path}/bin/exseek.py --step count_matrix --dataset ${dataset}
+${exseek_path}/bin/exseek.py count_matrix --dataset ${dataset}
 ```
 
 
@@ -153,7 +162,7 @@ ${exseek_path}/bin/exseek.py --step count_matrix --dataset ${dataset}
 ## Call domains for long RNA
 
 ```bash
-${exseek_path}/bin/exseek.py --step call_domains --dataset ${dataset}
+${exseek_path}/bin/exseek.py call_domains --dataset ${dataset}
 ```
 
 
@@ -167,5 +176,5 @@ ${exseek_path}/bin/exseek.py --step call_domains --dataset ${dataset}
 ## Normalization
 
 ```bash
-${exseek_path}/bin/exseek.py --step normalization --dataset ${dataset}
+${exseek_path}/bin/exseek.py normalization --dataset ${dataset}
 ```
