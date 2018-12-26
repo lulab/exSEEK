@@ -23,7 +23,7 @@ conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/
 conda install -y numpy scipy scikit-learn 
 conda install -y pandas matplotlib seaborn
 conda install -y tqdm snakemake h5py bokeh
-conda install -y umap
+conda install -y umap jinja2
 ```
 
 ## Install Bioconda packages
@@ -55,7 +55,7 @@ install.packages(c('devtools', 'sva', 'VGAM', 'argparse', 'magrittr', 'readr', '
 # From Bioconductor
 source('https://bioconductor.org/biocLite.R')
 biocLite(c('SingleCellExperiment', 'scater', 'scran', 'SCnorm',
-    'EDASeq', 'RUVSeq', 'DESeq2', 'edgeR', 'sva'))
+    'EDASeq', 'RUVSeq', 'DESeq2', 'edgeR', 'sva', 'apeglm'))
 # From R-forge
 install.packages('countreg', repos = c('http://R-Forge.R-project.org', 'https://mirrors.tuna.tsinghua.edu.cn/CRAN/'), dep = TRUE)
 # From GitHub
