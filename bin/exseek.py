@@ -52,6 +52,7 @@ if __name__ == '__main__':
 
     # snakemake command
     snakemake_args = ['snakemake', '-k', '--rerun-incomplete']
+    extra_config = {}
     # check configuration file
     if not os.path.isdir(args.config_dir):
         raise ValueError('cannot find configuration directory: {}'.format(args.config_dir))
@@ -130,19 +131,23 @@ if __name__ == '__main__':
     else:
         snakefile = os.path.join(root_dir, 'snakemake', args.step + '.snakemake')
     snakemake_args += ['--snakefile', snakefile, '--configfile', configfile]
-    # add bin_dir
-    snakemake_args += ['--config', 'root_dir="{}"'.format(root_dir), 'bin_dir="{}"'.format(os.path.join(root_dir, 'bin'))]
+    # set root_dir and bin_dir
+    extra_config['bin_dir'] = os.path.join(root_dir, 'bin')
+    extra_config['root_dir'] = root_dir
     # extra args
-    snakemake_args += extra_args
-    # run snakemake
     snakemake_args = [str(s) for s in snakemake_args]
-    logger.info('run snakemake: {}'.format(quoted_string_join(snakemake_args)))
+    snakemake_args += extra_args
 
     if args.singularity is not None:
         if not os.path.isdir('singularity/wrappers'):
             update_singularity_wrappers()
         logger.info('export singularity wrappers to snakemake')
-        os.environ['PATH'] = 'singularity/wrappers:' + os.environ['PATH']
+        extra_config['singularity_wrappers'] = 'singularity/wrappers'
+    
+    # extra config
+    snakemake_args += ['--config'] + ['{}={}'.format(key, val) for key, val in extra_config.items()]
     #subprocess.check_call(snakemake_args, shell=False)
+    logger.info('run snakemake: {}'.format(quoted_string_join(snakemake_args)))
+    # run snakemake
     os.execv(snakemake_path, snakemake_args)
     
