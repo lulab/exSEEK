@@ -20,11 +20,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if 'SINGULARITY_CONTAINER' not in os.environ:
-        subprocess.Popen([args.singularity_path, 'exec', args.image] + sys.argv)
-        sys.exit(0)
+        os.execv(args.singularity_path, [args.singularity_path, 'exec', args.image] + sys.argv)
 
     def make_wrapper(filename):
-        print('Make wrapper: {}'.format(filename))
+        #print('Make wrapper: {}'.format(filename))
         if not os.path.isdir(args.output_dir):
             os.makedirs(args.output_dir)
         basename = os.path.basename(filename)
