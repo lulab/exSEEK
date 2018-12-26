@@ -187,11 +187,23 @@ genePredToGtf -source=piRBase file source/piRBase-hsa-v2.0.genePred source/piRBa
 
 ### Long RNA (GENCODE + Mitranscriptome - miRNA)
 ```bash
+# Merge GTF files
 cat genome/hg38/gtf/gencode.gtf \
     genome/hg38/gtf/mitranscriptome_lncRNA.gtf \
     | grep -v 'gene_type "miRNA' \
     > genome/hg38/gtf/long_RNA.gtf
+# Get gene lengths
+tools/GTFtools_0.6.5/gtftools.py -l genome/hg38/gene_length/long_RNA genome/hg38/gtf/long_RNA.gtf
 ```
+**gene_length/long_RNA**
+
+* Tab-deliminated text file
+* First row: header
+* Column 1 (gene): gene_id
+* Column 2 (mean): mean length of isoforms
+* Column 3 (median): median length of isoforms
+* Column 4 (longest_isoform): length of the longest isoform
+* Column 5 (merged): merged length of isoforms
 
 ### piRNABank (NCBI36)
 ```bash
@@ -234,14 +246,6 @@ zcat genome/hg38/source/miRBase.hairpin.fa.gz \
     | awk '/^>/{if($0 ~ />hsa-/) {keep=1; print $1} else{keep=0}; next}{if(keep==1){gsub(/U/, "T");print}}' \
     > genome/hg38/fasta/miRNA.fa
 samtools faidx genome/hg38/fasta/miRNA.fa
-# generate transcript table (pre-miRNA)
-{
-echo -e 'chrom\tstart\tend\tname\tscore\tstrand\tgene_id\ttranscript_id\tgene_name\ttranscript_name\tgene_type\ttranscript_type\tsource'
-awk 'BEGIN{OFS="\t";FS="\t"}{print $1,0,$2,$1,0,"+",$1,$1,$1,$1,"miRNA","miRNA","miRBase"}' \
-    genome/hg38/fasta/miRNA.fa.fai
-} > genome/hg38/transcript_table/miRNA.txt
-# get transcript sizes
-cut -f1,2 genome/hg38/fasta/miRNA.fa.fai > genome/hg38/chrom_sizes/miRNA
 # extract human mature miRNA
 zcat genome/hg38/source/miRBase.mature.fa.gz \
     | awk '/^>/{if($0 ~ />hsa-/) {keep=1; print $1} else{keep=0}; next}{if(keep==1){gsub(/U/, "T");print}}' \
@@ -253,7 +257,8 @@ echo -e 'chrom\tstart\tend\tname\tscore\tstrand\tgene_id\ttranscript_id\tgene_na
 awk 'BEGIN{OFS="\t";FS="\t"}{print $1,0,$2,$1,0,"+",$1,$1,$1,$1,"miRNA","miRNA","miRBase"}' \
     genome/hg38/fasta/miRNA.fa.fai genome/hg38/fasta/mature_miRNA.fa.fai 
 } > genome/hg38/transcript_table/miRNA.txt
-
+# get transcript sizes
+cut -f1,2 genome/hg38/fasta/miRNA.fa.fai genome/hg38/fasta/mature_miRNA.fa.fai > genome/hg38/chrom_sizes/miRNA
 ```
 
 ### Intron
