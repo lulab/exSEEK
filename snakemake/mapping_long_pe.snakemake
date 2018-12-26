@@ -1,6 +1,6 @@
 include: 'common.snakemake'
 
-map_steps = ['rRNA', 'genome', 'circRNA']
+map_steps = ['rRNA', 'genome', 'circRNA', 'remove_duplicates']
 
 rule all:
     input:
