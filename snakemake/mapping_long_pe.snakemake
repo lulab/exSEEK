@@ -42,8 +42,7 @@ map_command_pe = '''STAR --genomeDir {params.index} \
             --outReadsUnmapped Fastx \
             --readFilesCommand gzip -d -c \
             --outSAMmultNmax 1 \
-            --seedPerWindowNmax {params.seedPerWindowNmax} \
-            --outMultimapperOrder Random
+            --seedPerWindowNmax {params.seedPerWindowNmax}
         mv {params.output_prefix}Aligned.out.bam {output.bam}
         gzip -c {params.output_prefix}Unmapped.out.mate1 > {output.unmapped1}
         gzip -c {params.output_prefix}Unmapped.out.mate2 > {output.unmapped2}
