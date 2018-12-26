@@ -75,7 +75,9 @@ trim_5p: 0
 trim_3p: 0
 # Discard reads of length below this value
 min_read_length: 16
+# Maximum read length
 max_read_length: 100
+# Trim bases with quality below this value from 3'-end
 min_base_quality: 30
 # Trim bases with quality below this value from 5'-end
 min_base_quality_5p: 30
@@ -93,6 +95,8 @@ use_longest_transcript: true
 star_sjdboverhang: 100
 # Number of threads for mapping
 threads_mapping: 4
+# Remove duplicates for long RNA-seq before feature counting
+remove_duplicates_long: false
 # Input reads are paired-end
 paired_end: false
 # Use small RNA-seq pipeline (sequential mapping)
