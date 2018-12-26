@@ -46,20 +46,20 @@ All parameters are specified in a configuration file in [YAML](https://en.wikipe
 
 The default configuration file is (snakemake/default_config.yaml).
 
-Example configuration files can be found in `config/`.
+Example configuration files can be found in *config/*.
 
-The parameter values in the configuration file can also be overrided through the `--config` option in [snakemake](https://snakemake.readthedocs.io/en/stable/executable.html).
+The parameter values in the configuration file can also be overrided through the *--config* option in [snakemake](https://snakemake.readthedocs.io/en/stable/executable.html).
 
 The following parameters should be changed:
 
 | Parameter | Description | Example |
 | ------ | ----------- | ------- |
-| `genome_dir` | Directory for genome and annotation files | `genome/hg38` |
-| `data_dir` | Directory for input files | `data/dataset` |
-| `temp_dir` | Temporary directory | `tmp` |
-| `output_dir` | Directory for all output files | `output/dataset` |
-| `aligner` | Mapping software | `bowtie2` |
-| `adaptor` | 3' adaptor sequence for single-end RNA-seq | `AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC` |
+| genome_dir | Directory for genome and annotation files | genome/hg38 |
+| data_dir | Directory for input files | data/dataset |
+| temp_dir | Temporary directory | tmp |
+| output_dir | Directory for all output files | output/dataset |
+| aligner | Mapping software | bowtie2 |
+| adaptor | 3' adaptor sequence for single-end RNA-seq | AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC |
 
 
 Please refer the [link](https://snakemake.readthedocs.io/en/stable/snakefiles/configuration.html#cluster-configuration) for descriptions of cluster configuration file.
@@ -103,8 +103,8 @@ optional arguments:
 
 **Note**
 
-* Other arguments are passed to `snakemake`
-* Specify number of processes to run in parallel with `-j`
+* Other arguments are passed to *snakemake*
+* Specify number of processes to run in parallel with *-j*
 
 
 
@@ -123,7 +123,7 @@ exseek.py mapping --dataset ${dataset}
 
 **Note**
 
-If you changed mapping order in the `rna_types` config variable, you should update the snakefile with the command:
+If you changed mapping order in the *rna_types* config variable, you should update the snakefile with the command:
 ```bash
 exseek.py update_sequential_mapping --dataset ${dataset}
 ```
@@ -153,10 +153,10 @@ ${exseek_path}/bin/exseek.py count_matrix --dataset ${dataset}
 
 **Count matrix**
 
-* File path: `${output_dir}/count_matrix/transcript.txt`
+* File path: ${output_dir}/count_matrix/transcript.txt
 * First row: sample IDs
 * First column: feature names
-* Feature name: `gene_id|gene_type|gene_name`
+* Feature name: gene_id|gene_type|gene_name
 
 
 ## Call domains for long RNA
@@ -168,10 +168,10 @@ ${exseek_path}/bin/exseek.py call_domains --dataset ${dataset}
 
 **Read count matrix**
 
-* File path: `${output_dir}/count_matrix/domain_long.txt`
+* File path: ${output_dir}/count_matrix/domain_long.txt
 * First row: sample IDs
 * First column: feature names
-* Feature name: `gene_id|gene_type|gene_name|domain_id|transcript_id|start|end`
+* Feature name: gene_id|gene_type|gene_name|domain_id|transcript_id|start|end
 
 ## Normalization
 
