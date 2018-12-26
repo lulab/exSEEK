@@ -35,7 +35,7 @@ def count_transcript(args):
     
     with open_file_or_stdout(args.output_file) as f:
         if sam.header is not None:
-            for name in sam.header.references:
+            for name, length in sam.header['SQ']:
                 f.write('{}\t{}\n'.format(name, counts.get(name, 0)))
         else:
             for name, count in counts.items():
