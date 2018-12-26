@@ -440,7 +440,7 @@ def highlight_mature_mirna_location(args):
 
 @command_handler
 def extract_mature_mirna_location(args):
-    from utils import read_gtf, GFFRecord
+    from utils import read_gff, GFFRecord
     from ioutils import open_file_or_stdin, open_file_or_stdout
     from collections import OrderedDict, defaultdict
 
