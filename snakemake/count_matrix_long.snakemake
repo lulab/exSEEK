@@ -1,0 +1,129 @@
+include: 'common.snakemake'
+
+
+rule all:
+    input:
+        count_matrix=expand('{output_dir}/count_matrix/{count_method}.txt',
+            output_dir=output_dir, count_method=config['count_method'])
+
+rule featurecounts:
+    input:
+        bam='{output_dir}/bam/{sample_id}/{map_step}.bam',
+        gtf=genome_dir + '/gtf/long_RNA.gtf'
+    output:
+        counts='{output_dir}/counts/featurecounts/{sample_id}/{map_step}',
+        summary='{output_dir}/counts/featurecounts/{sample_id}/{map_step}.summary'
+    params:
+        strandness={'no': 0, 'forward': 1, 'reverse': 2}.get(config['strandness'], 0),
+        paired_end={True: '-p', False: ''}[config['paired_end']],
+        min_mapping_quality=config['min_mapping_quality']
+    log:
+        '{output_dir}/log/featurecounts/{sample_id}/{map_step}'
+    shell:
+        '''featureCounts -t exon -g gene_id -M -s {params.strandness} -Q {params.min_mapping_quality} \
+            {params.paired_end} -a {input.gtf} -o {output.counts} {input.bam} > {log}
+        '''
+
+rule htseq:
+    input:
+        bam='{output_dir}/bam/{sample_id}/{map_step}.bam',
+        gtf=genome_dir + '/gtf/long_RNA.gtf'
+    output:
+        counts='{output_dir}/counts/htseq/{sample_id}/{map_step}'
+    params:
+        strandness={'forward': 'yes', 'reverse': 'reverse'}.get(config['strandness'], 'no'),
+        min_mapping_quality=config['min_mapping_quality']
+    shell:
+        '''htseq-count -t exon -i gene_id -f bam -a {params.min_mapping_quality} \
+            -s {params.strandness} {input.bam} {input.gtf} > {output.counts}
+        '''
+        
+rule count_circRNA:
+    input:
+        '{output_dir}/bam/{sample_id}/circRNA.bam'
+    output:
+        '{output_dir}/counts/count_circrna/{sample_id}/circRNA'
+    params:
+        paired_end={True: '-p', False: ''}[config['paired_end']],
+        min_mapping_quality=config['min_mapping_quality']
+    shell:
+        '''{bin_dir}/count_reads.py count_circrna -q {params.min_mapping_quality} {params.paired_end} -i {input} -o {output}
+        '''
+
+def get_count_matrix_input_counts(wildcards):
+    if wildcards.count_method.endswith('_rmdup'):
+        template = '{output_dir}/counts/{count_method}/{sample_id}/remove_duplicates'
+    else:
+        template = '{output_dir}/counts/{count_method}/{sample_id}/genome'
+    return expand(template, output_dir=wildcards.output_dir, count_method=wildcards.count_method, sample_id=sample_ids)
+
+rule count_matrix:
+    input:
+        counts=lambda wildcards: expand('{output_dir}/counts/{count_method}/{sample_id}/genome',
+            output_dir=wildcards.output_dir, count_method=wildcards.count_method, sample_id=sample_ids),
+        circrna_counts=lambda wildcards: expand('{output_dir}/counts/count_circrna/{sample_id}/circRNA', 
+            output_dir=wildcards.output_dir, count_method=wildcards.count_method, sample_id=sample_ids),
+        transcript_table=genome_dir + '/transcript_table/all.txt',
+        circrna_sizes=genome_dir + '/chrom_sizes/circRNA'
+    output:
+        '{output_dir}/count_matrix/{count_method}.txt'
+    run:
+        import pandas as pd
+        import re
+
+        count_method = re.sub(r'_rmdup', '', wildcards.count_method)
+
+        # annotate features
+        transcript_table = pd.read_table(input.transcript_table, sep='\t', dtype='str')
+        transcript_table = transcript_table.drop_duplicates('gene_id', keep='first')
+        transcript_table.set_index('gene_id', inplace=True, drop=False)
+        # read gene counts from individual files
+        matrix = {}
+        sample_ids = []
+        for filename in input.counts:
+            sample_id = filename.split('/')[-2]
+            sample_ids.append(sample_id)
+            if count_method == 'featurecounts':
+                matrix[sample_id] = pd.read_table(filename, comment='#', sep='\t', index_col=0)
+                matrix[sample_id] = matrix[sample_id].iloc[:, -1]
+            elif count_method == 'htseq':
+                matrix[sample_id] = pd.read_table(filename, comment='__', sep='\t', header=None, index_col=0).iloc[:, 0]
+        matrix = pd.DataFrame(matrix)
+        matrix = matrix.loc[:, sample_ids]
+        # remove all-zero features
+        matrix = matrix.loc[matrix.sum(axis=1) > 0].copy()
+        gene_ids = matrix.index.values
+        # read circRNA counts from individual files
+        matrix_circrna = {}
+        for filename in input.circrna_counts:
+            sample_id = filename.split('/')[-2]
+            matrix_circrna[sample_id] = pd.read_table(filename, sep='\t', header=None, index_col=0).iloc[:, 0]
+        matrix_circrna = pd.DataFrame(matrix_circrna)
+        matrix_circrna = matrix_circrna.loc[:, sample_ids]
+        matrix_circrna.fillna(0, inplace=True)
+        matrix_circrna = matrix_circrna.astype('int')
+        matrix_circrna = matrix_circrna.loc[matrix_circrna.sum(axis=1) > 0].copy()
+        # annotate circRNA 
+        circrna_sizes = pd.read_table(input.circrna_sizes, sep='\t', header=None, index_col=0).iloc[:, 0]
+        circrna_ids = matrix_circrna.index.values
+        matrix_circrna.index = circrna_ids + '|circRNA|' + circrna_ids + '|' + circrna_ids\
+             + '|' + circrna_ids + '|0|' + circrna_sizes.loc[circrna_ids].values.astype('str')
+        
+        # remove features not in transcript table
+        gene_ids = gene_ids[~(transcript_table.loc[gene_ids, 'gene_id'].isna().values)]
+        matrix = matrix.loc[gene_ids]
+        # annotate features
+        feature_names = transcript_table.loc[gene_ids, 'gene_id'].values \
+            + '|' + transcript_table.loc[gene_ids, 'gene_type'].values \
+            + '|' + transcript_table.loc[gene_ids, 'gene_name'].values \
+            + '|' + transcript_table.loc[gene_ids, 'gene_id'].values \
+            + '|' + transcript_table.loc[gene_ids, 'chrom'].values \
+            + '|' + transcript_table.loc[gene_ids, 'start'].values \
+            + '|' + transcript_table.loc[gene_ids, 'end'].values
+        
+        matrix.index = feature_names
+        # merge gene matrix and circRNA matrix
+        matrix = pd.concat([matrix, matrix_circrna], axis=0)
+        matrix.index.name = 'feature'
+        
+        matrix.to_csv(output[0], sep='\t', header=True, index=True, na_rep='NA')
