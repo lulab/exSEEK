@@ -19,8 +19,11 @@ def quoted_string_join(strs, sep=' '):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='exSeek main program')
 
-    parser.add_argument('--step', type=str, required=True, choices=('quality_control', 
-        'mapping', 'count_matrix', 'call_domains', 'normalization', 'feature_selection', 'update_sequential_mapping'))
+    parser.add_argument('step', type=str, 
+        choices=('quality_control', 'prepare_genome',
+        'mapping', 'count_matrix', 'call_domains', 'normalization', 'feature_selection', 
+        'update_sequential_mapping', 'update_singularity_wrappers')
+    )
     parser.add_argument('--dataset', '-d', type=str, required=True,
         help='dataset name')
     parser.add_argument('--config-dir', '-c', type=str, default='config',
@@ -30,6 +33,10 @@ if __name__ == '__main__':
         help='cluster configuration file ({config_dir}/cluster.yaml by default)')
     parser.add_argument('--cluster-command', type=str,
         help='command for submitting job to cluster (default read from {config_dir}/cluster_command.txt')
+    parser.add_argument('--singularity', type=str, 
+        help='singularity image file')
+    parser.add_argument('--singularity-wrapper-dir', type=str, default='singularity/wrappers',
+        help='directory for singularity wrappers')
     args, extra_args = parser.parse_known_args()
 
     logger = logging.getLogger('exseek')
@@ -74,9 +81,21 @@ if __name__ == '__main__':
     def update_sequential_mapping():
         snakefile = os.path.join(root_dir, 'snakemake', 'sequential_mapping.snakemake')
         logger.info('generate sequential_mapping.snakemake')
-        subprocess.check_call([root_dir + '/bin/generate_snakemake.py', 'sequential_mapping',
+        subprocess.check_call([os.path.join(root_dir, 'bin/generate_snakemake.py'), 'sequential_mapping',
                 '--rna-types', ','.join(config['rna_types']), 
                 '-o', snakefile], shell=False)
+        
+    def update_singularity_wrappers():
+        singularity_path = shutil.which('singularity')
+        if singularity_path is None:
+            raise ValueError('cannot find singularity')
+        logger.info('generate singularity wrappers')
+        subprocess.check_call([os.path.join(root_dir, 'bin/make_singularity_wrappers.py'), 
+            '--image', args.singularity,
+            '--list-file', os.path.join(root_dir, 'singularity/exports.txt'),
+            '--singularity-path', singularity_path,
+            '-o', 'singularity/wrappers'
+        ], shell=False)
         
     # find proper version of snakemake
     if args.step == 'quality_control':
@@ -103,6 +122,11 @@ if __name__ == '__main__':
         if config['small_rna']:
             update_sequential_mapping()
         sys.exit(0)
+    elif args.step == 'update_singularity_wrappers':
+        if args.singularity is None:
+            raise ValueError('argument --singularity is required for step: update-singularity-wrappers')
+        update_singularity_wrappers()
+        sys.exit(0)
     else:
         snakefile = os.path.join(root_dir, 'snakemake', args.step + '.snakemake')
     snakemake_args += ['--snakefile', snakefile, '--configfile', configfile]
@@ -114,6 +138,11 @@ if __name__ == '__main__':
     snakemake_args = [str(s) for s in snakemake_args]
     logger.info('run snakemake: {}'.format(quoted_string_join(snakemake_args)))
 
+    if args.singularity is not None:
+        if not os.path.isdir('singularity/wrappers'):
+            update_singularity_wrappers()
+        logger.info('export singularity wrappers to snakemake')
+        os.environ['PATH'] = 'singularity/wrappers:' + os.environ['PATH']
     #subprocess.check_call(snakemake_args, shell=False)
     os.execv(snakemake_path, snakemake_args)
     
