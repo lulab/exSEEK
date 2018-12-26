@@ -68,6 +68,8 @@ install_github("hemberg-lab/scRNA.seq.funcs")
 
 ## Other packages
 * [find_circ 1.2](https://github.com/marvin-jens/find_circ) (depends on Python 2.7)
+* [GTFTools](http://www.genemine.org/codes/GTFtools_0.6.5.zip) (depends on Python)
+* [Prinseq](http://prinseq.sourceforge.net/) (requires Perl)
 
 ## Singularity
 
