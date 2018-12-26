@@ -234,12 +234,7 @@ zcat genome/hg38/source/miRBase.hairpin.fa.gz \
     | awk '/^>/{if($0 ~ />hsa-/) {keep=1; print $1} else{keep=0}; next}{if(keep==1){gsub(/U/, "T");print}}' \
     > genome/hg38/fasta/miRNA.fa
 samtools faidx genome/hg38/fasta/miRNA.fa
-# extract human mature miRNA
-zcat genome/hg38/source/miRBase.mature.fa.gz \
-    | awk '/^>/{if($0 ~ />hsa-/) {keep=1; print $1} else{keep=0}; next}{if(keep==1){gsub(/U/, "T");print}}' \
-    > genome/hg38/fasta/miRNA_mature.fa
-samtools faidx genome/hg38/fasta/miRNA_mature.fa
-# generate transcript table
+# generate transcript table (pre-miRNA)
 {
 echo -e 'chrom\tstart\tend\tname\tscore\tstrand\tgene_id\ttranscript_id\tgene_name\ttranscript_name\tgene_type\ttranscript_type\tsource'
 awk 'BEGIN{OFS="\t";FS="\t"}{print $1,0,$2,$1,0,"+",$1,$1,$1,$1,"miRNA","miRNA","miRBase"}' \
@@ -247,6 +242,18 @@ awk 'BEGIN{OFS="\t";FS="\t"}{print $1,0,$2,$1,0,"+",$1,$1,$1,$1,"miRNA","miRNA",
 } > genome/hg38/transcript_table/miRNA.txt
 # get transcript sizes
 cut -f1,2 genome/hg38/fasta/miRNA.fa.fai > genome/hg38/chrom_sizes/miRNA
+# extract human mature miRNA
+zcat genome/hg38/source/miRBase.mature.fa.gz \
+    | awk '/^>/{if($0 ~ />hsa-/) {keep=1; print $1} else{keep=0}; next}{if(keep==1){gsub(/U/, "T");print}}' \
+    > genome/hg38/fasta/mature_miRNA.fa
+samtools faidx genome/hg38/fasta/mature_miRNA.fa
+# generate transcript table (mature miRNA)
+{
+echo -e 'chrom\tstart\tend\tname\tscore\tstrand\tgene_id\ttranscript_id\tgene_name\ttranscript_name\tgene_type\ttranscript_type\tsource'
+awk 'BEGIN{OFS="\t";FS="\t"}{print $1,0,$2,$1,0,"+",$1,$1,$1,$1,"miRNA","miRNA","miRBase"}' \
+    genome/hg38/fasta/miRNA.fa.fai genome/hg38/fasta/mature_miRNA.fa.fai 
+} > genome/hg38/transcript_table/miRNA.txt
+
 ```
 
 ### Intron
