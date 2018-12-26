@@ -2,9 +2,6 @@ shell.prefix('set -x;')
 import os
 import yaml
 
-
-
-
 with open('snakemake/default_config.yaml', 'r') as f:
     default_config = yaml.load(f)
 
@@ -67,6 +64,7 @@ def auto_gzip_input(template):
             return gzip_names
     return get_filename
 
+# template for nbconvert
 nbconvert_command = '''cp {input.jupyter} {output.jupyter}
 jupyter nbconvert --execute --to html \
     --HTMLExporter.exclude_code_cell=False \
@@ -74,6 +72,11 @@ jupyter nbconvert --execute --to html \
     --HTMLExporter.exclude_output_prompt=True \
     {output.jupyter}
 '''
+
+# export singularity wrappers
+singularity_wrappers = config.get('singularity_wrappers')
+if singularity_wrappers is not None:
+    os.environ['PATH'] = singularity_wrappers + ':' + os.environ['PATH']
 
 rule make_temp:
     output:
