@@ -45,20 +45,19 @@ rule cutadapt_se:
         umi_length=config['umi_length']
     log:
         '{output_dir}/log/cutadapt/{sample_id}'
-    threads:
-        config['threads_compress']
+    threads: 2
     run:
         if config['umi_tags']:
             shell('''{bin_dir}/auto_uncompress {input} \
             | {bin_dir}/cut_umi_tags.py -u {params.umi_length} \
             | cutadapt {params.adaptor} {params.trim_3p} \
                 -m {params.min_read_length} --trim-n -q {params.min_base_quality} - \
-                -o >(pigz -c -p {threads} > {output.trimmed}) > {log} 2>&1
+                -o >(gzip -c -p {threads} > {output.trimmed}) > {log} 2>&1
             ''')
         else:
             shell('''cutadapt {params.adaptor} {params.adaptor_5p} {params.trim_5p} {params.trim_3p} \
             -m {params.min_read_length} --trim-n -q {params.min_base_quality} \
-            -o >(pigz -c -p {threads} > {output.trimmed}) {input} > {log} 2>&1
+            -o >(gzip -c -p {threads} > {output.trimmed}) {input} > {log} 2>&1
             ''')
 
 rule summarize_cutadapt_se:
