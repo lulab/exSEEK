@@ -20,8 +20,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='exSeek main program')
 
     parser.add_argument('step', type=str, 
-        choices=('quality_control', 'prepare_genome',
-        'mapping', 'count_matrix', 'call_domains', 'normalization', 'feature_selection', 
+        choices=('quality_control', 'prepare_genome', 'bigwig',
+        'mapping', 'count_matrix', 'call_domains', 'combine_domains', 'normalization', 'feature_selection', 
+        'differential_expression',
         'update_sequential_mapping', 'update_singularity_wrappers')
     )
     parser.add_argument('--dataset', '-d', type=str, required=True,
@@ -119,6 +120,11 @@ if __name__ == '__main__':
             snakefile = os.path.join(root_dir, 'snakemake', 'count_matrix_small.snakemake')
         else:
             snakefile = os.path.join(root_dir, 'snakemake', 'count_matrix_long.snakemake')
+    elif args.step == 'combine_domains':
+        if config['small_rna']:
+            snakefile = os.path.join(root_dir, 'snakemake', 'combine_domains_with_small.snakemake')
+        else:
+            raise ValueError('combine_domains can only be applied to small RNA-seq data')
     elif args.step == 'update_sequential_mapping':
         if config['small_rna']:
             update_sequential_mapping()
@@ -128,6 +134,16 @@ if __name__ == '__main__':
             raise ValueError('argument --singularity is required for step: update-singularity-wrappers')
         update_singularity_wrappers()
         sys.exit(0)
+    elif args.step == 'bigwig':
+        if config['small_rna']:
+            snakefile = os.path.join(root_dir, 'snakemake', 'bigwig.snakemake')
+        else:
+            raise ValueError('bigwig can only be applied to small RNA-seq data')
+    elif args.step == 'call_domains':
+        if config['small_rna']:
+            snakefile = os.path.join(root_dir, 'snakemake', 'call_domains.snakemake')
+        else:
+            raise ValueError('call_domains can only be applied to small RNA-seq data')
     else:
         snakefile = os.path.join(root_dir, 'snakemake', args.step + '.snakemake')
     snakemake_args += ['--snakefile', snakefile, '--configfile', configfile]
