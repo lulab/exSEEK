@@ -107,3 +107,5 @@ umi_tags: false
 umi_length: 0
 # Evaluate published biomarkers
 evaluate_features_preprocess_methods: []
+# differential expression method
+diffexp_method: deseq2
