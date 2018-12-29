@@ -5,6 +5,9 @@
 
 ![workflow](assets/whole_pipe.png)
 
+## Frequently asked Questions:
+[FAQs](docs/FAQ.md)
+
 ## Installation
 
 Install required software packages according to [requirements](docs/requirements.md)
