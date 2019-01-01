@@ -2,7 +2,7 @@ include: 'common.snakemake'
 
 rule all:
     input:
-        '{output_dir}/count_matrix/domains_combined.txt'
+        expand('{output_dir}/count_matrix/domains_combined.txt', output_dir=output_dir)
 
 rule combine_full_length_and_domain:
     input:
@@ -25,11 +25,8 @@ rule combine_full_length_and_domain:
         # select small RNA transcripts
         full_length_features = full_length_features.query('(gene_type == "miRNA") or (gene_type == "piRNA")')
         full_length = full_length.loc[full_length_features.index.values]
-        gene_length = (transcript_table['end'] - transcript_table['start']).astype('str')
 
         domain_long = pd.read_table(input.domain_long, sep='\t', index_col=0)
-        #domain_long_features = domain_long.index.to_series().str.split('|', expand=True)
-        #domain_long_features.columns = ['gene_id', 'gene_type', 'gene_name', 'domain_id', 'transcript_id', 'start', 'end']
 
         combined = pd.concat([full_length, domain_long], axis=0)
         combined.index.name = 'feature'
