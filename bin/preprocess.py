@@ -492,7 +492,48 @@ def calculate_gene_length(args):
     for feature in tqdm(gff, unit='feature'):
         if feature.type == 'exon':
             exons[feature.attr['gene_id']][feature.attr['transcript_id']] += feature.iv.length
-        
+
+@command_handler
+def merge_data_frames(args):
+    import pandas as pd
+    import numpy as np
+    from ioutils import open_file_or_stdout
+
+    if (not args.on_index) and (args.on is None):
+        raise ValueError('argument --on is required if --on-index is not specified')
+    merged = None
+    for input_file in args.input_file:
+        logger.info('read input file: ' + input_file)
+        df = pd.read_table(input_file, sep=args.sep)
+        if merged is None:
+            merged = df
+        else:
+            if args.on_index:
+                merged = pd.merge(merged, df, how=args.how, left_index=True, right_index=True)
+            else:
+                merged = pd.merge(merged, df, how=args.how, on=args.on)
+    if args.fillna is not None:
+        merged.fillna(args.fillna, inplace=True)
+    logger.info('open output file: ' + args.output_file)
+    with open_file_or_stdout(args.output_file) as f:
+        merged.to_csv(f, sep=args.sep, header=True, index=args.on_index)
+    
+@command_handler
+def genomecov(args):
+    import pysam
+    import h5py
+    import numpy as np
+    from tqdm import tqdm
+
+    logger.info('read input BAM/SAM file: ' + args.input_file)
+    sam = pysam.AlignmentFile(args.input_file, 'r')
+    logger.info('open output HDF5 file: ' + args.output_file)
+    fout = h5py.File(args.output_file, 'w')
+    for sq in tqdm(sam.header['SQ'], unit='seq'):
+        data = np.zeros(sq['LN'], dtype=np.int32)
+        fout.create_dataset(sq['SN'], data=data, compression='gzip')
+    fout.close()
+
 if __name__ == '__main__':
     main_parser = argparse.ArgumentParser(description='Preprocessing module')
     subparsers = main_parser.add_subparsers(dest='command')
@@ -610,6 +651,24 @@ if __name__ == '__main__':
         choices=('isoform_length_mean', 'isoform_length_median', 'isoform_length_max', 'merged_exon_length'))
     parser.add_argument('--output-file', '-o', type=str,
         help='output tab-deliminated file with two columns: gene_id, length')
+    
+    parser = subparsers.add_parser('merge_data_frames')
+    parser.add_argument('--input-file', '-i', type=str, action='append', required=True,
+        help='input data matrix')
+    parser.add_argument('--sep', type=str, default='\t', help='column delimiter')
+    parser.add_argument('--how', type=str, default='inner',
+        choices=('inner', 'outer', 'left', 'right'))
+    parser.add_argument('--on', type=str, help='column name to join on')
+    parser.add_argument('--on-index', action='store_true', default=False, help='join on index')
+    parser.add_argument('--fillna', type=str)
+    parser.add_argument('--output-file', '-o', type=str, default='-',
+        help='output merged data frame')
+    
+    parser = subparsers.add_parser('genomecov')
+    parser.add_argument('--input-file', '-i', type=str,  required=True,
+        help='input BAM/SAM file')
+    parser.add_argument('--output-file', '-o', type=str, required=True,
+        help='output HDF5 file')
     
     args = main_parser.parse_args()
     if args.command is None:
