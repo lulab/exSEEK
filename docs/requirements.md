@@ -93,3 +93,25 @@ bin/make_singularity_wrappers.py \
 ```bash
 export PATH="$HOME/singularity/wrappers/exseek:$PATH"
 ```
+
+## Build Pykent
+
+```bash
+wget -O tools/ucsc-tools.tar.gz http://hgdownload.soe.ucsc.edu/admin/exe/userApps.src.tgz
+tar -C tools -zxf tools/ucsc-tools.tar.gz
+(cd tools/userApps/kent/src/htslib/
+    CFLAGS="-fPIC -DUCSC_CRAM=0 -DKNETFILE_HOOKS=1" ./configure
+    make
+)
+(cd tools/userApps/kent/src/lib/
+echo '
+%.o: %.c
+        ${CC} -fPIC ${COPT} ${CFLAGS} ${HG_DEFS} ${LOWELAB_DEFS} ${HG_WARN} ${HG_INC} ${XINC} -o $@ -c $<
+
+$(MACHTYPE)/libjkweb.so: $(O) $(MACHTYPE)
+    gcc -fPIC -shared -o $(MACHTYPE)/libjkweb.so $(O) -Wl,-z,defs -L../htslib -lhts -lm -lz -lpthread -lpng -lcrypto -lssl -luuid
+' > makefile
+make x86_64/libjkweb.so
+)
+cp tools/userApps/kent/src/lib/x86_64/libjkweb.so lib/
+```
