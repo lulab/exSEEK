@@ -35,7 +35,8 @@ def count_transcript(args):
     
     with open_file_or_stdout(args.output_file) as f:
         if sam.header is not None:
-            for name, length in sam.header['SQ']:
+            for sq in sam.header['SQ']:
+                name = sq['SN']
                 f.write('{}\t{}\n'.format(name, counts.get(name, 0)))
         else:
             for name, count in counts.items():
@@ -67,6 +68,7 @@ def count_circrna(args):
     counts = pd.Series(np.zeros(len(gene_ids), dtype='int'), index=gene_ids)
     # count reads
     min_mapping_quality = args.min_mapping_quality
+    strandness = args.strandness
     if args.paired_end:
         logger.info('count paired-end fragments')
         for bundle in HTSeq.pair_SAM_alignments(sam, bundle=True):
@@ -83,6 +85,10 @@ def count_circrna(args):
             # ignore pairs with mapping quality below threshold
             if (read1.aQual < min_mapping_quality) or (read2.aQual < min_mapping_quality):
                 continue
+            if strandness == 'forward' and ((read1.iv.strand == '-') or (read2.iv.strand == '-')):
+                continue
+            if strandness == 'reverse' and ((not (read1.iv.strand == '+')) or (not (read2.iv.strand == '+'))):
+                continue
             # ignore pairs on different chromosomes
             if read1.iv.chrom != read2.iv.chrom:
                 continue
@@ -97,6 +103,10 @@ def count_circrna(args):
                 continue
             # ignore reads with mapping quality below threshold
             if read.aQual < min_mapping_quality:
+                continue
+            if (strandness == 'forward') and (read.iv.strand == '-'):
+                continue
+            if (strandness == 'reverse') and (not ((read.iv.strand == '+'))):
                 continue
             pos = junction_positions[read.iv.chrom]
             if read.iv.start < pos <= read.iv.end:
@@ -197,6 +207,9 @@ if __name__ == '__main__':
     parser.add_argument('--paired-end', '-p', action='store_true', help='count reads as paired-end')
     parser.add_argument('--min-mapping-quality', '-q', type=int, default=0,
         help='only count reads with mapping quality greater than this number')
+    parser.add_argument('--strandness', '-s', type=str, default='no',
+        choices=('forward', 'reverse', 'no'),
+        help='forward/reverse: only count reads in reverse strand. no: count reads in both strands')
     parser.add_argument('--output-file', '-o', type=str, default='-', 
         help='output tab-deliminated file. Two columns: gene_id, count')
     
