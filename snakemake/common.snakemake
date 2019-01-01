@@ -64,6 +64,26 @@ def auto_gzip_input(template):
             return gzip_names
     return get_filename
 
+def parse_fastqc_data(fp):
+    section = None
+    qc_status = OrderedDict()
+    basic_statistics = OrderedDict()
+    for line in fp:
+        line = str(line, encoding='utf-8')
+        line = line.strip()
+        if line.startswith('>>'):
+            if line == '>>END_MODULE':
+                continue
+            section, status = line[2:].split('\t')
+            qc_status[section] = status
+        else:
+            if section == 'Basic Statistics':
+                key, val = line.split('\t')
+                basic_statistics[key] = val
+    for key, val in qc_status.items():
+        basic_statistics[key] = val
+    return basic_statistics
+    
 # template for nbconvert
 nbconvert_command = '''cp {input.jupyter} {output.jupyter}
 jupyter nbconvert --execute --to html \
