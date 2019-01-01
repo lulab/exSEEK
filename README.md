@@ -5,9 +5,6 @@
 
 ![workflow](assets/whole_pipe.png)
 
-## Frequently asked Questions:
-[FAQs](docs/FAQ.md)
-
 ## Installation
 
 Install required software packages according to [requirements](docs/requirements.md)
@@ -18,13 +15,15 @@ Download the scripts:
 git clone https://github.com/lulab/exSeek-dev.git
 ```
 
-## Prepare genome and annotations
+## Input files
+
+### Genome and annotation directory
 
 Download preprocessed genome annotations to `genome/hg38`
 
 Refer to the [documentation](docs/genome_and_annotations.md) for details.
 
-## Input files
+### Input data files
 
 | File name | Description |
 | ------ | ----------- |
@@ -43,7 +42,7 @@ Every key-value pairs defines a compare group and a negative-positive class pair
 Normal-CRC: ["Healthy Control", "Colorectal Cancer"]
 ```
 
-## Configuration
+### Dataset configuration file
 
 All parameters are specified in a configuration file in [YAML](https://en.wikipedia.org/wiki/YAML) format.
 
@@ -65,10 +64,12 @@ The following parameters should be changed:
 | adaptor | 3' adaptor sequence for single-end RNA-seq | AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC |
 
 
+### Cluster configuration file
+
 Please refer the [link](https://snakemake.readthedocs.io/en/stable/snakefiles/configuration.html#cluster-configuration) for descriptions of cluster configuration file.
 
 
-## Run exSeek
+## Basic usage of exSeek
 
 Run `exseek.py --help` to get basic usage:
 
@@ -111,14 +112,18 @@ optional arguments:
 
 
 
-## Quality control
+## Small RNA-seq analysis
 
+### Configuration file
+
+An example configuration file for small RNA single-end sequencing can be found in `config/small_se_example.yaml`.
+
+### Quality control, adaptor removal and trimming
 ```bash
 ${exseek_path}/bin/exseek.py quality_control --dataset ${dataset}
 ```
 
-## Mapping (small RNA-seq)
-
+### Mapping
 
 ```bash
 exseek.py mapping --dataset ${dataset}
@@ -131,22 +136,7 @@ If you changed mapping order in the *rna_types* config variable, you should upda
 exseek.py update_sequential_mapping --dataset ${dataset}
 ```
 
-## Quality control, adaptor removal and trimming
-
-```bash
-${exseek_path}/bin/exseek.py quality_control --dataset ${dataset}
-```
-
 Description of output files: [output_files](docs/output_files.md)
-
-## Mapping (long RNA-seq)
-
-```bash
-${exseek_path}/bin/exseek.py mapping --dataset ${dataset}
-```
-
-Description of output files: [output_files](docs/output_files.md)
-
 
 ## Generate count matrix
 ```bash
@@ -162,7 +152,7 @@ ${exseek_path}/bin/exseek.py count_matrix --dataset ${dataset}
 * Feature name: gene_id|gene_type|gene_name
 
 
-## Call domains for long RNA
+### Call domains
 
 ```bash
 ${exseek_path}/bin/exseek.py call_domains --dataset ${dataset}
@@ -176,8 +166,54 @@ ${exseek_path}/bin/exseek.py call_domains --dataset ${dataset}
 * First column: feature names
 * Feature name: gene_id|gene_type|gene_name|domain_id|transcript_id|start|end
 
-## Normalization
+### Combine read counts of miRNA/piRNA and domains
+
+```bash
+${exseek_path}/bin/exseek.py combine_domains --dataset ${dataset}
+```
+
+### Normalization
 
 ```bash
 ${exseek_path}/bin/exseek.py normalization --dataset ${dataset}
 ```
+
+### Feature selection
+
+```bash
+${exseek_path}/bin/exseek.py feature_selection --dataset ${dataset}
+```
+
+### Differential expression
+
+```bash
+${exseek_path}/bin/exseek.py differential_expression --dataset ${dataset}
+```
+
+## Long RNA-seq analysis
+
+### Configuration file
+
+An example configuration file for long RNA paired-end sequencing can be found in `config/long_pe_example.yaml`.
+
+### Quality control and adaptor removal
+```bash
+${exseek_path}/bin/exseek.py quality_control --dataset ${dataset}
+```
+
+### Mapping
+
+```bash
+${exseek_path}/bin/exseek.py mapping --dataset ${dataset}
+```
+
+### Generate count matrix
+
+```bash
+${exseek_path}/bin/exseek.py count_matrix --dataset ${dataset}
+```
+
+## Frequently asked Questions
+
+[FAQs](docs/FAQ.md)
+
