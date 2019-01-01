@@ -136,9 +136,9 @@ if __name__ == '__main__':
         sys.exit(0)
     elif args.step == 'bigwig':
         if config['small_rna']:
-            snakefile = os.path.join(root_dir, 'snakemake', 'bigwig.snakemake')
+            snakefile = os.path.join(root_dir, 'snakemake', 'bigwig_small.snakemake')
         else:
-            raise ValueError('bigwig can only be applied to small RNA-seq data')
+            snakefile = os.path.join(root_dir, 'snakemake', 'bigwig_long.snakemake')
     elif args.step == 'call_domains':
         if config['small_rna']:
             snakefile = os.path.join(root_dir, 'snakemake', 'call_domains.snakemake')
