@@ -35,7 +35,9 @@ def create_igv(args):
     file_types = {
         'bigWig': {'type': 'wig', 'format': 'bigwig'},
         'gff3': {'type': 'annotation', 'format': 'gff3'},
-        'bed': {'type': 'annotation', 'format': 'bed'}
+        'bed': {'type': 'annotation', 'format': 'bed'},
+        'genePredExt': {'type': 'annotation', 'format': 'genepredext'},
+        'genePred': {'type': 'annotation', 'format': 'genepred'}
     }
     #data['tracks'] = []
     if args.track:
@@ -60,7 +62,7 @@ if __name__ == '__main__':
         help='template file for IGV files')
     parser.add_argument('--output-file', '-o', type=str, default='-',
         help='output file')
-    parser.add_argument('--genome-dir', '-r', type=str,
+    parser.add_argument('--genome-dir', '-r', type=str, required=True,
         help='reference genome directory from http://s3.amazonaws.com/igv.broadinstitute.org/genomes')
     parser.add_argument('--track', type=str, action='append',
         help='track file in any supported format in https://software.broadinstitute.org/software/igv/RecommendedFileFormats')
