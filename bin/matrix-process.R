@@ -6,7 +6,7 @@ parser <- ArgumentParser()
 parser$add_argument("-s", "--step", required=TRUE, default='imputation', help="which step to run")
 parser$add_argument("-i", "--input", required=TRUE, help="input expression matrix file")
 parser$add_argument("-c", "--class", required=TRUE, help="input class info file")
-parser$add_argument("-b", "--batch", required=TRUE, help="input batch info file")
+parser$add_argument("-b", "--batch", required=FALSE, help="input batch info file")
 
 parser$add_argument("--filterout", required=TRUE, help="output filter path")
 parser$add_argument("--imputeout", required=TRUE, help="output imputation path")
