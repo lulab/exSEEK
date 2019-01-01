@@ -151,26 +151,6 @@ rule fastqc_clean:
         '''fastqc -q -o {params.output_prefix} -d {params.temp_dir} {input} > {log} 2>&1
         '''
 
-def parse_fastqc_data(fp):
-    section = None
-    qc_status = OrderedDict()
-    basic_statistics = OrderedDict()
-    for line in fp:
-        line = str(line, encoding='utf-8')
-        line = line.strip()
-        if line.startswith('>>'):
-            if line == '>>END_MODULE':
-                continue
-            section, status = line[2:].split('\t')
-            qc_status[section] = status
-        else:
-            if section == 'Basic Statistics':
-                key, val = line.split('\t')
-                basic_statistics[key] = val
-    for key, val in qc_status.items():
-        basic_statistics[key] = val
-    return basic_statistics
-
 rule summarize_fastqc:
     input:
         zip=lambda wildcards: expand('{output_dir}/{fastqc_step}/{sample_id}_fastqc.zip',
