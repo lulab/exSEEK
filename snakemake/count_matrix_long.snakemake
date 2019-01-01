@@ -1,5 +1,9 @@
 include: 'common.snakemake'
 
+map_steps = ['clean', 'genome', 'rRNA', 'circRNA']
+if config['remove_duplicates_long']:
+    map_steps += ['genome_rmdup', 'rRNA_rmdup', 'circRNA_rmdup']
+
 rule all:
     input:
         count_matrix=expand('{output_dir}/count_matrix/{count_method}.txt',
@@ -25,7 +29,7 @@ rule featurecounts:
     log:
         '{output_dir}/log/featurecounts/{sample_id}/{map_step}'
     shell:
-        '''featureCounts -t exon -g gene_id -M -s {params.strandness} -Q {params.min_mapping_quality} \
+        '''featureCounts -O -t exon -g gene_id -M -s {params.strandness} -Q {params.min_mapping_quality} \
             {params.paired_end} -a {input.gtf} -o {output.counts} {input.bam} > {log}
         '''
 
@@ -52,11 +56,13 @@ rule count_circRNA:
         '{output_dir}/counts/count_circrna/{sample_id}/{map_step}'
     params:
         paired_end={True: '-p', False: ''}[config['paired_end']],
+        strandness=config['strandness'],
         min_mapping_quality=config['min_mapping_quality']
     wildcard_constraints:
         map_step='circRNA.*'
     shell:
-        '''{bin_dir}/count_reads.py count_circrna -q {params.min_mapping_quality} {params.paired_end} -i {input} -o {output}
+        '''{bin_dir}/count_reads.py count_circrna -s {params.strandness} \
+            -q {params.min_mapping_quality} {params.paired_end} -i {input} -o {output}
         '''
 
 class get_rmdup_counts:
@@ -141,10 +147,6 @@ rule count_matrix:
         matrix.index.name = 'feature'
         
         matrix.to_csv(output[0], sep='\t', header=True, index=True, na_rep='NA')
-
-map_steps = ['clean', 'genome', 'rRNA']
-if config['remove_duplicates_long']:
-    map_steps += ['genome_rmdup']
 
 rule summarize_fragment_counts:
     input:
