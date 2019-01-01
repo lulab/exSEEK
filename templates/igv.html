@@ -1,0 +1,70 @@
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="">
+    <meta name="author" content="">
+    <link rel="shortcut icon" href="https://igv.org/web/img/favicon.ico">
+    <title>Integrative Genomics Viewer</title>
+
+    <!-- IGV JS -->
+    <script src="https://igv.org/web/release/2.1.0/dist/igv.min.js"></script>
+
+</head>
+
+<body>
+
+<div id="igv-div" style="padding-top: 10px;padding-bottom: 10px; border:1px solid lightgray"></div>
+
+<script type="text/javascript">
+
+    document.addEventListener("DOMContentLoaded", function () {
+
+        var options =
+        {
+            locus: "{{ locus }}",
+            genome: "{{ genome }}",
+            {% if reference %}
+            reference: {
+                id: "{{ reference.id }}",
+                fastaURL: "{{ reference.fastaURL }}",
+                indexURL: "{{ reference.indexURL }}",
+                cytobandURL: "{{ reference.cytobandURL }}"
+            },
+            {% endif %}
+            {% for track in tracks %}
+            {% if loop.first %}
+            tracks: [
+            {% endif %}
+                {
+                    type: '{{ track.type }}',
+                    format: '{{ track.format }}',
+                    url: '{{ track.url }}',
+                    {% if 'indexURL' in track %}
+                    indexURL: '{{ track.indexURL }}',
+                    {% endif %}
+                    name: '{{ track.name }}'
+                }
+            {% if not loop.last %},{% else %}]{% endif %}
+            {% endfor %}
+        };
+
+        var igvDiv = document.getElementById("igv-div");
+
+        igv.createBrowser(igvDiv, options)
+                .then(function (browser) {
+                    console.log("Created IGV browser");
+                })
+
+    });
+
+</script>
+
+</body>
+
+</html>
