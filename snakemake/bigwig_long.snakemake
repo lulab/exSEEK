@@ -1,0 +1,64 @@
+include: 'common.snakemake'
+
+import re
+
+if config['remove_duplicates_long']:
+    map_steps = ['genome_rmdup', 'circRNA_rmdup', 'rRNA_rmdup']
+else:
+    map_steps = ['genome', 'circRNA', 'rRNA']
+
+def get_all_inputs(wildcards):
+    available_inputs = dict()
+    for map_step in map_steps:
+        if map_step.startswith('genome'):
+            strands = ['+', '-']
+        else:
+            strands = '+'
+        available_inputs[map_step] = expand('{output_dir}/bigwig/{sample_id}.{map_step}.{strand}.bigWig',
+            output_dir=output_dir, sample_id=sample_ids, map_step=map_step, strand=strands)
+    enabled_inputs = list(available_inputs.keys())
+    inputs = []
+    for key, l in available_inputs.items():
+        if key in enabled_inputs:
+            inputs += l
+    return inputs
+
+rule all:
+    input:
+        get_all_inputs
+
+rule sort_bam:
+    input:
+        '{output_dir}/bam/{sample_id}/{map_step}.bam'
+    output:
+        '{output_dir}/bam_sorted_by_coord/{sample_id}/{map_step}.bam'
+    params:
+        temp_dir=config['temp_dir']
+    shell:
+        '''samtools sort -T {params.temp_dir} -o {output} {input}
+        '''
+
+rule genomecov:
+    input:
+        '{output_dir}/bam_sorted_by_coord/{sample_id}/{map_step}.bam'
+    output:
+        '{output_dir}/bedgraph/{sample_id}.{map_step}.{strand}.bedGraph'
+    params:
+        pc='-pc' if config['paired_end'] else '',
+        temp_dir=config['temp_dir']
+    wildcard_constraints:
+        strand='[+-]'
+    shell:
+        '''bedtools genomecov -strand {wildcards.strand} -bg {params.pc} -split -ibam {input} \
+            | LC_COLLATE=C sort -T {params.temp_dir} -k1,1 -k2,2n > {output}
+        '''
+
+rule bedgraph_to_bigwig:
+    input:
+        bedgraph='{output_dir}/bedgraph/{sample_id}.{map_step}.{strand}.bedGraph',
+        chrom_sizes=lambda wildcards: genome_dir + '/chrom_sizes/' + re.sub('_rmdup$', '', wildcards.map_step)
+    output:
+        '{output_dir}/bigwig/{sample_id}.{map_step}.{strand}.bigWig'
+    shell:
+        '''bedGraphToBigWig {input.bedgraph} {input.chrom_sizes} {output}
+        '''
