@@ -33,14 +33,13 @@ rule all:
 rule filter_step:
     input:
         matrix='{output_dir}/count_matrix/{count_method}.txt',
-        sample_classes=data_dir + '/sample_classes.txt',
-        batch_info=data_dir + '/batch_info.txt'
+        sample_classes=data_dir + '/sample_classes.txt'
     output:
         '{output_dir}/matrix_processing/filter.{count_method}.txt'
     threads:
         config['threads']
     wildcard_constraints:
-        count_method='(featurecounts)|(htseq)|(domains_combined)'
+        count_method='(featurecounts)|(htseq)|(domains_combined)|(transcript)'
     params:
         filtercount=config['filtercount'],
         filtersample=config['filtersample'],
@@ -52,7 +51,6 @@ rule filter_step:
         '''Rscript {bin_dir}/matrix-process.R -s filter \
         -i {input.matrix} \
         -c {input.sample_classes} \
-        -b {input.batch_info} \
         --filterout '{wildcards.output_dir}/matrix_processing/' \
         --imputeout '{wildcards.output_dir}/matrix_processing/' \
         --normalizeout '{wildcards.output_dir}/matrix_processing/' \
@@ -74,8 +72,7 @@ rule imputation_step:
     input:
         filter_matrix='{output_dir}/matrix_processing/filter.{count_method}.txt',
         matrix='{output_dir}/count_matrix/{count_method}.txt',
-        sample_classes=data_dir + '/sample_classes.txt',
-        batch_info=data_dir + '/batch_info.txt'
+        sample_classes=data_dir + '/sample_classes.txt'
     output:
         '{output_dir}/matrix_processing/filter.{imputation_method}.{count_method}.txt'
     threads:
@@ -89,12 +86,11 @@ rule imputation_step:
         imputecluster=5
     wildcard_constraints:
         imputation_method='(scimpute_count)|(viper_count)|(null)',
-        count_method='(featurecounts)|(htseq)|(domains_combined)'
+        count_method='(featurecounts)|(htseq)|(domains_combined)|(transcript)'
     shell:
         '''Rscript {bin_dir}/matrix-process.R -s imputation \
         -i {input.matrix} \
         -c {input.sample_classes} \
-        -b {input.batch_info} \
         --filterout '{wildcards.output_dir}/matrix_processing/' \
         --imputeout '{wildcards.output_dir}/matrix_processing/' \
         --normalizeout '{wildcards.output_dir}/matrix_processing/' \
@@ -116,15 +112,14 @@ rule normalization_step:
     input:
         imputation_matrix='{output_dir}/matrix_processing/filter.{imputation_method}.{count_method}.txt',
         matrix='{output_dir}/count_matrix/{count_method}.txt',
-        sample_classes=data_dir + '/sample_classes.txt',
-        batch_info=data_dir + '/batch_info.txt'
+        sample_classes=data_dir + '/sample_classes.txt'
     output:
         '{output_dir}/matrix_processing/filter.{imputation_method}.Norm_{normalization_method}.{count_method}.txt'
     threads:
         config['threads']
     wildcard_constraints:
         normalization_method='(SCnorm)|(TMM)|(RLE)|(CPM)|(CPM_top)|(CPM_rm)|(CPM_refer)|(null)',
-        count_method='(featurecounts)|(htseq)|(domains_combined)'
+        count_method='(featurecounts)|(htseq)|(domains_combined)|(transcript)'
     params:
         filtercount=5,
         filtersample=10,
@@ -136,7 +131,6 @@ rule normalization_step:
         '''Rscript {bin_dir}/matrix-process.R -s normalization \
         -i {input.matrix} \
         -c {input.sample_classes} \
-        -b {input.batch_info} \
         --filterout '{wildcards.output_dir}/matrix_processing/' \
         --imputeout '{wildcards.output_dir}/matrix_processing/' \
         --normalizeout '{wildcards.output_dir}/matrix_processing/' \
@@ -159,8 +153,7 @@ rule batch_removal_step_Combat:
         normalization_matrix='{output_dir}/matrix_processing/filter.{imputation_method}.Norm_{normalization_method}.{count_method}.txt',
         matrix='{output_dir}/count_matrix/{count_method}.txt',
         sample_classes=data_dir + '/sample_classes.txt',
-        batch_info=data_dir + '/batch_info.txt',
-        reference_genes=data_dir + '/reference_genes.txt'
+        batch_info=data_dir + '/batch_info.txt'
     output:
         '{output_dir}/matrix_processing/filter.{imputation_method}.Norm_{normalization_method}.Batch_{batch_removal_method}_{batch_index}.{count_method}.txt'
     threads:
@@ -179,7 +172,6 @@ rule batch_removal_step_Combat:
         -i {input.matrix} \
         -c {input.sample_classes} \
         -b {input.batch_info} \
-        --refergenefile {input.reference_genes} \
         --filterout '{wildcards.output_dir}/matrix_processing/' \
         --imputeout '{wildcards.output_dir}/matrix_processing/' \
         --normalizeout '{wildcards.output_dir}/matrix_processing/' \
@@ -215,12 +207,50 @@ rule batch_removal_step_RUV:
         normtopk=20,
         imputecluster=5
     wildcard_constraints:
-        batch_removal_method='(RUV)|(null)'
+        batch_removal_method='RUV'
     shell:
         '''Rscript {bin_dir}/matrix-process.R -s batch_removal \
         -i {input.matrix} \
         -c {input.sample_classes} \
         -b {input.batch_info} \
+        --filterout '{wildcards.output_dir}/matrix_processing/' \
+        --imputeout '{wildcards.output_dir}/matrix_processing/' \
+        --normalizeout '{wildcards.output_dir}/matrix_processing/' \
+        --batchremoveout '{wildcards.output_dir}/matrix_processing/' \
+        --imputemethod {wildcards.imputation_method} \
+        --filtercount {params.filtercount} \
+        --filtersample {params.filtersample} \
+        --imputecluster {params.imputecluster} \
+        -p {threads} \
+        --normmethod {wildcards.normalization_method} \
+        --normtopk {params.normtopk} \
+        --removetype {params.removetype} \
+        --cvthreshold {params.cvthreshold} \
+        --batchmethod {wildcards.batch_removal_method}
+        '''
+
+rule batch_removal_step_null:
+    input:
+        normalization_matrix='{output_dir}/matrix_processing/filter.{imputation_method}.Norm_{normalization_method}.{count_method}.txt',
+        matrix='{output_dir}/count_matrix/{count_method}.txt',
+        sample_classes=data_dir + '/sample_classes.txt'
+    output:
+        '{output_dir}/matrix_processing/filter.{imputation_method}.Norm_{normalization_method}.Batch_{batch_removal_method}.{count_method}.txt'
+    threads:
+        config['threads']
+    params:
+        filtercount=5,
+        filtersample=10,
+        cvthreshold=0.5,
+        removetype='miRNA,piRNA',
+        normtopk=20,
+        imputecluster=5
+    wildcard_constraints:
+        batch_removal_method='null'
+    shell:
+        '''Rscript {bin_dir}/matrix-process.R -s batch_removal \
+        -i {input.matrix} \
+        -c {input.sample_classes} \
         --filterout '{wildcards.output_dir}/matrix_processing/' \
         --imputeout '{wildcards.output_dir}/matrix_processing/' \
         --normalizeout '{wildcards.output_dir}/matrix_processing/' \
