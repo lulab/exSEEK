@@ -2,7 +2,7 @@ include: 'common.snakemake'
 
 map_steps = ['rRNA', 'genome', 'circRNA']
 if config['remove_duplicates_long']:
-    map_steps += ['genome_rmdup', 'circRNA_rmdup']
+    map_steps += ['genome_rmdup', 'circRNA_rmdup', 'rRNA_rmdup']
 
 def get_all_inputs(wildcards):
     available_inputs = dict(
@@ -108,19 +108,21 @@ rule map_circRNA_pe:
 
 rule sort_bam_by_name:
     input:
-        '{output_dir}/bam/{sample_id}/genome.bam'
+        '{output_dir}/bam/{sample_id}/{map_step}.bam'
     output:
-        '{output_dir}/bam_sorted_by_name/{sample_id}/genome.bam'
+        '{output_dir}/bam_sorted_by_name/{sample_id}/{map_step}.bam'
     shell:
         '''picard SortSam I={input} O={output} SORT_ORDER=queryname
         '''
 
-rule genome_rmdup:
+rule remove_duplicates:
     input:
-        bam='{output_dir}/bam_sorted_by_name/{sample_id}/genome.bam'
+        bam='{output_dir}/bam_sorted_by_name/{sample_id}/{map_step}.bam'
     output:
-        bam='{output_dir}/bam/{sample_id}/genome_rmdup.bam',
-        metrics='{output_dir}/log/genome_rmdup/{sample_id}'
+        bam='{output_dir}/bam/{sample_id}/{map_step}_rmdup.bam',
+        metrics='{output_dir}/log/{map_step}_rmdup/{sample_id}'
+    wildcard_constraints:
+        map_step='(rRNA)|(genome)|(circRNA)'
     shell:
         '''picard MarkDuplicates REMOVE_DUPLICATES=true \
             ASSUME_SORT_ORDER=queryname \
@@ -129,19 +131,6 @@ rule genome_rmdup:
             M={output.metrics}
         '''
 
-rule circrna_rmdup:
-    input:
-        bam='{output_dir}/bam_sorted_by_name/{sample_id}/circRNA.bam'
-    output:
-        bam='{output_dir}/bam/{sample_id}/circRNA_rmdup.bam',
-        metrics='{output_dir}/log/circRNA_rmdup/{sample_id}'
-    shell:
-        '''picard MarkDuplicates REMOVE_DUPLICATES=true \
-            ASSUME_SORT_ORDER=queryname \
-            I={input.bam} \
-            O={output.bam} \
-            M={output.metrics}
-        '''
 
 rule samtools_stats:
     input:
