@@ -41,7 +41,7 @@ conda install -y flexbar
 ## Install Ubuntu packages
 
 ```bash
-sudo apt-get install -y gzip pigz openjdk-8-jdk
+sudo apt-get install -y gzip pigz openjdk-8-jdk libgraphviz-dev uuid-dev zlib1g-dev libpng-dev gawk
 ```
 
 ## Install R packages
@@ -51,7 +51,8 @@ Install by running the following code in an R interactive session:
 options("repos" = c(CRAN="https://mirrors.tuna.tsinghua.edu.cn/CRAN/"))
 options(BioC_mirror="https://mirrors.tuna.tsinghua.edu.cn/bioconductor")
 # From CRAN
-install.packages(c('devtools', 'sva', 'VGAM', 'argparse', 'magrittr', 'readr', 'mvoutlier', 'ggpubr'))
+install.packages(c('devtools', 'sva', 'VGAM', 'argparse', 'magrittr', 'readr', 'mvoutlier', 
+    'ggpubr', 'fastqr'))
 # From Bioconductor
 source('https://bioconductor.org/biocLite.R')
 biocLite(c('SingleCellExperiment', 'scater', 'scran', 'SCnorm',
