@@ -10,9 +10,12 @@ def get_all_inputs(wildcards):
         clean_reads=expand('{output_dir}/unmapped/{sample_id}/clean_{pair_index}.fa.gz',
             output_dir=output_dir, sample_id=sample_ids, pair_index=[1, 2]),
         fastqc=expand('{output_dir}/summary/{fastqc_step}.html',
-            output_dir=output_dir, fastqc_step=['fastqc', 'fastqc_clean'])
+            output_dir=output_dir, fastqc_step=['fastqc', 'fastqc_clean']),
+        summarize_cutadapt=expand('{output_dir}/summary/cutadapt.html',
+            output_dir=output_dir)
     )
     del available_inputs['prinseq']
+    #del available_inputs['clean_reads']
     #enabled_inputs = ['clean_reads']
     enabled_inputs = list(available_inputs.keys())
     inputs = []
@@ -63,7 +66,7 @@ rule cutadapt_pe:
         '{output_dir}/log/cutadapt/{sample_id}'
     threads: 3
     shell:
-        '''cutadapt -j {threads} -q {params.quality_5p},{params.quality_3p} \
+        '''cutadapt --pair-filter any -j {threads} -q {params.quality_5p},{params.quality_3p} \
             {params.adaptor1} {params.adaptor2} {params.adaptor1_5p} {params.adaptor2_5p} \
             --trim-n -m {params.miniL} -o >(gzip -c > {output.fastq1}) -p >(gzip -c > {output.fastq2}) \
             {input.fastq1} {input.fastq2} > {log} 2>&1
@@ -71,34 +74,21 @@ rule cutadapt_pe:
 
 rule fastqc_pe:
     input:
-        auto_gzip_input(data_dir + '/fastq/{sample_id}_{mate_index}.fastq')
+        lambda wildcards: {
+            'fastqc': auto_gzip_input(data_dir + '/fastq/{sample_id}_{mate_index}.fastq')(wildcards),
+            'fastqc_clean': '{output_dir}/cutadapt/{sample_id}_{mate_index}.fastq.gz'.format(**wildcards)
+            }[wildcards.fastqc_step]
     output:
-        html='{output_dir}/fastqc/{sample_id}_{mate_index}_fastqc.html',
-        zip='{output_dir}/fastqc/{sample_id}_{mate_index}_fastqc.zip'
+        html='{output_dir}/{fastqc_step}/{sample_id}_{mate_index}_fastqc.html',
+        zip='{output_dir}/{fastqc_step}/{sample_id}_{mate_index}_fastqc.zip'
     params:
-        output_prefix='{output_dir}/fastqc/',
+        output_prefix='{output_dir}/{fastqc_step}/',
         temp_dir=config['temp_dir']
     log:
-        '{output_dir}/log/fastqc/{sample_id}_{mate_index}'
+        '{output_dir}/log/{fastqc_step}/{sample_id}_{mate_index}'
     wildcard_constraints:
-        mate_index='[12]'
-    shell:
-        '''fastqc -q -o {params.output_prefix} -d {params.temp_dir} {input} > {log} 2>&1
-        '''
-
-rule fastqc_clean_pe:
-    input:
-        '{output_dir}/cutadapt/{sample_id}_{mate_index}.fastq.gz'
-    output:
-        html='{output_dir}/fastqc_clean/{sample_id}_{mate_index}_fastqc.html',
-        zip='{output_dir}/fastqc_clean/{sample_id}_{mate_index}_fastqc.zip'
-    params:
-        output_prefix='{output_dir}/fastqc_clean/',
-        temp_dir=config['temp_dir']
-    log:
-        '{output_dir}/log/fastqc_clean/{sample_id}_{mate_index}'
-    wildcard_constraints:
-        mate_index='[12]'
+        mate_index='[12]',
+        fastqc_step='fastqc.*'
     shell:
         '''fastqc -q -o {params.output_prefix} -d {params.temp_dir} {input} > {log} 2>&1
         '''
@@ -167,3 +157,72 @@ rule prinseq_graph_pe:
     shell:
         '''perl {tools_dir}/prinseq/prinseq-graphs.pl -i {input} -html_all -o {output}
         '''
+
+rule summarize_cutadapt_pe:
+    input:
+        lambda wildcards: expand('{output_dir}/log/cutadapt/{sample_id}',
+            output_dir=wildcards.output_dir, sample_id=sample_ids)
+    output:
+        '{output_dir}/summary/cutadapt.txt'
+    run:
+        import pandas as pd
+        import re
+        
+        patterns = [
+            re.compile(r'Total read pairs processed:\s*(?P<total_pairs>[0-9,]+)'),
+            re.compile(r'Read 1 with adapter:\s*(?P<read1_with_adapters>[0-9,]+)'),
+            re.compile(r'Read 2 with adapter:\s*(?P<read2_with_adapters>[0-9,]+)'),
+            re.compile(r'Pairs that were too short:\s*(?P<pairs_too_short>[0-9,]+)'),
+            re.compile(r'Pairs written \(passing filters\):\s*(?P<pairs_kept>[0-9,]+)'),
+            re.compile(r'Total basepairs processed:\s*(?P<total_bp>[0-9,]+) bp'),
+            re.compile(r'Quality-trimmed:\s*(?P<bp_quality_trimmed>[0-9,]+) bp'),
+            re.compile(r'Total written \(filtered\):\s*(?P<bp_kept>[0-9,]+) bp'),
+            re.compile(r'Read 1:\s*(?P<bp_read1>[0-9,]+) bp'),
+            re.compile(r'Read 2:\s*(?P<bp_read2>[0-9,]+) bp')
+        ]
+
+        def parse_number(s):
+            return int(''.join(s.split(',')))
+
+        columns = ['sample_id', 'total_pairs', 
+            'read1_with_adapters', 'read2_with_adapters', 
+            'pairs_too_short', 'pairs_kept',
+            'total_bp', 'total_bp_read1', 'total_bp_read2',
+            'bp_quality_trimmed', 'bp_quality_trimmed_read1', 'bp_quality_trimmed_read2',
+            'bp_kept', 'bp_kept_read1', 'bp_kept_read2'
+        ]
+        summary = []
+        for filename in input:
+            sample_id = os.path.basename(filename)
+            record = {'sample_id': sample_id}
+            with open(filename, 'r') as fin:
+                section = None
+                for line in fin:
+                    line = line.strip()
+                    for pat in patterns:
+                        m = pat.search(line)
+                        if m is not None:
+                            d = m.groupdict()
+                            key = list(d.keys())[0]
+                            d[key] = ''.join(d[key].split(','))
+                            if key in ('total_bp', 'bp_quality_trimmed', 'bp_kept'):
+                                section = key
+                                record[key] = d[key]
+                            elif key in ('bp_read1', 'bp_read2'):
+                                record[section + key[2:]] = d[key]
+                            else:
+                                record[key] = d[key]
+            summary.append(record)
+        summary = pd.DataFrame.from_records(summary)
+        summary = summary.reindex(columns=columns)
+        summary.to_csv(output[0], sep='\t', na_rep='NA', index=False, header=True)
+
+rule summarize_cutadapt_jupyter_pe:
+    input:
+        summary='{output_dir}/summary/cutadapt.txt',
+        jupyter=root_dir + '/templates/summarize_cutadapt_pe.ipynb'
+    output:
+        jupyter='{output_dir}/summary/cutadapt.ipynb',
+        html='{output_dir}/summary/cutadapt.html'
+    run:
+        shell(nbconvert_command)
