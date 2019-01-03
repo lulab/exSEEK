@@ -10,5 +10,7 @@ threads_compress: 1
 aligner: bowtie2
 adaptor: AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC
 paired_end: false
+# Discard reads of length below this value
+min_read_length: 16
 small_rna: true
 count_method: domains_combined
