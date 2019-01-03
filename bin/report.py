@@ -406,6 +406,8 @@ def bigwig_fetch(filename, chrom, start, end, dtype='float'):
         data[(int(c[1]) - start):(int(c[2]) - start)] = float(c[3])
     return data
     
+
+
 @command_handler
 def visualize_domains(args):
     import numpy as np
@@ -418,9 +420,17 @@ def visualize_domains(args):
     import pandas as pd
     plt.rcParams['figure.dpi'] = 96
     from tqdm import tqdm
+    from pykent import BigWigFile
+    from scipy.cluster.hierarchy import linkage, dendrogram
 
     # read sample ids
-    sample_ids = open(args.sample_ids_file, 'r').read().split()
+    #logger.info('read sample ids: ' + args.sample_ids)
+    #sample_ids = open(args.sample_ids_file, 'r').read().split()
+    logger.info('reads sample classes: ' + args.sample_classes)
+    sample_classes =  pd.read_table(args.sample_classes, sep='\t', index_col=0).iloc[:, 0]
+    sample_classes = sample_classes.sort_values()
+    sample_ids = sample_classes.index.values
+
     # read features
     features = pd.read_table(args.features, header=None).iloc[:, 0]
     feature_info = features.str.split('|', expand=True)
@@ -431,7 +441,7 @@ def visualize_domains(args):
     read_depth = counts.sum(axis=0)
     del counts
     # read chrom sizes
-    chrom_sizes = pd.read_table(args.chrom_sizes, sep='\t', index_col=0, header=None).iloc[:, 0]
+    #chrom_sizes = pd.read_table(args.chrom_sizes, sep='\t', index_col=0, header=None).iloc[:, 0]
 
     with PdfPages(args.output_file) as pdf:
         for feature_name, feature in tqdm(feature_info.iterrows(), unit='feature'):
@@ -441,31 +451,42 @@ def visualize_domains(args):
                 start = int(start)
                 end = int(end)
                 bigwig_file = os.path.join(args.output_dir, 'bigwig', '{{0}}.genome.{0}.bigWig'.format(strand))
+            elif feature['gene_type'] in ('piRNA', 'miRNA'):
+                continue
             else:
                 start = int(feature['start'])
                 end = int(feature['end'])
                 chrom = feature.transcript_id
                 bigwig_file = os.path.join(args.output_dir, 'tbigwig', '{{0}}.{0}.bigWig'.format(feature['gene_type']))
-            # interval to display coverage
-            cov_start = max(start - args.flanking, 0)
-            cov_end = min(end + args.flanking, chrom_sizes[feature['transcript_id']])
-            # interval of domains relative to visible region
-            domain_start = start - cov_start
-            domain_end = domain_start + end - start
-            coverage = np.empty((len(sample_ids), cov_end - cov_start), dtype='float')
             # read coverage from BigWig files
+            coverage = None
             for i, sample_id in enumerate(sample_ids):
-                coverage[i] = bigwig_fetch(bigwig_file.format(sample_id), chrom, cov_start, cov_end, dtype='int')
+                bwf = BigWigFile(bigwig_file.format(sample_id))
+                if coverage is None:
+                    # interval to display coverage
+                    chrom_size = bwf.get_chrom_size(feature['transcript_id'])
+                    if chrom_size == 0:
+                        raise ValueError('cannot find transcript id {} in bigwig'.format(feature['transcript_id']))
+                    view_start = max(start - args.flanking, 0)
+                    view_end = min(end + args.flanking, chrom_size)
+                    coverage = np.zeros((len(sample_ids), view_end - view_start), dtype='float')
+                    logger.info('create_coverage_matrix: ({}, {})'.format(*coverage.shape))
+                #logger.info('bigWigQuery: {}:{}-{}'.format(chrom, view_start, view_end))
+                values = bwf.query(chrom, view_start, view_end, fillna=0)
+                del bwf
+                if values is not None:
+                    coverage[i] = values
+                #coverage[i] = bigwig_fetch(bigwig_file.format(sample_id), chrom, view_start, view_end, dtype='int')
                 # normalize coverage by read depth
                 coverage[i] *= 1e6/read_depth[sample_id]
                 # log2 transformation
                 coverage[i] = np.log2(coverage[i] + 1)
             
             # draw heatmap
+            '''
             plot_data = pd.DataFrame(coverage)
             cmap = sns.light_palette('blue', as_cmap=True, n_colors=6)
-            g = sns.clustermap(plot_data, figsize=(20, 8), col_cluster=False, row_colors=None,
-                        cmap='Reds')
+            g = sns.clustermap(plot_data, figsize=(20, 8), col_cluster=False, row_colors=None, cmap='Blues')
             g.ax_heatmap.set_yticklabels([])
             g.ax_heatmap.set_yticks([])
             xticks = np.arange(0, coverage.shape[1], 10)
@@ -474,9 +495,42 @@ def visualize_domains(args):
             g.ax_heatmap.vlines(x=domain_start, ymin=0, ymax=g.ax_heatmap.get_ylim()[0], linestyle='dashed', linewidth=1.0)
             g.ax_heatmap.vlines(x=domain_end, ymin=0, ymax=g.ax_heatmap.get_ylim()[0], linestyle='dashed', linewidth=1.0)
             g.ax_heatmap.set_title(feature_name)
+            '''
+            # hierarchical clustering
+            order = np.arange(coverage.shape[0], dtype='int')
+            for label in np.unique(sample_classes):
+                mask = (sample_classes == label)
+                Z = linkage(coverage[mask], 'single')
+                R = dendrogram(Z, no_plot=True, labels=order[mask])
+                order[mask] = R['ivl']
+            sample_classes = sample_classes.iloc[order]
+            coverage = coverage[order]
 
+            plt.rcParams['xtick.minor.visible'] = True
+            plt.rcParams['xtick.minor.size'] = 4
+            plt.rcParams['xtick.bottom'] = True
+            fig, axes = plt.subplots(1, 2, figsize=(20, 3), sharey=True, 
+                gridspec_kw={'width_ratios': [0.98, 0.02], 'hspace': 0})
+            ax_heatmap, ax_label = axes
+            ax_heatmap.pcolormesh(coverage, cmap='Blues')
+            ax_heatmap.set_xticks(np.arange(coverage.shape[0]) + 0.5, minor=True)
+            xticks = ax_heatmap.get_xticks()
+            ax_heatmap.set_xticks(xticks + 0.5)
+            ax_heatmap.set_xticklabels(xticks.astype('int'))
+            ax_heatmap.set_title(feature_name)
+
+            for label in sample_classes.unique():
+                ax_label.barh(y=np.arange(coverage.shape[0]), width=(sample_classes == label).astype('int'), height=1,
+                    edgecolor='none', label=label)
+            ax_label.set_xlim(0, 1)
+            ax_label.set_ylim(0, coverage.shape[0])
+            ax_label.tick_params(labelbottom=False, bottom=False)
+            ax_label.set_xticks([])
+            ax_label.set_yticks([])
+            ax_label.legend(title='Class', bbox_to_anchor=(1.04, 0.5), loc="center left", borderaxespad=0)
+            fig.tight_layout()
             # save plot
-            pdf.savefig(g.fig)
+            pdf.savefig(fig)
             plt.close()
 
 
@@ -485,12 +539,11 @@ if __name__ == '__main__':
     subparsers = main_parser.add_subparsers(dest='command')
 
     parser = subparsers.add_parser('visualize_domains', help='plot read coverage of domains as heatmaps')
-    parser.add_argument('--sample-ids-file', type=str, required=True, help='e.g. {data_dir}/sample_ids.txt')
+    parser.add_argument('--sample-classes', type=str, required=True, help='e.g. {data_dir}/sample_classes.txt')
     parser.add_argument('--output-dir', type=str, required=True, help='e.g. output/scirep')
     parser.add_argument('--features', type=str, required=True, help='list of selected features')
-    parser.add_argument('--chrom-sizes', type=str, required=True)
     parser.add_argument('--count-matrix', type=str, required=True, help='count matrix')
-    parser.add_argument('--output-file', type=str, required=True, help='output PDF file')
+    parser.add_argument('--output-file', '-o', type=str, required=True, help='output PDF file')
     parser.add_argument('--flanking', type=int, default=20, help='flanking length for genomic domains')
     
     args = main_parser.parse_args()
