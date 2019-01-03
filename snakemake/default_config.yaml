@@ -107,5 +107,7 @@ umi_tags: false
 umi_length: 0
 # Evaluate published biomarkers
 evaluate_features_preprocess_methods: []
-# differential expression method
+# Differential expression method
 diffexp_method: deseq2
+# Count multi-mapping reads
+count_multimap_reads: false
