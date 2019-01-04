@@ -24,13 +24,15 @@ rule featurecounts:
         strandness={'no': 0, 'forward': 1, 'reverse': 2}.get(config['strandness'], 0),
         paired_end={True: '-p', False: ''}[config['paired_end']],
         min_mapping_quality=config['min_mapping_quality'],
-        count_multimap_reads='-M' if config['count_multimap_reads'] else ''
+        count_multimap_reads='-M' if config['count_multimap_reads'] else '',
+        count_overlapping_features='-O' if config['count_overlapping_features'] else ''
     wildcard_constraints:
         map_step='(?!circRNA).*'
     log:
         '{output_dir}/log/featurecounts/{sample_id}/{map_step}'
     shell:
-        '''featureCounts -O -t exon -g gene_id {params.count_multimap_reads} -s {params.strandness} -Q {params.min_mapping_quality} \
+        '''featureCounts {params.count_overlapping_features} -t exon -g gene_id {params.count_multimap_reads} \
+            -s {params.strandness} -Q {params.min_mapping_quality} \
             {params.paired_end} -a {input.gtf} -o {output.counts} {input.bam} > {log}
         '''
 
@@ -43,12 +45,12 @@ rule htseq:
     params:
         strandness={'forward': 'yes', 'reverse': 'reverse'}.get(config['strandness'], 'no'),
         min_mapping_quality=config['min_mapping_quality'],
-        count_multimap_reads='all' if config['count_multimap_reads'] else 'none'
+        count_overlapping_features='all' if config['count_overlapping_features'] else 'none'
     wildcard_constraints:
         map_step='(?!circRNA).*'
     shell:
         '''htseq-count -t exon -i gene_id -f bam -a {params.min_mapping_quality} \
-            --nonunique {params.count_multimap_reads} -s {params.strandness} {input.bam} {input.gtf} > {output.counts}
+            --nonunique {params.count_overlapping_features} -s {params.strandness} {input.bam} {input.gtf} > {output.counts}
         '''
 
 rule count_circRNA:

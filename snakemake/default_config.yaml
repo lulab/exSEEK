@@ -110,4 +110,6 @@ evaluate_features_preprocess_methods: []
 # Differential expression method
 diffexp_method: deseq2
 # Count multi-mapping reads
-count_multimap_reads: false
+count_multimap_reads: true
+# Count overlapping features
+count_overlapping_features: false
