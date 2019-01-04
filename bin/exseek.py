@@ -22,7 +22,7 @@ if __name__ == '__main__':
     parser.add_argument('step', type=str, 
         choices=('quality_control', 'prepare_genome', 'bigwig',
         'mapping', 'count_matrix', 'call_domains', 'combine_domains', 'normalization', 'feature_selection', 
-        'differential_expression',
+        'differential_expression', 'evaluate_features',
         'update_sequential_mapping', 'update_singularity_wrappers')
     )
     parser.add_argument('--dataset', '-d', type=str, required=True,

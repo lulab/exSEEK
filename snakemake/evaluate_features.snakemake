@@ -7,21 +7,27 @@ with open(data_dir + '/compare_groups.yaml', 'r') as f:
 
 count_method = config['count_method']
 # read selected matrix preprocessing methods
-preprocess_methods = config['evaluate_features_preprocess_methods']
+feature_sets = config['evaluate_feature_sets']
 
+
+def get_all_inputs(wildcards):
+    inputs = []
+    for compare_group, feature_set in feature_sets.items():
+        inputs += expand('{output_dir}/evaluate_features/result/{compare_group}/{feature_set}/{classifier}',
+            output_dir=output_dir, feature_set=feature_set,
+            classifier=config['classifiers'], compare_group=compare_group)
+    return inputs
 
 rule all:
     input:
-        evaluate_features=expand('{output_dir}/evaluate_features/result/{preprocess_method}/{compare_group}/{classifier}',
-            output_dir=output_dir, preprocess_method=preprocess_methods,
-            classifier=config['classifiers'], compare_group=list(compare_groups.keys())),
+        get_all_inputs
 
 
 rule preprocess_features:
     input:
-        '{output_dir}/evaluate_features/matrix/{preprocess_method}.txt'
+        '{output_dir}/evaluate_features/matrix/{compare_group}/{feature_set}.txt'
     output:
-        '{output_dir}/evaluate_features/preprocess_features/{preprocess_method}.txt'
+        '{output_dir}/evaluate_features/preprocess_features/{compare_group}/{feature_set}.txt'
     params:
         scaler=config['scale_method']
     shell:
@@ -31,10 +37,10 @@ rule preprocess_features:
         
 rule evaluate_features:
     input:
-        matrix='{output_dir}/evaluate_features/preprocess_features/{preprocess_method}.txt',
+        matrix='{output_dir}/evaluate_features/preprocess_features/{compare_group}/{feature_set}.txt',
         sample_classes=data_dir+ '/sample_classes.txt'
     output:
-        directory('{output_dir}/evaluate_features/result/{preprocess_method}/{compare_group}/{classifier}')
+        directory('{output_dir}/evaluate_features/result/{compare_group}/{feature_set}/{classifier}')
     params:
         n_splits=config['cross_validation_splits'],
         splitter=config['splitter'],
