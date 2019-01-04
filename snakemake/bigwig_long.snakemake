@@ -16,6 +16,8 @@ def get_all_inputs(wildcards):
             strands = '+'
         available_inputs[map_step] = expand('{output_dir}/bigwig/{sample_id}.{map_step}.{strand}.bigWig',
             output_dir=output_dir, sample_id=sample_ids, map_step=map_step, strand=strands)
+        available_inputs[map_step + '_normalized'] = expand('{output_dir}/bigwig_normalized/{sample_id}.{map_step}.{strand}.bigWig',
+            output_dir=output_dir, sample_id=sample_ids, map_step=map_step, strand=strands)
     enabled_inputs = list(available_inputs.keys())
     inputs = []
     for key, l in available_inputs.items():
@@ -61,4 +63,21 @@ rule bedgraph_to_bigwig:
         '{output_dir}/bigwig/{sample_id}.{map_step}.{strand}.bigWig'
     shell:
         '''bedGraphToBigWig {input.bedgraph} {input.chrom_sizes} {output}
+        '''
+
+rule normalize_bigwig:
+    input:
+        bam='{output_dir}/bam/{sample_id}/{map_step}.bam',
+        bigwig='{output_dir}/bigwig/{sample_id}.{map_step}.{strand}.bigWig',
+        chrom_sizes=lambda wildcards: genome_dir + '/chrom_sizes/' + re.sub('_rmdup$', '', wildcards.map_step)
+    output:
+        bigwig='{output_dir}/bigwig_normalized/{sample_id}.{map_step}.{strand}.bigWig',
+        bedgraph=temp('{output_dir}/bigwig_normalized/{sample_id}.{map_step}.{strand}.bedGraph')
+    wildcard_constraints:
+        strand='[+-]'
+    shell:
+        r'''read_depth=`bamtools count -in {input.bam}`
+        bigWigToBedGraph {input.bigwig} stdout \
+            | awk -v d="$read_depth" 'BEGIN{{OFS="\t";FS="\t"}}{{print $1,$2,$3,1000000.0*2*$4/d}}' > {output.bedgraph}
+        bedGraphToBigWig {output.bedgraph} {input.chrom_sizes} {output.bigwig}
         '''
