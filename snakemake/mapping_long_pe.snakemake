@@ -1,6 +1,7 @@
 include: 'common.snakemake'
 
-map_steps = ['rRNA', 'genome', 'circRNA']
+star_map_steps = ['rRNA', 'genome', 'circRNA']
+map_steps = list(star_map_steps)
 if config['remove_duplicates_long']:
     map_steps += ['genome_rmdup', 'circRNA_rmdup', 'rRNA_rmdup']
 
@@ -11,7 +12,11 @@ def get_all_inputs(wildcards):
         summarize_read_length=expand('{output_dir}/stats/mapped_read_length_by_sample/{sample_id}',
             output_dir=output_dir, sample_id=sample_ids),
         summarize_insert_size=expand('{output_dir}/stats/mapped_insert_size_by_sample/{sample_id}',
-            output_dir=output_dir, sample_id=sample_ids)
+            output_dir=output_dir, sample_id=sample_ids),
+        count_clean_fragments=expand('{output_dir}/stats/fragment_counts/{sample_id}/clean',
+            output_dir=output_dir, sample_id=sample_ids),
+        summarize_mapping_star=expand('{output_dir}/summary/mapping_star.html',
+            output_dir=output_dir)
     )
     enabled_inputs = list(available_inputs.keys())
     inputs = []
@@ -111,8 +116,10 @@ rule sort_bam_by_name:
         '{output_dir}/bam/{sample_id}/{map_step}.bam'
     output:
         '{output_dir}/bam_sorted_by_name/{sample_id}/{map_step}.bam'
+    params:
+        temp_dir=config['temp_dir']
     shell:
-        '''picard SortSam I={input} O={output} SORT_ORDER=queryname
+        '''samtools sort -n -T {params.temp_dir} -o {output} {input}
         '''
 
 rule remove_duplicates:
@@ -130,7 +137,6 @@ rule remove_duplicates:
             O={output.bam} \
             M={output.metrics}
         '''
-
 
 rule samtools_stats:
     input:
@@ -209,3 +215,42 @@ rule summarize_insert_size:
         matrix.index.name = 'insert_size'
         matrix.to_csv(output[0], sep='\t', header=True, index=True)
 
+rule summarize_mapping_star:
+    input:
+        lambda wildcards: expand('{output_dir}/mapping_star/{sample_id}/{map_step}/Log.final.out',
+            output_dir=wildcards.output_dir, sample_id=sample_ids, map_step=star_map_steps)
+    output:
+        '{output_dir}/summary/mapping_star.txt'
+    run:
+        import pandas as pd
+
+        records = []
+        columns = ['sample_id', 'map_step']
+        for i, filename in enumerate(input):
+            map_step = filename.split('/')[-2]
+            sample_id = filename.split('/')[-3]
+            record = {'sample_id': sample_id, 'map_step': map_step}
+            with open(filename, 'r') as fin:
+                for line in fin:
+                    c = line.strip().split('|')
+                    if len(c) == 2:
+                        key, val = c[0].strip(), c[1].strip()
+                        record[key] = val
+                        if i == 0:
+                            columns.append(key)
+            records.append(record)
+        summary = pd.DataFrame.from_records(records)
+        summary = summary.reindex(columns=columns)
+        summary.set_index('sample_id', inplace=True)
+        summary.index.name = 'sample_id'
+        summary.to_csv(output[0], sep='\t', header=True, na_rep='NA', index=True)
+
+rule summarize_fragment_counts_jupyter:
+    input:
+        summary='{output_dir}/summary/mapping_star.txt',
+        jupyter=root_dir + '/templates/summarize_mapping_star.ipynb'
+    output:
+        jupyter='{output_dir}/summary/mapping_star.ipynb',
+        html='{output_dir}/summary/mapping_star.html'
+    run:
+        shell(nbconvert_command)
