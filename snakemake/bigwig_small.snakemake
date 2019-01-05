@@ -7,6 +7,8 @@ rule all:
     input:
         tbigwig=expand('{output_dir}/tbigwig/{sample_id}.{rna_type}.bigWig',
             output_dir=output_dir, sample_id=sample_ids, rna_type=['transcriptome']),
+        tbigwig_normalized=expand('{output_dir}/tbigwig_normalized/{sample_id}.{rna_type}.bigWig',
+            output_dir=output_dir, sample_id=sample_ids, rna_type=['transcriptome']),
         gbigwig=expand('{output_dir}/bigwig/{sample_id}.{rna_type}.{strand}.bigWig',
             output_dir=output_dir, sample_id=sample_ids, rna_type=['other', 'genome', 'transcriptome'], strand=['+', '-']),
         gbigwig_normalized=expand('{output_dir}/bigwig_normalized/{sample_id}.{rna_type}.{strand}.bigWig',
@@ -131,6 +133,21 @@ rule normalize_gbigwig:
         bedgraph=temp('{output_dir}/bigwig_normalized/{sample_id}.{rna_type}.{strand}.bedGraph')
     wildcard_constraints:
         strand='[+-]'
+    shell:
+        r'''read_depth=`bamtools count -in {input.bam}`
+        bigWigToBedGraph {input.bigwig} stdout \
+            | awk -v d="$read_depth" 'BEGIN{{OFS="\t";FS="\t"}}{{print $1,$2,$3,1000000.0*$4/d}}' > {output.bedgraph}
+        bedGraphToBigWig {output.bedgraph} {input.chrom_sizes} {output.bigwig}
+        '''
+
+rule normalize_tbigwig:
+    input:
+        bam='{output_dir}/tbam/{sample_id}/{rna_type}.bam',
+        bigwig='{output_dir}/tbigwig/{sample_id}.{rna_type}.bigWig',
+        chrom_sizes=genome_dir + '/chrom_sizes/{rna_type}'
+    output:
+        bigwig='{output_dir}/tbigwig_normalized/{sample_id}.{rna_type}.bigWig',
+        bedgraph=temp('{output_dir}/tbigwig_normalized/{sample_id}.{rna_type}.bedGraph')
     shell:
         r'''read_depth=`bamtools count -in {input.bam}`
         bigWigToBedGraph {input.bigwig} stdout \
