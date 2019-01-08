@@ -19,8 +19,6 @@ def get_all_inputs(wildcards):
             output_dir=output_dir),
         mapped_read_length=expand('{output_dir}/stats/mapped_read_length_by_sample/{sample_id}',
             output_dir=output_dir, sample_id=sample_ids),
-        bigwig=expand('{output_dir}/bigwig/{sample_id}.{rna_type}.{strand}.bigWig',
-            output_dir=output_dir, sample_id=sample_ids, rna_type=['other', 'genome'], strand=['+', '-']),
         summarize_read_counts_jupyter=expand('{output_dir}/summary/read_counts.html',
             output_dir=output_dir)
     )
@@ -144,48 +142,6 @@ rule merge_mapped_read_length:
             table[rna_type] = df['query']
         table = pd.DataFrame(table)
         table.to_csv(output[0], sep='\t', header=True, index=True)
-
-
-rule sort_gbam:
-    input:
-        '{output_dir}/gbam/{sample_id}/{rna_type}.bam'
-    output:
-        bam='{output_dir}/gbam_sorted/{sample_id}/{rna_type}.bam',
-        bai='{output_dir}/gbam_sorted/{sample_id}/{rna_type}.bam.bai'
-    params:
-        temp_dir=config['temp_dir']
-    shell:
-        '''samtools sort -T {params.temp_dir} -o {output.bam} {input}
-        samtools index {output.bam}
-        '''
-
-rule gbam_to_bedgraph:
-    input:
-        '{output_dir}/gbam_sorted/{sample_id}/{rna_type}.bam'
-    output:
-        '{output_dir}/bedgraph/{sample_id}.{rna_type}.{strand}.bedGraph'
-    shell:
-        '''bedtools genomecov -ibam {input} -strand {wildcards.strand} -bg -split | LC_COLLATE=C sort -k1,1 -k2,2n > {output}
-        '''
-
-rule gbedgraph_to_bigwig:
-    input:
-        bedgraph='{output_dir}/bedgraph/{sample_id}.{rna_type}.{strand}.bedGraph',
-        chrom_sizes=genome_dir + '/chrom_sizes/genome'
-    output:
-        '{output_dir}/bigwig/{sample_id}.{rna_type}.{strand}.bigWig'
-    shell:
-        '''bedGraphToBigWig {input.bedgraph} {input.chrom_sizes} {output}
-        '''
-
-rule collect_alignment_summary_metrics:
-    input:
-        '{output_dir}/tbam_sorted/{sample_id}/{rna_type}.bam'
-    output:
-        '{output_dir}/alignment_summary_metrics/{sample_id}/{rna_type}'
-    shell:
-        '''picard CollectAlignmentSummaryMetrics I={input} O={output}
-        '''
 
 rule bam_to_bed:
     input:
