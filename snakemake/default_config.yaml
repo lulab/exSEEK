@@ -112,4 +112,4 @@ diffexp_method: deseq2
 # Count multi-mapping reads
 count_multimap_reads: true
 # Count overlapping features
-count_overlapping_features: false
+count_overlapping_features: true
