@@ -24,6 +24,7 @@ conda install -y numpy scipy scikit-learn
 conda install -y pandas matplotlib seaborn
 conda install -y tqdm snakemake h5py bokeh
 conda install -y umap jinja2
+pip install mlxtend 
 ```
 
 ## Install Bioconda packages
