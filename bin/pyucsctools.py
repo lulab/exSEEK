@@ -11,25 +11,21 @@ def command_handler(f):
 @command_handler
 def bigwig_to_hdf5(args):
     import h5py
-    from pykent import init_library, BigWigFile
+    from pykent import BigWigFile
     from tqdm import tqdm
-    
-    logger.info('initialize shared library')
-    init_library(args.library)
+
     logger.info('read input BigWig file: ' + args.input_file)
     bwf = BigWigFile(args.input_file)
     logger.info('open output HDF5 file: ' + args.output_file)
     fout = h5py.File(args.output_file, 'w')
-    chrom_sizes = bwf.get_chrom_list()
+    chrom_sizes = bwf.get_chrom_sizes()
     for chrom, size in tqdm(chrom_sizes, unit='chrom'):
-        values = bwf.values_on_chrom(chrom, fillna=args.fillna)
+        values = bwf.query_interval(chrom, 0, size, fillna=args.fillna)
         fout.create_dataset(chrom, data=values, compression='gzip')
     fout.close()
     
 if __name__ == '__main__':
     main_parser = argparse.ArgumentParser(description='Count reads in BAM files')
-    main_parser.add_argument('--library', '-l', type=str,
-        help='path to libjkweb.so')
     subparsers = main_parser.add_subparsers(dest='command')
 
     parser = subparsers.add_parser('bigwig_to_hdf5')
