@@ -47,7 +47,7 @@ def count_circrna(args):
     import HTSeq
     import numpy as np
     import pandas as pd
-    from collections import OrderedDict
+    from collections import OrderedDict, defaultdict
     from ioutils import open_file_or_stdout
 
     logger.info('read input BAM/SAM file: ' + args.input_file)
@@ -71,30 +71,41 @@ def count_circrna(args):
     strandness = args.strandness
     if args.paired_end:
         logger.info('count paired-end fragments')
+        stats = defaultdict(int)
         for bundle in HTSeq.pair_SAM_alignments(sam, bundle=True):
+            stats['total_pairs'] += 1
             # ignore multi-mapped pairs
             if len(bundle) != 1:
+                stats['multi_mapping'] += 1
                 continue
             read1, read2 = bundle[0]
             # ignore singletons
-            if read1 is None or read2 is None:
+            if (read1 is None) or (read2 is None):
+                stats['singleton'] += 1
                 continue
             # ignore unmapped reads
-            if not read1.aligned and read2.aligned:
+            if not (read1.aligned and read2.aligned):
+                stats['unmapped'] += 1
                 continue
             # ignore pairs with mapping quality below threshold
             if (read1.aQual < min_mapping_quality) or (read2.aQual < min_mapping_quality):
+                stats['low_mapping_quality'] += 1
                 continue
-            if strandness == 'forward' and ((read1.iv.strand == '-') or (read2.iv.strand == '-')):
+            if (strandness == 'forward') and (not ((read1.iv.strand == '+') and (read2.iv.strand == '-'))):
+                stats['improper_strand'] += 1
                 continue
-            if strandness == 'reverse' and ((not (read1.iv.strand == '+')) or (not (read2.iv.strand == '+'))):
+            if (strandness == 'reverse') and (not ((read1.iv.strand == '-') and (read2.iv.strand == '+'))):
+                stats['improper_strand'] += 1
                 continue
             # ignore pairs on different chromosomes
             if read1.iv.chrom != read2.iv.chrom:
+                stats['diff_chrom'] += 1
                 continue
             pos = junction_positions[read1.iv.chrom]
             if read1.iv.start < pos <= read2.iv.end:
                 counts[read1.iv.chrom] += 1
+        for key, val in stats.items():
+            logger.info('{}: {}'.format(key, val))
     else:
         logger.info('count single-end reads')
         for read in sam:
