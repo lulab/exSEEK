@@ -25,7 +25,11 @@ def unsupervised_clustering_accuracy(y, y_pred):
 def uca_score(X, y, prediction_algorithm='knn'):
     #X_log = np.log2(X + 0.001).T
     X_scale = StandardScaler().fit_transform(X)
-    labels = y 
+    # convert string labels to integer labels
+    unique_classes = np.unique(y)
+    labels = np.zeros(y.shape)
+    for i, c in enumerate(unique_classes):
+        labels[y == c] = i
     
     cluster_num = np.unique(y).shape[0]
     if prediction_algorithm == 'knn':
