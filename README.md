@@ -3,7 +3,7 @@
 
 ## Workflow
 
-![workflow](assets/whole_pipe.png)
+![workflow](docs/img/whole_pipe.png)
 
 ## Installation
 
