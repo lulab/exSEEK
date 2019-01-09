@@ -7,7 +7,7 @@
 
 ## Installation
 
-Install required software packages according to [requirements](requirements.md)
+Install required software packages according to [installation](installation.md)
 
 Download the scripts:
 

@@ -1,6 +1,6 @@
 # Matrix Processing   
 
-![](../assets/pipeline_matrix.png)
+![](img/pipeline_matrix.png)
 
 ```
 usage: bin/matrix-process.R [-h] -s STEP -i INPUT -c CLASS -b BATCH
@@ -128,12 +128,12 @@ A density plot or a violin plot is used to analyze the coefficient of variation 
 
 - Density plot of CV
 
-![](../assets/cv_density.png) 
+![](img/cv_density.png) 
 
 - Boxplot of expression value (log)
 
 
-![](../assets/refer_box.png)
+![](img/refer_box.png)
 
 
 ### Criteria to use top20
@@ -143,12 +143,12 @@ We recommend to remove top20 and use left genes sum as scale factor if they acco
 - cumulative ratio
 
 
-![](../assets/topk.png)
+![](img/topk.png)
 
 - highest expressed gene
 
 
-![](../assets/plot_highest_exprs.png)
+![](img/plot_highest_exprs.png)
 
 
 
@@ -157,11 +157,11 @@ We recommend to remove top20 and use left genes sum as scale factor if they acco
 ### Visualize Batch Effect
 - visualize batch by counts
 - 
-![](../assets/show_batch.png)
+![](img/show_batch.png)
 
 - visualize batch by specific RNA counts
 - 
-![](../assets/show_batch_rna.png)
+![](img/show_batch_rna.png)
 
 - [ ] to do select batch factor plot
 
@@ -183,38 +183,38 @@ PCA and t-SNE can visualize the aggregation degree of the sample, but it cannot 
 - PCA visualization of original matrix and processed matrix
 
 
-![](../assets/PCA.png)
+![](img/PCA.png)
 
 
 ### expression vs count depth
 
 - scImpute
-![](../assets/mat_impute_count_depth.png)
+![](img/mat_impute_count_depth.png)
 
 - CPM
-![](../assets/mat_cpm_count_depth.png)
+![](img/mat_cpm_count_depth.png)
 
 - CPM, remove mi and piRNA
-![](../assets/mat_cpm_rm_count_depth.png)
+![](img/mat_cpm_rm_count_depth.png)
 
 - CPM remove top
-![](../assets/mat_cpm_top_count_depth.png)
+![](img/mat_cpm_top_count_depth.png)
 
 - CPM use reference gene
-![](../assets/mat_cpm_refer_count_depth.png)
+![](img/mat_cpm_refer_count_depth.png)
 
 - RLE
-![](../assets/mat_rle_count_depth.png)
+![](img/mat_rle_count_depth.png)
 
 -TMM
-![](../assets/mat_tmm_count_depth.png)
+![](img/mat_tmm_count_depth.png)
 
 -SCnorm
-![](../assets/mat_scnorm_count_depth.png)
+![](img/mat_scnorm_count_depth.png)
 
 
 ### Relative Log Expression box plot
-![](../assets/RLE.png)
+![](img/RLE.png)
 
 
 
