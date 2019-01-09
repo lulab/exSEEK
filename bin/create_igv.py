@@ -104,9 +104,99 @@ def render(args):
 def create_reference(args):
     import yaml
     import pandas as pd
+    from pyfaidx import Fasta
+    from Bio.Seq import Seq
+    import subprocess
 
+    logger.info('read fasta')
+    fasta = Fasta(args.fasta)
+
+    logger.info('read fasta index')
+    fasta_index = pd.read_table(args.fasta + '.fai', sep='\t', header=None, type=str).iloc[:, [0, 1]].copy()
+    fasta_index.columns = ['name', 'length']
+    fasta_index.index = fasta_index['name']
+    fasta_index.iloc[:, 1] = fasta_index.iloc[:, 1].astype('int')
+    # rename gene ids to gene names
+    if args.gene_names is not None:
+        logger.info('convert gene ids to gene names')
+        gene_names = pd.read_table(args.gene_name, sep='\t', header=None, type=str, index_col=0).iloc[:, 0]
+        fasta_index['name'] = gene_names[fasta_index['name'].values]
+    gene_ids = None
+    if args.gene_ids is not None:
+        logger.info('read gene ids')
+        gene_ids = pd.read_table(args.gene_ids, type=str, header=None).iloc[:, 0]
+
+    if not os.path.isdir(args.output_dir):
+        os.makedirs(args.output_dir)
+    config = {}
+    config['genome'] = args.genome
+    config['reference'] = {}
+    if args.name is not None:
+        config['reference']['id'] = args.genome
+        if args.name is not None
+            config['reference']['name'] = args.name
+        else:
+            config['reference']['name'] = args.genome
+        config['reference']['fastaURL'] = os.path.join(args.output_dir, 'reference.fa')
+        config['reference']['indexURL'] = os.path.join(args.output_dir, 'reference.fa.fa')
+        config['reference']['cytobandURL'] = os.path.join(args.output_dir, 'cytoband.txt')
+    config['tracks'] = {
+        args.genome: {
+            'name': args.genome,
+            'type': 'annotation',
+            'format': 'genepred',
+            'url': os.path.join(args.output_dir, 'annotation.genePred'),
+            'displayMode': 'EXPANDED',
+            'searchable': True,
+            'visibilityWindow':  300000000,
+            'height': 100
+            'show': True
+        }
+    }
+    if gene_ids is None:
+        logger.info('copy fasta file')
+        os.copyfile(args.fasta, config['reference']['fastaURL'])
+        logger.info('copy fasta index')
+        os.copyfile(args.fasta + '.fai', config['reference']['indexURL'])
+    else:
+        logger.info('write subset of reference fasta')
+        with open(config['reference']['fastaURL'], 'w') as fout
+            for gene_id in gene_ids:
+                record = fasta.get(gene_id)
+                if record is None:
+                    raise ValueError('gene id {} is not found in fasta file'.format(gene_id))
+                seq = record.seq
+                fout.write('>{}\n'.format(gene_id))
+                fout.write(seq)
+                fout.write('\n')
+        logger.info('generate fasta index')
+        subprocess.check_call(['samtools', 'faidx', config['reference']['fastaURL']])
+        fasta_index = fasta_index.loc[gene_ids]
     
+    cytoband = pd.DataFrame(index=np.arange(fasta_index.shape[0]), columns=np.arange(6))
+    bed.iloc[:, 0] = fasta_index['name'].values
+    bed.iloc[:, 2] = np.zeros(fasta_index.shape[0], dtype='int')
+    bed.iloc[:, 3] = fasta_index['length'].values
+    bed.iloc[:, 4] = np.full(fasta_index.shape[0], 'p') + np.arange(fasta_index.shape[0]) + '.1'
+    bed.iloc[:, 5] = np.full(fasta_index.shape[0], 'gneg')
+    logger.info('write cytoband file')
+    cytoband.to_csv(config['reference']['cytobandURL'], sep='\t', header=False, index=False)
 
+    bed = pd.DataFrame(index=np.arange(fasta_index.shape[0]), columns=np.arange(6))
+    bed.iloc[:, 0] = fasta_index['name'].values,
+    bed.iloc[:, 2] = np.zeros(fasta_index.shape[0], dtype='int')
+    bed.iloc[:, 3] = fasta_index['length'].values
+    bed.iloc[:, 4] = fasta_index['name'].values
+    bed.iloc[:, 5] = np.full(fasta_index.shape[0], '0')
+    bed.iloc[:, 6] = np.full(fasta_index.shape[0], '+')
+    logger.info('write annotation bed file')
+    bed_file = os.path.join(args.output_dir, 'annotation.bed')
+    bed.to_csv(bed_file, sep='\t', header=False, index=False)
+    logger.info('write annotation genePred file')
+    subprocess.check_call(['bedToGenePred', bed_file, config['tracks'][args.genome]['url']])
+
+    with open(os.path.join(args.output_dir, 'config.yaml'), 'w') as fout:
+    yaml.dump(config, fout, default_flow_style=False)
 
 if __name__ == '__main__':
     main_parser = argparse.ArgumentParser(description='Create IGV')
@@ -114,13 +204,12 @@ if __name__ == '__main__':
 
     parser = subparsers.add_parser('create_reference', 
         help='Create IGV reference genome from FASTA file')
-    parser.add_argument('--genome', type=str, help='genome name')
+    parser.add_argument('--genome', type=str, help='genome name', required=True)
     parser.add_argument('--name', type=str, help='reference name')
     parser.add_argument('--fasta', type=str, required=True)
-    parser.add_argument('--fasta-index', type=str, required=True)
-    parser.add_argument('--gene-name', type=str,
+    parser.add_argument('--gene-names', type=str,
         help='Tab-separated file with 2 columns: gene_id, gene_name')
-    parser.add_argument('--gene-id', type=str,
+    parser.add_argument('--gene-ids', type=str,
         help='Only use gene ids in provided list file')
     parser.add_argument('--output-dir', '-o', type=str,
         help='output directory')
