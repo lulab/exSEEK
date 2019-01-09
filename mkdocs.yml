@@ -1,5 +1,6 @@
 docs_dir: docs
 site_name: exseek
+theme: readthedocs
 nav:
   - Overview: index.md
   - Get Started: get_started.md
