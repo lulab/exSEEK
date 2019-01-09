@@ -2,7 +2,7 @@
 
 ![](img/pipeline_matrix.png)
 
-```
+```bash
 usage: bin/matrix-process.R [-h] -s STEP -i INPUT -c CLASS -b BATCH
                             --filterout FILTEROUT --imputeout IMPUTEOUT
                             --normalizeout NORMALIZEOUT --batchremoveout
@@ -63,7 +63,7 @@ optional arguments:
 
 - **Some parameters:**
 
-```
+```bash
 -s filter imputation normalization batch_removal
 --imputemethod scimpute_count,viper_count,null
 --normmethod SCnorm,TMM,RLE,CPM,CPM_top,CPM_rm,CPM_refer,null
@@ -73,7 +73,7 @@ optional arguments:
 
 - **Example:**
 
-```
+```bash
 bin/matrix-process.R -s imputation \
 -i output/lulab_hcc/count_matrix/domains_combined.txt \
 --filterout  output/lulab_hcc/matrix_processing/ \
