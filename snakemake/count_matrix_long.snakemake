@@ -77,18 +77,45 @@ class get_rmdup_counts:
             self.template = template
 
     def __call__(self, wildcards):
-        return expand(self.template, output_dir=wildcards.output_dir, 
-            count_method=wildcards.count_method, sample_id=sample_ids)
+        return expand(self.template, sample_id=sample_ids, **wildcards)
+
+rule count_matrix_circrna:
+    input:
+        circrna_counts=get_rmdup_counts('{output_dir}/counts/count_circrna/{sample_id}/circRNA', rmdup=config['remove_duplicates_long']),
+        circrna_sizes=genome_dir + '/chrom_sizes/circRNA'
+    output:
+        '{output_dir}/count_matrix/circRNA.txt'
+    run:
+        import pandas as pd
+
+        # read circRNA counts from individual files
+        matrix_circrna = {}
+        for filename in input.circrna_counts:
+            sample_id = filename.split('/')[-2]
+            matrix_circrna[sample_id] = pd.read_table(filename, sep='\t', header=None, index_col=0).iloc[:, 0]
+        matrix_circrna = pd.DataFrame(matrix_circrna)
+        matrix_circrna = matrix_circrna.loc[:, sample_ids]
+        matrix_circrna.fillna(0, inplace=True)
+        matrix_circrna = matrix_circrna.astype('int')
+        matrix_circrna = matrix_circrna.loc[matrix_circrna.sum(axis=1) > 0].copy()
+        # annotate circRNA 
+        circrna_sizes = pd.read_table(input.circrna_sizes, sep='\t', header=None, index_col=0).iloc[:, 0]
+        circrna_ids = matrix_circrna.index.values
+        matrix_circrna.index = circrna_ids + '|circRNA|' + circrna_ids + '|' + circrna_ids\
+             + '|' + circrna_ids + '|0|' + circrna_sizes.loc[circrna_ids].values.astype('str')
+        matrix_circrna.index.name = 'feature'
+        matrix_circrna.to_csv(output[0], sep='\t', header=True, index=True, na_rep='NA')
 
 rule count_matrix:
     input:
         counts=get_rmdup_counts('{output_dir}/counts/{count_method}/{sample_id}/genome', rmdup=config['remove_duplicates_long']),
-        circrna_counts=get_rmdup_counts('{output_dir}/counts/count_circrna/{sample_id}/circRNA', rmdup=config['remove_duplicates_long']),
+        matrix_circrna='{output_dir}/count_matrix/circRNA.txt',
         transcript_table=genome_dir + '/transcript_table/all.txt',
-        circrna_sizes=genome_dir + '/chrom_sizes/circRNA',
         gene_length=genome_dir + '/gene_length/long_RNA'
     output:
         '{output_dir}/count_matrix/{count_method}.txt'
+    wildcard_constraints:
+        count_method='(?!circRNA).*'
     run:
         import pandas as pd
         import re
@@ -113,21 +140,7 @@ rule count_matrix:
         # remove all-zero features
         matrix = matrix.loc[matrix.sum(axis=1) > 0].copy()
         gene_ids = matrix.index.values
-        # read circRNA counts from individual files
-        matrix_circrna = {}
-        for filename in input.circrna_counts:
-            sample_id = filename.split('/')[-2]
-            matrix_circrna[sample_id] = pd.read_table(filename, sep='\t', header=None, index_col=0).iloc[:, 0]
-        matrix_circrna = pd.DataFrame(matrix_circrna)
-        matrix_circrna = matrix_circrna.loc[:, sample_ids]
-        matrix_circrna.fillna(0, inplace=True)
-        matrix_circrna = matrix_circrna.astype('int')
-        matrix_circrna = matrix_circrna.loc[matrix_circrna.sum(axis=1) > 0].copy()
-        # annotate circRNA 
-        circrna_sizes = pd.read_table(input.circrna_sizes, sep='\t', header=None, index_col=0).iloc[:, 0]
-        circrna_ids = matrix_circrna.index.values
-        matrix_circrna.index = circrna_ids + '|circRNA|' + circrna_ids + '|' + circrna_ids\
-             + '|' + circrna_ids + '|0|' + circrna_sizes.loc[circrna_ids].values.astype('str')
+        
         
         # remove features not in transcript table
         gene_ids = gene_ids[~(transcript_table.loc[gene_ids, 'gene_id'].isna().values)]
@@ -147,6 +160,7 @@ rule count_matrix:
         
         matrix.index = feature_names
         # merge gene matrix and circRNA matrix
+        matrix_circrna = pd.read_table(input.matrix_circrna, sep='\t', index_col=0)
         matrix = pd.concat([matrix, matrix_circrna], axis=0)
         matrix.index.name = 'feature'
         
@@ -171,7 +185,7 @@ rule summarize_fragment_counts:
                 fragment_counts.loc[map_step, sample_id] = int(f.read().strip())
         fragment_counts = fragment_counts.astype('int')
         fragment_counts.columns.name = 'sample_id'
-        #fragment_counts.drop(index='circRNA', inplace=True)
+        fragment_counts.drop(index='circRNA', inplace=True)
 
         # read count matrix
         count_matrix = pd.read_table(input.count_matrix, sep='\t', index_col=0)
