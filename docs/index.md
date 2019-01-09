@@ -3,7 +3,7 @@
 
 ## Workflow
 
-![workflow](https://raw.githubusercontent.com/lulab/exSeek/master/assets/whole_pipe.png)
+![workflow](img/whole_pipe.png)
 
 ## Installation
 
