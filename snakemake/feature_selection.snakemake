@@ -48,7 +48,7 @@ rule select_features:
         positive_class=lambda wildcards: compare_groups[wildcards.compare_group][1],
         negative_class=lambda wildcards: compare_groups[wildcards.compare_group][0],
         n_splits=config['cross_validation_splits'],
-        splitter=config['splitter']
+        splitter=config['cv_splitter']
     shell:
         '''{bin_dir}/feature_selection.py evaluate -i {input.matrix} \
             --sample-classes {input.sample_classes} \
