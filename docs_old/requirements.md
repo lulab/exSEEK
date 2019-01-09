@@ -1,20 +1,13 @@
-# Installation
+# Requirements
 
-
-## Install exSeek
-
-```bash
-git clone https://github.com/lulab/exSeek-dev.git
-```
-
-## Install required software
+## Software
 
 * Python 3.6 (miniconda)
 * Python 2.7 (miniconda)
 * Java 8
 * R 3.4 (https://mran.microsoft.com/download)
 
-### Configure conda channels
+## Configure conda channels
 ```bash
 conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free/
 conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main/
@@ -25,7 +18,7 @@ conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/
 conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/bioconda/
 ```
 
-### Install Python packages using conda
+## Install Python packages using conda
 ```bash
 conda install -y numpy scipy scikit-learn 
 conda install -y pandas matplotlib seaborn
@@ -35,7 +28,7 @@ pip install mlxtend
 pip install flask Flask-AutoIndex
 ```
 
-### Install Bioconda packages
+## Install Bioconda packages
 
 List of all available Bioconda packages: (https://bioconda.github.io/recipes.html)
 
@@ -47,13 +40,13 @@ conda install -y htseq fastx_toolkit biopython rpy2
 conda install -y flexbar
 ```
 
-### Install Ubuntu packages
+## Install Ubuntu packages
 
 ```bash
 sudo apt-get install -y gzip pigz openjdk-8-jdk libgraphviz-dev uuid-dev zlib1g-dev libpng-dev gawk
 ```
 
-### Install R packages
+## Install R packages
 
 Install by running the following code in an R interactive session:
 ```R
@@ -76,7 +69,7 @@ install_github("Vivianstats/scImpute")
 install_github("hemberg-lab/scRNA.seq.funcs")
 ```
 
-### Other packages
+## Other packages
 * [find_circ 1.2](https://github.com/marvin-jens/find_circ) (depends on Python 2.7)
 * [GTFTools](http://www.genemine.org/codes/GTFtools_0.6.5.zip) (depends on Python)
 * [Prinseq](http://prinseq.sourceforge.net/) (requires Perl)
