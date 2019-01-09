@@ -12,14 +12,51 @@ cov_threshold: 0.2
 # Method to scale features
 scale_method: robust
 # Classifier for feature selection
-classifiers: [random_forest]
+classifiers: random_forest
 # Number of features to select
 n_selects: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30, 40, 50]
 resample_method: bootstrap
 # Feature selection methods
 select_methods: [robust]
 
-splitter: stratified_shuffle_split
+# Parameters for classifiers
+classifier_params:
+  logistic_regression:
+    penalty: l2
+  random_forest:
+    n_estimators: 10
+# Parameters for grid search for classifier parameters
+grid_search:
+  logistic_regression:
+    C: [1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1, 1e2, 1e3, 1e4, 1e5]
+  linear_svm:
+    C: [1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1, 1e2, 1e3, 1e4, 1e5]
+  random_forest:
+    n_estimators: [25, 50, 75]
+    max_depth: [3, 4, 5, 6, 7, 8]
+# Splitter for cross-validation
+cv_splitter: stratified_shuffle_split
+# Number of cross-validation folds for grid search
+grid_search_n_splits: 5
+# Number of train-test splits for cross-validation
+cv_n_splits: 50
+# Fraction/number of test samples in cross-validation
+cv_test_size: 0.2
+# Compute sample weight for imbalanced classes
+compute_sample_weight: true
+# Fold change filter in feature selection (up, down, both)
+fold_change_direction: up
+# Fold change filter threshold
+fold_change_threshold: 1
+# Fraction of features to eliminate in each RFE step
+rfe_step: 0.1
+# Number of cross-validation splits in RFE
+rfe_n_splits: 10
+# Number of cross-validation splits in robust feature selection
+robust_feature_selection_n_splits: 10
+# Splitter for robust feature selection
+robust_feature_selection_splitter: stratified_shuffle_split
+
 # Number of random train-test splits for cross-validation
 cross_validation_splits: 50
 # Type of counts for feature selection
