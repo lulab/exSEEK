@@ -407,6 +407,28 @@ def bigwig_fetch(filename, chrom, start, end, dtype='float'):
     return data
     
 
+def extract_feature_sequence(feature, genome_dir):
+    from pyfaidx import Fasta
+    from Bio.Seq import Seq
+
+    feature = line.split('\t')[0]
+    gene_id, gene_type, gene_name, domain_id, transcript_id, start, end = feature.split('|')
+    start = int(start)
+    end = int(end)
+    if gene_type == 'genomic':
+        gene_type = 'genome'
+    fasta = Fasta(os.path.join(args.genome_dir, 'fasta', gene_type + '.fa'))
+    if gene_type == 'genome':
+        chrom, gstart, gend, strand = gene_id.split('_')
+        gstart = int(gstart)
+        gend = int(gend)
+        seq = fasta[chrom][gstart:gend].seq
+        if strand == '-':
+            seq = str(Seq(seq).reverse_complement())
+    else:
+        seq = fasta[transcript_id][start:end].seq
+    seq = seq.upper()
+
 
 @command_handler
 def visualize_domains(args):
@@ -415,13 +437,17 @@ def visualize_domains(args):
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
     from matplotlib.backends.backend_pdf import PdfPages
+    from matplotlib.gridspec import GridSpec
     import seaborn as sns
-    sns.set_style('whitegrid')
+    sns.set_style('white')
     import pandas as pd
     plt.rcParams['figure.dpi'] = 96
     from tqdm import tqdm
     from pykent import BigWigFile
     from scipy.cluster.hierarchy import linkage, dendrogram
+    from pyfaidx import Fasta
+    from Bio.Seq import Seq
+    from call_peak import call_peaks
 
     # read sample ids
     #logger.info('read sample ids: ' + args.sample_ids)
@@ -437,9 +463,9 @@ def visualize_domains(args):
     feature_info.columns = ['gene_id', 'gene_type', 'gene_name', 'domain_id', 'transcript_id', 'start', 'end']
     feature_info.index = features.values
     # read count matrix to get read depth
-    counts = pd.read_table(args.count_matrix, index_col=0)
-    read_depth = counts.sum(axis=0)
-    del counts
+    #counts = pd.read_table(args.count_matrix, index_col=0)
+    #read_depth = counts.sum(axis=0)
+    #del counts
     # read chrom sizes
     #chrom_sizes = pd.read_table(args.chrom_sizes, sep='\t', index_col=0, header=None).iloc[:, 0]
 
@@ -457,7 +483,7 @@ def visualize_domains(args):
                 start = int(feature['start'])
                 end = int(feature['end'])
                 chrom = feature.transcript_id
-                bigwig_file = os.path.join(args.output_dir, 'tbigwig', '{{0}}.{0}.bigWig'.format(feature['gene_type']))
+                bigwig_file = os.path.join(args.output_dir, 'tbigwig_normalized', '{0}.transcriptome.bigWig')
             # read coverage from BigWig files
             coverage = None
             for i, sample_id in enumerate(sample_ids):
@@ -478,10 +504,20 @@ def visualize_domains(args):
                     coverage[i] = values
                 #coverage[i] = bigwig_fetch(bigwig_file.format(sample_id), chrom, view_start, view_end, dtype='int')
                 # normalize coverage by read depth
-                coverage[i] *= 1e6/read_depth[sample_id]
+                #coverage[i] *= 1e6/read_depth[sample_id]
                 # log2 transformation
                 coverage[i] = np.log2(coverage[i] + 1)
             
+            # get sequence
+            gene_type = feature['gene_type']
+            if gene_type == 'genomic':
+                gene_type = 'genome'
+            fasta = Fasta(os.path.join(args.genome_dir, 'fasta', gene_type + '.fa'))
+            seq = fasta[feature['transcript_id']][view_start:view_end].seq
+            if (gene_type == 'genome') and (strand == '-'):
+                seq = str(Seq(seq).reverse_complement())
+            seq = seq.upper()
+
             # draw heatmap
             '''
             plot_data = pd.DataFrame(coverage)
@@ -509,15 +545,27 @@ def visualize_domains(args):
             plt.rcParams['xtick.minor.visible'] = True
             plt.rcParams['xtick.minor.size'] = 4
             plt.rcParams['xtick.bottom'] = True
-            fig, axes = plt.subplots(1, 2, figsize=(20, 3), sharey=True, 
-                gridspec_kw={'width_ratios': [0.98, 0.02], 'hspace': 0})
-            ax_heatmap, ax_label = axes
-            ax_heatmap.pcolormesh(coverage, cmap='Blues')
-            ax_heatmap.set_xticks(np.arange(coverage.shape[0]) + 0.5, minor=True)
+            plt.rcParams['xtick.labelsize'] = 8
+            fig = plt.figure(figsize=(20, 6))
+            gs = GridSpec(4, 3, figure=fig, width_ratios=[0.95, 0.03, 0.02], height_ratios=[0.6, 0.15, 0.1, 0.1], hspace=0.2, wspace=0.15)
+            #fig, axes = plt.subplots(1, 2, figsize=(20, 3), sharey=True, 
+            #    gridspec_kw={'width_ratios': [0.98, 0.02], 'hspace': 0})
+            ax_heatmap = plt.subplot(gs[0, 0])
+            ax_colorbar = plt.subplot(gs[0, 1])
+            ax_label = plt.subplot(gs[0, 2])
+            ax_line = plt.subplot(gs[1, 0])
+            ax_domain = plt.subplot(gs[2, 0])
+            ax_refined_domain = plt.subplot(gs[3, 0])
+
+            p = ax_heatmap.pcolormesh(coverage, cmap='Blues')
+            ax_heatmap.set_xticks(np.arange(coverage.shape[1]) + 0.5, minor=True)
+            ax_heatmap.set_xlim(0, coverage.shape[1])
             xticks = ax_heatmap.get_xticks()
             ax_heatmap.set_xticks(xticks + 0.5)
             ax_heatmap.set_xticklabels(xticks.astype('int'))
             ax_heatmap.set_title(feature_name)
+
+            fig.colorbar(p, cax=ax_colorbar, use_gridspec=False, orientation='vertical')
 
             for label in sample_classes.unique():
                 ax_label.barh(y=np.arange(coverage.shape[0]), width=(sample_classes == label).astype('int'), height=1,
@@ -527,7 +575,43 @@ def visualize_domains(args):
             ax_label.tick_params(labelbottom=False, bottom=False)
             ax_label.set_xticks([])
             ax_label.set_yticks([])
-            ax_label.legend(title='Class', bbox_to_anchor=(1.04, 0.5), loc="center left", borderaxespad=0)
+            ax_label.legend(title='Class', bbox_to_anchor=(1.1, 0.5), loc="center left", borderaxespad=0)
+
+            ax_line.fill_between(np.arange(coverage.shape[1]), coverage.mean(axis=0), step='pre', alpha=0.9)
+            ax_line.set_xlim(0, coverage.shape[1])
+            #ax_line.set_xticks(np.arange(coverage.shape[1]) + 0.5, minor=True)
+            #xticks = ax_line.get_xticks()
+            #ax_line.set_xticks(xticks + 0.5)
+            #ax_line.set_xticklabels(xticks.astype('int'))
+            ax_line.set_xticks(np.arange(coverage.shape[1]) + 0.5)
+            ax_line.set_xticks([], minor=True)
+            ax_line.set_xticklabels(list(seq))
+            ax_line.set_ylim(0, ax_line.get_ylim()[1])
+            #ax_line.vlines(x=start - view_start + 0.5, ymin=0, ymax=ax_line.get_ylim()[1], linestyle='dashed', linewidth=1.0)
+            #ax_line.vlines(x=end - view_start + 0.5, ymin=0, ymax=ax_line.get_ylim()[1], linestyle='dashed', linewidth=1.0)
+
+            ax_domain.hlines(y=0.5, xmin=start - view_start, xmax=end - view_start, linewidth=5, color='C0')
+            ax_domain.set_ylim(0, 1)
+            ax_domain.set_ylabel('Domain')
+            ax_domain.set_yticks([])
+            ax_domain.set_xticks([])
+            ax_domain.set_xticks(np.arange(coverage.shape[1]) + 0.5, minor=True)
+            ax_domain.set_xlim(0, coverage.shape[1])
+            ax_domain.spines['top'].set_visible(False)
+            ax_domain.spines['right'].set_visible(False)
+
+            coverage_mean = coverage.mean(axis=0)
+            for _, peak_start, peak_end in call_peaks([coverage_mean], min_length=10):
+                ax_refined_domain.hlines(y=0.5, xmin=peak_start, xmax=peak_end, linewidth=5, color='C0')
+            ax_refined_domain.set_ylim(0, 1)
+            ax_refined_domain.set_ylabel('Refined')
+            ax_refined_domain.set_yticks([])
+            ax_refined_domain.set_xticks([])
+            ax_refined_domain.set_xticks(np.arange(coverage.shape[1]) + 0.5, minor=True)
+            ax_refined_domain.set_xlim(0, coverage.shape[1])
+            ax_refined_domain.spines['top'].set_visible(False)
+            ax_refined_domain.spines['right'].set_visible(False)
+
             fig.tight_layout()
             # save plot
             pdf.savefig(fig)
@@ -542,9 +626,10 @@ if __name__ == '__main__':
     parser.add_argument('--sample-classes', type=str, required=True, help='e.g. {data_dir}/sample_classes.txt')
     parser.add_argument('--output-dir', type=str, required=True, help='e.g. output/scirep')
     parser.add_argument('--features', type=str, required=True, help='list of selected features')
-    parser.add_argument('--count-matrix', type=str, required=True, help='count matrix')
+    #parser.add_argument('--count-matrix', type=str, required=True, help='count matrix')
     parser.add_argument('--output-file', '-o', type=str, required=True, help='output PDF file')
     parser.add_argument('--flanking', type=int, default=20, help='flanking length for genomic domains')
+    parser.add_argument('--genome-dir', type=str, required=True, help='e.g. genome/hg38')
     
     args = main_parser.parse_args()
     if not args.command:
