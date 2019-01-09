@@ -12,8 +12,9 @@ nav:
   - Feature Selection: feature_selection.md
   - Run on a cluster: cluster_configuration.md
   - Configuration File Reference: configuration.md
-  - Quality Control: quality_control.md
-  - Adapter Removal: adapter_removal.md
-  - Generate BigWig Files: bigwig.md
-  - IGV Browser: igv_browser.md
+  - Utilities:
+    - Quality Control: quality_control.md
+    - Adapter Removal: adapter_removal.md
+    - Generate BigWig Files: bigwig.md
+    - IGV Browser: igv_browser.md
   - Frequently Asked Questions: FAQ.md
