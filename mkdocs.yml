@@ -1,6 +1,3 @@
 docs_dir: docs
 site_name: exseek
 theme: readthedocs
-nav:
-  - Home: FAQ.md
-  - FAQ: FAQ.md
