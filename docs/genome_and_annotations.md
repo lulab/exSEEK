@@ -190,10 +190,13 @@ genePredToGtf -source=piRBase file source/piRBase-hsa-v2.0.genePred source/piRBa
 # Merge GTF files
 cat genome/hg38/gtf/gencode.gtf \
     genome/hg38/gtf/mitranscriptome_lncRNA.gtf \
+    genome/hg38/gtf/mitranscriptome_tucp.gtf \
     | grep -v 'gene_type "miRNA' \
     > genome/hg38/gtf/long_RNA.gtf
 # Get gene lengths
-tools/GTFtools_0.6.5/gtftools.py -l genome/hg38/gene_length/long_RNA genome/hg38/gtf/long_RNA.gtf
+tools/GTFtools_0.6.5/gtftools.py -c 1-22,X,Y,M -l genome/hg38/gene_length/long_RNA genome/hg38/gtf/long_RNA.gtf
+# GTF to BED12 format
+gffread --bed -o genome/hg38/bed/long_RNA.bed genome/hg38/gtf/long_RNA.gtf
 ```
 **gene_length/long_RNA**
 
@@ -259,6 +262,10 @@ awk 'BEGIN{OFS="\t";FS="\t"}{print $1,0,$2,$1,0,"+",$1,$1,$1,$1,"miRNA","miRNA",
 } > genome/hg38/transcript_table/miRNA.txt
 # get transcript sizes
 cut -f1,2 genome/hg38/fasta/miRNA.fa.fai genome/hg38/fasta/mature_miRNA.fa.fai > genome/hg38/chrom_sizes/miRNA
+# gff3 to genePred
+awk 'BEGIN{OFS="\t";FS="\t";d["miRNA"]="transcript";d["miRNA_primary_transcript"]="primary_transcript"}/^#/{print}!/^#/{$3=d[$3];print $1,$2,$3,$4,$5,$6,$7,$8,$9}' \
+    genome/hg38/gff3/miRBase.gff3 > genome/hg38/source/miRBase.fixed.gff3
+gff3ToGenePred -useName genome/hg38/source/miRBase.fixed.gff3 genome/hg38/genePred/miRBase.genePred
 ```
 
 ### Intron

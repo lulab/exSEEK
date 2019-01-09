@@ -51,8 +51,14 @@
 
 | File name | Description |
 | --------- | ----------- |
-| `${output_dir}/normalized_matrix/${normalization_method}.${imputation_method}.${batch_removal_method}.txt` |
+| `${output_dir}/normalized_matrix/${normalization_method}.${imputation_method}.${batch_removal_method}.txt` | 
 | `${output_dir}/matrix_processing/normalization/${normalization_method}.txt` |
 | `${output_dir}/matrix_processing/imputation/${normalization_method}.${imputation_method}.txt` |
 | `${output_dir}/matrix_processing/batch_removal/${batch_removal_method}.${batch_index}.txt` |
+
+## Differential expression
+
+| File name | Description |
+| --------- | ----------- |
+| `${output_dir}/differential_expression/${count_method}/${compare_group}/${diffexp_method}.txt` | 
 
