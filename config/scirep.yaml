@@ -18,6 +18,69 @@ aligner: bowtie2
 adaptor: AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC
 paired_end: false
 small_rna: true
-count_method: domains_combined
+count_method: [domains_combined, domains_long, transcript]
 
-evaluate_features_preprocess_methods: [control_markers_0,scirep.de_selected_mx]
+evaluate_feature_sets:
+  Normal-CRC:
+    - control_markers_0
+    - control_markers_10
+    - control_markers_11
+    - control_markers_12
+    - control_markers_13
+    - control_markers_14
+    - control_markers_15
+    - control_markers_16
+    - control_markers_17
+    - control_markers_18
+    - control_markers_1
+    - control_markers_2
+    - control_markers_3
+    - control_markers_4
+    - control_markers_5
+    - control_markers_6
+    - control_markers_7
+    - control_markers_8
+    - control_markers_9
+  Normal-PAAD:
+    - control_markers_0
+    - control_markers_10
+    - control_markers_11
+    - control_markers_12
+    - control_markers_13
+    - control_markers_14
+    - control_markers_15
+    - control_markers_16
+    - control_markers_17
+    - control_markers_18
+    - control_markers_1
+    - control_markers_2
+    - control_markers_3
+    - control_markers_4
+    - control_markers_5
+    - control_markers_6
+    - control_markers_7
+    - control_markers_8
+    - control_markers_9
+  Normal-PRAD:
+    - control_markers_0
+    - control_markers_10
+    - control_markers_11
+    - control_markers_12
+    - control_markers_13
+    - control_markers_14
+    - control_markers_15
+    - control_markers_16
+    - control_markers_17
+    - control_markers_18
+    - control_markers_19
+    - control_markers_1
+    - control_markers_20
+    - control_markers_21
+    - control_markers_2
+    - control_markers_3
+    - control_markers_4
+    - control_markers_5
+    - control_markers_6
+    - control_markers_7
+    - control_markers_8
+    - control_markers_9

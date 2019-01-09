@@ -5,9 +5,9 @@ nav:
   - Overview: index.md
   - Get Started: get_started.md
   - Installation: installation.md
-  - Genome and Annotations: genome_and_annotatins.md
-  - Small RNA-seq mapping: small_rna_pipeline.md
-  - Long RNA-seq mapping: long_rna_pipeline.md
+  - Genome and Annotations: genome_and_annotations.md
+  - Small RNA-seq mapping: small_rna_mapping.md
+  - Long RNA-seq mapping: long_rna_mapping.md
   - Matrix processing: matrix_processing.md
   - Feature Selection: feature_selection.md
   - Run on a cluster: cluster_configuration.md

@@ -40,16 +40,6 @@ def get_input_fastq_se(wildcards):
     else:
         return fastq
 
-def auto_gzip_input(template):
-    def get_filename(wildcards):
-        original_names = expand(template, **wildcards)
-        if all(os.path.exists(f) for f in original_names):
-            return original_names
-        gzip_names = expand(template + '.gz', **wildcards)
-        if all(os.path.exists(f) for f in gzip_names):
-            return gzip_names
-    return get_filename
-
 rule cutadapt_se:
     input:
         auto_gzip_input(data_dir + '/fastq/{sample_id}.fastq')
