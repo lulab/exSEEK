@@ -502,11 +502,11 @@ combat <- function(
 ){
     print('start batch removal using combat')
     batch_info <-read.table(batchinfo_path,sep='\t',row.names=1,header=T,check.names = FALSE)
+    if (!(dim(mat)[2]==dim(batch_info)[1]))
+        stop('sample numbers in batch info and expression matrix should be same')
     batchname <-toString(names(batch_info)[batch_column])
-    batch_info=batch_info[names(mat),]
+    batch_info=as.data.frame(batch_info[names(mat),])
     mod <- model.matrix(~ 1, data = batch_info)
-    if (!dim(mat)[2]==dim(batch_info)[1])
-    stop('sample numbers in batch info and expression matrix should be same')
     combat <- ComBat(
         dat = log(mat+0.001),
         batch = factor(batch_info[,batch_column]),
