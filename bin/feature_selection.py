@@ -8,6 +8,41 @@ def command_handler(f):
     command_handlers[f.__name__] = f
     return f
 
+def select_samples_by_class(matrix, sample_classes, positive_class=None, negative_class=None):
+    '''
+    Args:
+        matrix: 
+            pandas DataFrame: [n_samples, n_features]
+        sample_classes: 
+            pandas Series. Index are sample ids. Values are sample classes.
+    Returns:
+        X: pandas DataFrame
+        y: ndarray
+    '''
+    if (positive_class is not None) and (negative_class is not None):
+        positive_class = positive_class.split(',')
+        negative_class = negative_class.split(',')
+    else:
+        unique_classes = np.unique(sample_classes.values)
+        if len(unique_classes) != 2:
+            raise ValueError('expect 2 classes but {} classes found'.format(len(unique_classes)))
+        positive_class, negative_class = unique_classes
+    positive_class = np.atleast_1d(positive_class)
+    negative_class = np.atleast_1d(negative_class)
+
+    logger.info('positive class: {}, negative class: {}'.format(positive_class, negative_class))
+    X_pos = matrix.loc[sample_classes[sample_classes.isin(positive_class)].index.values]
+    X_neg = matrix.loc[sample_classes[sample_classes.isin(negative_class)].index.values]
+    logger.info('number of positive samples: {}, negative samples: {}, class ratio: {}'.format(
+        X_pos.shape[0], X_neg.shape[0], float(X_pos.shape[0])/X_neg.shape[0]))
+    X = pd.concat([X_pos, X_neg], axis=0)
+    y = np.zeros(X.shape[0], dtype=np.int32)
+    y[X_pos.shape[0]:] = 1
+    del X_pos
+    del X_neg
+
+    return X, y
+
 @command_handler
 def preprocess_features(args):
     import numpy as np
@@ -348,6 +383,40 @@ def calculate_clustering_score(args):
     with open_file_or_stdout(args.output_file) as fout:
         fout.write('{}'.format(uca_score(X, y)))
 
+@command_handler
+def evaluate_single_features(args):
+    import numpy as np
+    import pandas as pd
+    from evaluation import uca_score
+    from ioutils import open_file_or_stdout
+    from tqdm import tqdm
+    from sklearn.metrics import roc_auc_score
+
+    logger.info('read feature matrix: ' + args.matrix)
+    matrix = pd.read_table(args.matrix, index_col=0, sep='\t')
+    logger.info('read sample classes: ' + args.sample_classes)
+    sample_classes = pd.read_table(args.sample_classes, index_col=0, sep='\t').iloc[:, 0]
+    if args.transpose:
+        logger.info('transpose feature matrix')
+        matrix = matrix.T
+    logger.info('select positive and negative samples')
+    X, y = select_samples_by_class(matrix, sample_classes, 
+        positive_class=args.positive_class, 
+        negative_class=args.negative_class)
+    n_samples, n_features = X.shape
+    logger.info('evaluate single features')
+    scorers = [('roc_auc', roc_auc_score)]
+    scores = np.zeros((n_features, len(scorers)))
+    for i in tqdm(range(n_features), unit='feature'):
+        for j in range(len(scorers)):
+            scores[i, j] = scorers[j][1](y, X.iloc[:, i])
+            if scores[j][0] == 'roc_auc':
+                # if AUC < 0.5, use 1 - AUC
+                scores[i, j] = max(scores[i, j], 1 - scores[i, j])
+    scores = pd.DataFrame(scores, index=X.columns.values, columns=[name for name, scorer in scorers])
+    scores.index.name = 'sample_id'
+    logger.info('write scores to file: ' + args.output_file)
+    scores.to_csv(args.output_file, sep='\t', index=True, header=True, na_rep='NA')
 
 if __name__ == '__main__':
     main_parser = argparse.ArgumentParser(description='Feature selection module')
@@ -428,11 +497,28 @@ if __name__ == '__main__':
     parser.add_argument('--use-log', action='store_true',
         help='apply log2 to feature matrix')
 
+    parser = subparsers.add_parser('evaluate_single_features')
+    parser.add_argument('--matrix', '-i', type=str, required=True)
+    parser.add_argument('--sample-classes', type=str, required=True,
+        help='input file containing sample classes with 2 columns: sample_id, sample_class')
+    parser.add_argument('--positive-class', type=str,
+        help='comma-separated list of sample classes to use as positive class')
+    parser.add_argument('--negative-class', type=str,
+        help='comma-separates list of sample classes to use as negative class')
+    parser.add_argument('--transpose', action='store_true', default=False,
+        help='transpose the feature matrix')
+    parser.add_argument('--output-file', '-o', type=str, required=True,
+        help='output file for the score')
+
     args = main_parser.parse_args()
     if args.command is None:
         print('Errror: missing command', file=sys.stdout)
         main_parser.print_help()
         sys.exit(1)
     logger = logging.getLogger('feature_selection.' + args.command)
+
+    # global imports
+    import numpy as np
+    import pandas as pd
 
     command_handlers.get(args.command)(args)
