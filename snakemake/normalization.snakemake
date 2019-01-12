@@ -39,7 +39,7 @@ rule filter_step:
     threads:
         config['threads']
     wildcard_constraints:
-        count_method='(featurecounts)|(htseq)|(domains_combined)|(transcript)'
+        count_method='(featurecounts)|(htseq)|(domains_combined)|(domains_long)|(transcript)'
     params:
         filtercount=config['filtercount'],
         filtersample=config['filtersample'],
@@ -86,7 +86,7 @@ rule imputation_step:
         imputecluster=5
     wildcard_constraints:
         imputation_method='(scimpute_count)|(viper_count)|(null)',
-        count_method='(featurecounts)|(htseq)|(domains_combined)|(transcript)'
+        count_method='(featurecounts)|(htseq)|(domains_combined)|(transcript)|(domains_combined)|(domains_long)'
     shell:
         '''Rscript {bin_dir}/matrix-process.R -s imputation \
         -i {input.matrix} \
@@ -119,7 +119,7 @@ rule normalization_step:
         config['threads']
     wildcard_constraints:
         normalization_method='(SCnorm)|(TMM)|(RLE)|(CPM)|(CPM_top)|(CPM_rm)|(CPM_refer)|(null)',
-        count_method='(featurecounts)|(htseq)|(domains_combined)|(transcript)'
+        count_method='(featurecounts)|(htseq)|(domains_combined)|(transcript)|(domains_combined)|(domains_long)'
     params:
         filtercount=5,
         filtersample=10,
