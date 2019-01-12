@@ -5,8 +5,6 @@ import os
 
 def get_all_inputs(wildcards):
     available_inputs = dict(
-        prinseq=expand('{output_dir}/prinseq/{sample_id}.html',
-            output_dir=output_dir, sample_id=sample_ids),
         clean_reads=expand('{output_dir}/unmapped/{sample_id}/clean_{pair_index}.fa.gz',
             output_dir=output_dir, sample_id=sample_ids, pair_index=[1, 2]),
         fastqc=expand('{output_dir}/summary/{fastqc_step}.html',
@@ -14,9 +12,6 @@ def get_all_inputs(wildcards):
         summarize_cutadapt=expand('{output_dir}/summary/cutadapt.html',
             output_dir=output_dir)
     )
-    del available_inputs['prinseq']
-    #del available_inputs['clean_reads']
-    #enabled_inputs = ['clean_reads']
     enabled_inputs = list(available_inputs.keys())
     inputs = []
     for key, l in available_inputs.items():
