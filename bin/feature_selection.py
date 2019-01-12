@@ -410,11 +410,10 @@ def evaluate_single_features(args):
     for i in tqdm(range(n_features), unit='feature'):
         for j in range(len(scorers)):
             scores[i, j] = scorers[j][1](y, X.iloc[:, i])
-            if scores[j][0] == 'roc_auc':
-                # if AUC < 0.5, use 1 - AUC
-                scores[i, j] = max(scores[i, j], 1 - scores[i, j])
+            # if AUC < 0.5, use 1 - AUC
+            scores[i, j] = max(scores[i, j], 1 - scores[i, j])
     scores = pd.DataFrame(scores, index=X.columns.values, columns=[name for name, scorer in scorers])
-    scores.index.name = 'sample_id'
+    scores.index.name = 'feature'
     logger.info('write scores to file: ' + args.output_file)
     scores.to_csv(args.output_file, sep='\t', index=True, header=True, na_rep='NA')
 
