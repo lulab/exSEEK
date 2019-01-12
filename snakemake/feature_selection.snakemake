@@ -7,18 +7,32 @@ with open(data_dir + '/compare_groups.yaml', 'r') as f:
 
 count_method = config['count_method']
 # read selected matrix preprocessing methods
-with open(output_dir + '/select_preprocess_method/uca_score/{count_method}/selected_methods.txt'.format(**config), 'r') as f:
-    preprocess_methods = f.read().split()
+if not isinstance(config['count_method'], list):
+    count_methods = [config['count_method']]
+else:
+    count_methods = config['count_method']
 
-
-rule all:
-    input:
-        feature_selection=expand('{output_dir}/feature_selection/{preprocess_method}.{count_method}/{compare_group}/{classifier}.{n_select}.{select_method}',
+def get_all_inputs(wildcards):
+    inputs = []
+    for count_method in count_methods:
+        with open(output_dir + '/select_preprocess_method/uca_score/{count_method}/selected_methods.txt'.format(count_method=count_method), 'r') as f:
+            preprocess_methods = f.read().split()
+        # feature_selection
+        inputs += expand('{output_dir}/feature_selection/{preprocess_method}.{count_method}/{compare_group}/{classifier}.{n_select}.{select_method}',
             output_dir=output_dir, count_method=count_method, preprocess_method=preprocess_methods,
             classifier=config['classifiers'], select_method=config['select_methods'], 
-            compare_group=list(compare_groups.keys()), n_select=config['n_selects']),
-        preprocess_features=expand('{output_dir}/preprosess_features/{preprocess_method}.{count_method}.txt',
+            compare_group=list(compare_groups.keys()), n_select=config['n_selects'])
+        # preprocess_features
+        inputs += expand('{output_dir}/preprosess_features/{preprocess_method}.{count_method}.txt',
             output_dir=output_dir, count_method=count_method, preprocess_method=preprocess_methods)
+        # evaluate single features
+        inputs += expand('{output_dir}/evaluate_single_features/{preprocess_method}.{count_method}/{compare_group}.txt',
+            output_dir=output_dir, count_method=count_method, preprocess_method=preprocess_methods, compare_group=list(compare_groups.keys()))
+    return inputs
+        
+rule all:
+    input:
+        get_all_inputs
 
             
 rule preprocess_features:
@@ -61,4 +75,18 @@ rule select_features:
             -o {output}
         '''
 
-
+rule evaluate_single_features:
+    input:
+        matrix='{output_dir}/preprosess_features/{preprocess_method}.{count_method}.txt',
+        sample_classes=data_dir+ '/sample_classes.txt'
+    output:
+        '{output_dir}/evaluate_single_features/{preprocess_method}.{count_method}/{compare_group}.txt'
+    params:
+        positive_class=lambda wildcards: compare_groups[wildcards.compare_group][1],
+        negative_class=lambda wildcards: compare_groups[wildcards.compare_group][0]
+    shell:
+        '''{bin_dir}/feature_selection.py evaluate_single_features -i {input.matrix} \
+            --sample-classes {input.sample_classes} \
+            --positive-class '{params.positive_class}' --negative-class '{params.negative_class}' \
+            -o {output}
+        '''
