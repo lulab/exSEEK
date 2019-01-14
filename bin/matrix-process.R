@@ -146,7 +146,7 @@ filter_low_rpkm <- function(mat, min_rpkm = 5, min_pct_sample_per_gene = 0.5) {
     mat <- t(t(mat*1e6) / colSums(mat[row_all, , drop = F], na.rm = T))
     
     gene_length <- c()
-    for(i in seq_len(length(rownames(original_mx)))){
+    for(i in seq_len(length(rownames(mat)))){
             gene_length[i] <- as.integer(unlist(strsplit(rownames(mat)[i],"|",fixed=T))[7])
                              -as.integer(unlist(strsplit(rownames(mat)[i],"|",fixed=T))[6])
     }
