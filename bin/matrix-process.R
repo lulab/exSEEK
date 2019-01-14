@@ -130,6 +130,34 @@ filter_low <- function(mat, min_count = 5, min_sample_per_gene = 0.5) {
     mat[keeped_row, ]
 }
 
+filter_low_cpm <- function(mat, min_cpm = 5, min_pct_sample_per_gene = 0.5) {
+    print(paste('start filtering lowly expressed gene:','CPM threshold',min_cpm,'sample threshold',min_pct_sample_per_gene,sep=' '))
+    row_all <- nrow(mat) %>% seq_len()
+    mat <- t(t(mat*1e6) / colSums(mat[row_all, , drop = F], na.rm = T))
+    min_sample_per_gene <- ceiling(dim(mat)[2]*min_pct_sample_per_gene)
+    low_per_row <- rowSums(mat > min_cpm)
+    keeped_row <- low_per_row >= min_sample_per_gene
+    mat[keeped_row, ]
+}
+
+filter_low_rpkm <- function(mat, min_rpkm = 5, min_pct_sample_per_gene = 0.5) {
+    print(paste('start filtering lowly expressed gene:','RPKM threshold',min_rpkm,'sample threshold',min_pct_sample_per_gene,sep=' '))
+    row_all <- nrow(mat) %>% seq_len()
+    mat <- t(t(mat*1e6) / colSums(mat[row_all, , drop = F], na.rm = T))
+    
+    gene_length <- c()
+    for(i in seq_len(length(rownames(original_mx)))){
+            gene_length[i] <- as.integer(unlist(strsplit(rownames(mat)[i],"|",fixed=T))[7])
+                             -as.integer(unlist(strsplit(rownames(mat)[i],"|",fixed=T))[6])
+    }
+    mat <- mat*1000/gene_length
+    
+    min_sample_per_gene <- ceiling(dim(mat)[2]*min_pct_sample_per_gene)
+    low_per_row <- rowSums(mat > min_rpkm)
+    keeped_row <- low_per_row >= min_sample_per_gene
+    mat[keeped_row, ]
+}
+
 #' @imputation
 #'
 #' @param mat integer matrix.
