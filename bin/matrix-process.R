@@ -13,9 +13,13 @@ parser$add_argument("--imputeout", required=TRUE, help="output imputation path")
 parser$add_argument("--normalizeout", required=TRUE, help="output normalization file")
 parser$add_argument("--batchremoveout", required=TRUE, help="output batchremoved file")
 
-parser$add_argument("--filtercount", type="integer", default=5,
-    help="filter by counts of a gene [default = %(default)s]",
+parser$add_argument( "--filtermethod", type="character", default="filtercount",
+                    metavar="STRING",
+                    help="the filter algorithm to use [default = %(default)s], and return count matrix")
+parser$add_argument("--filterexpv", type="double", default=5,
+    help="filter by expression value of a gene [default = %(default)s]",
     metavar="NUMBER")
+
 parser$add_argument("--filtersample", type="double", default=0.2,
     help="filter by counts of sample above certain counts of a gene [default = %(default)s]",
     metavar="NUMBER")
@@ -133,9 +137,9 @@ filter_low <- function(mat, min_count = 5, min_sample_per_gene = 0.5) {
 filter_low_cpm <- function(mat, min_cpm = 5, min_pct_sample_per_gene = 0.5) {
     print(paste('start filtering lowly expressed gene:','CPM threshold',min_cpm,'sample threshold',min_pct_sample_per_gene,sep=' '))
     row_all <- nrow(mat) %>% seq_len()
-    mat <- t(t(mat*1e6) / colSums(mat[row_all, , drop = F], na.rm = T))
-    min_sample_per_gene <- ceiling(dim(mat)[2]*min_pct_sample_per_gene)
-    low_per_row <- rowSums(mat > min_cpm)
+    mat_cpm <- t(t(mat*1e6) / colSums(mat[row_all, , drop = F], na.rm = T))
+    min_sample_per_gene <- ceiling(dim(mat_cpm)[2]*min_pct_sample_per_gene)
+    low_per_row <- rowSums(mat_cpm > min_cpm)
     keeped_row <- low_per_row >= min_sample_per_gene
     mat[keeped_row, ]
 }
@@ -143,17 +147,17 @@ filter_low_cpm <- function(mat, min_cpm = 5, min_pct_sample_per_gene = 0.5) {
 filter_low_rpkm <- function(mat, min_rpkm = 5, min_pct_sample_per_gene = 0.5) {
     print(paste('start filtering lowly expressed gene:','RPKM threshold',min_rpkm,'sample threshold',min_pct_sample_per_gene,sep=' '))
     row_all <- nrow(mat) %>% seq_len()
-    mat <- t(t(mat*1e6) / colSums(mat[row_all, , drop = F], na.rm = T))
+    mat_cpm <- t(t(mat*1e6) / colSums(mat[row_all, , drop = F], na.rm = T))
     
     gene_length <- c()
-    for(i in seq_len(length(rownames(mat)))){
-            gene_length[i] <- as.integer(unlist(strsplit(rownames(mat)[i],"|",fixed=T))[7])
-                             -as.integer(unlist(strsplit(rownames(mat)[i],"|",fixed=T))[6])
+    for(i in seq_len(length(rownames(mat_cpm)))){
+            gene_length[i] <- as.integer(unlist(strsplit(rownames(mat_cpm)[i],"|",fixed=T))[7])
+                             -as.integer(unlist(strsplit(rownames(mat_cpm)[i],"|",fixed=T))[6])
     }
-    mat <- mat*1000/gene_length
+    mat_rpkm <- mat_cpm*1000/gene_length
     
-    min_sample_per_gene <- ceiling(dim(mat)[2]*min_pct_sample_per_gene)
-    low_per_row <- rowSums(mat > min_rpkm)
+    min_sample_per_gene <- ceiling(dim(mat_rpkm)[2]*min_pct_sample_per_gene)
+    low_per_row <- rowSums(mat_rpkm > min_rpkm)
     keeped_row <- low_per_row >= min_sample_per_gene
     mat[keeped_row, ]
 }
@@ -780,7 +784,13 @@ plot_refer_violin <- function(mat, refer_gene_id, refer_gene_name = refer_gene_i
 # filter
 if (args$step =='filter'){
 mat_raw <- read.table(args$input,sep='\t',header=TRUE,  check.names=FALSE, row.names=1, stringsAsFactors=FALSE)
-mat_filter <-filter_low(mat_raw,args$filtercount, args$filtersample)
+if (args$filtermethod=='filtercout'){
+mat_filter <-filter_low(mat_raw,args$filterexpv, args$filtersample)
+} else if(args$filtermethod=='filtercpm'){
+mat_filter <-filter_low_cpm(mat_raw,args$filterexpv, args$filtersample)
+} else if(args$filtermethod=='filterrpkm'){
+mat_filter <-filter_low_rpkm(mat_raw,args$filterexpv, args$filtersample)
+}
 write.table(mat_filter, paste(args$filterout, 'filter','.',splitname,sep=''),sep='\t')
 } else if(args$step =='imputation'){
 # imputation
