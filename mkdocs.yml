@@ -1,6 +1,9 @@
 docs_dir: docs
 site_name: exseek
 theme: readthedocs
+site_url: https://exseek.ncrnalab.org
+repo_url: https://github.com/lulab/exSeek
+repo_name: GitHub
 nav:
   - Overview: index.md
   - Get Started: get_started.md
