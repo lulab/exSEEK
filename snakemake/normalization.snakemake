@@ -41,7 +41,8 @@ rule filter_step:
     wildcard_constraints:
         count_method='(featurecounts)|(htseq)|(domains_combined)|(domains_long)|(transcript)'
     params:
-        filtercount=config['filtercount'],
+        filtermethod='filtercpm' if config['small_rna'] else 'filterrpkm',
+        filterexpv=config['filterexpv'],
         filtersample=config['filtersample'],
         cvthreshold=0.5,
         removetype='miRNA,piRNA',
@@ -55,8 +56,9 @@ rule filter_step:
         --imputeout '{wildcards.output_dir}/matrix_processing/' \
         --normalizeout '{wildcards.output_dir}/matrix_processing/' \
         --batchremoveout '{wildcards.output_dir}/matrix_processing/' \
+        --filtermethod {params.filtermethod} \
+        --filterexpv {params.filterexpv} \
         --imputemethod null \
-        --filtercount {params.filtercount} \
         --filtersample {params.filtersample} \
         --imputecluster {params.imputecluster} \
         -p {threads} \
@@ -78,8 +80,6 @@ rule imputation_step:
     threads:
         config['threads']
     params:
-        filtercount=5,
-        filtersample=10,
         cvthreshold=0.5,
         removetype='miRNA,piRNA',
         normtopk=20,
@@ -96,8 +96,6 @@ rule imputation_step:
         --normalizeout '{wildcards.output_dir}/matrix_processing/' \
         --batchremoveout '{wildcards.output_dir}/matrix_processing/' \
         --imputemethod {wildcards.imputation_method} \
-        --filtercount {params.filtercount} \
-        --filtersample {params.filtersample} \
         --imputecluster {params.imputecluster} \
         -p {threads} \
         --normmethod null \
@@ -121,8 +119,6 @@ rule normalization_step:
         normalization_method='(SCnorm)|(TMM)|(RLE)|(CPM)|(CPM_top)|(CPM_rm)|(CPM_refer)|(null)',
         count_method='(featurecounts)|(htseq)|(domains_combined)|(transcript)|(domains_combined)|(domains_long)'
     params:
-        filtercount=5,
-        filtersample=10,
         cvthreshold=0.5,
         removetype='miRNA,piRNA',
         normtopk=20,
@@ -136,8 +132,6 @@ rule normalization_step:
         --normalizeout '{wildcards.output_dir}/matrix_processing/' \
         --batchremoveout '{wildcards.output_dir}/matrix_processing/' \
         --imputemethod {wildcards.imputation_method} \
-        --filtercount {params.filtercount} \
-        --filtersample {params.filtersample} \
         --imputecluster {params.imputecluster} \
         -p {threads} \
         --normmethod {wildcards.normalization_method} \
@@ -159,8 +153,6 @@ rule batch_removal_step_Combat:
     threads:
         config['threads']
     params:
-        filtercount=5,
-        filtersample=10,
         cvthreshold=0.5,
         removetype='miRNA,piRNA',
         normtopk=20,
@@ -177,8 +169,6 @@ rule batch_removal_step_Combat:
         --normalizeout '{wildcards.output_dir}/matrix_processing/' \
         --batchremoveout '{wildcards.output_dir}/matrix_processing/' \
         --imputemethod {wildcards.imputation_method} \
-        --filtercount {params.filtercount} \
-        --filtersample {params.filtersample} \
         --imputecluster {params.imputecluster} \
         -p {threads} \
         --normmethod {wildcards.normalization_method} \
@@ -193,15 +183,12 @@ rule batch_removal_step_RUV:
     input:
         normalization_matrix='{output_dir}/matrix_processing/filter.{imputation_method}.Norm_{normalization_method}.{count_method}.txt',
         matrix='{output_dir}/count_matrix/{count_method}.txt',
-        sample_classes=data_dir + '/sample_classes.txt',
-        batch_info=data_dir + '/batch_info.txt'
+        sample_classes=data_dir + '/sample_classes.txt'
     output:
         '{output_dir}/matrix_processing/filter.{imputation_method}.Norm_{normalization_method}.Batch_{batch_removal_method}.{count_method}.txt'
     threads:
         config['threads']
     params:
-        filtercount=5,
-        filtersample=10,
         cvthreshold=0.5,
         removetype='miRNA,piRNA',
         normtopk=20,
@@ -212,14 +199,11 @@ rule batch_removal_step_RUV:
         '''Rscript {bin_dir}/matrix-process.R -s batch_removal \
         -i {input.matrix} \
         -c {input.sample_classes} \
-        -b {input.batch_info} \
         --filterout '{wildcards.output_dir}/matrix_processing/' \
         --imputeout '{wildcards.output_dir}/matrix_processing/' \
         --normalizeout '{wildcards.output_dir}/matrix_processing/' \
         --batchremoveout '{wildcards.output_dir}/matrix_processing/' \
         --imputemethod {wildcards.imputation_method} \
-        --filtercount {params.filtercount} \
-        --filtersample {params.filtersample} \
         --imputecluster {params.imputecluster} \
         -p {threads} \
         --normmethod {wildcards.normalization_method} \
@@ -239,8 +223,6 @@ rule batch_removal_step_null:
     threads:
         config['threads']
     params:
-        filtercount=5,
-        filtersample=10,
         cvthreshold=0.5,
         removetype='miRNA,piRNA',
         normtopk=20,
@@ -256,8 +238,6 @@ rule batch_removal_step_null:
         --normalizeout '{wildcards.output_dir}/matrix_processing/' \
         --batchremoveout '{wildcards.output_dir}/matrix_processing/' \
         --imputemethod {wildcards.imputation_method} \
-        --filtercount {params.filtercount} \
-        --filtersample {params.filtersample} \
         --imputecluster {params.imputecluster} \
         -p {threads} \
         --normmethod {wildcards.normalization_method} \
