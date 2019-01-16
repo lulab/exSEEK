@@ -39,7 +39,7 @@ def extract_gene(args):
     genes = {}
     logger.info('read GTF file: ' + args.input_file)
     for c, attrs, line in read_gtf(args.input_file):
-        if c[2] != feature:
+        if (feature is not None) and (c[2] != feature):
             continue
         gene_id = attrs.get('gene_id')
         gene = genes.get(gene_id)
@@ -534,6 +534,21 @@ def genomecov(args):
         fout.create_dataset(sq['SN'], data=data, compression='gzip')
     fout.close()
 
+@command_handler
+def calc_rpkm(args):
+    import pandas as pd
+    import numpy as np
+    from ioutils import open_file_or_stdin, open_file_or_stdout
+
+    matrix = pd.read_table(open_file_or_stdin(args.input_file), index_col=0, sep='\t')
+    feature_info = matrix.index.to_series().str.split('|', expand=True)
+    feature_info.columns = ['gene_id', 'gene_type', 'gene_name', 'feature_id', 'transcript_id', 'start', 'end']
+    feature_info['start'] = feature_info['start'].astype('int')
+    feature_info['end'] = feature_info['end'].astype('int')
+    feature_info['length'] = feature_info['end'] - feature_info['start']
+    matrix = 1000.0*matrix.div(feature_info['length'], axis=0)
+    matrix.to_csv(open_file_or_stdout(args.output_file), index=True, header=True, sep='\t', na_rep='NA')
+
 if __name__ == '__main__':
     main_parser = argparse.ArgumentParser(description='Preprocessing module')
     subparsers = main_parser.add_subparsers(dest='command')
@@ -580,7 +595,7 @@ if __name__ == '__main__':
         help='input GTF file')
     parser.add_argument('--output-file', '-o', type=str, default='-',
         help='output BED file')
-    parser.add_argument('--feature', type=str, default='exon',
+    parser.add_argument('--feature', type=str,
         help='feature to use in input GTF file (Column 3)')
     
     parser = subparsers.add_parser('extract_circrna_junction',
@@ -669,6 +684,12 @@ if __name__ == '__main__':
         help='input BAM/SAM file')
     parser.add_argument('--output-file', '-o', type=str, required=True,
         help='output HDF5 file')
+    
+    parser = subparsers.add_parser('calc_rpkm')
+    parser.add_argument('--input-file', '-i', type=str,  default='-',
+        help='input expression (RPM) matrix file')
+    parser.add_argument('--output-file', '-o', type=str, default='-',
+        help='output expression (RPKM) matrix file')
     
     args = main_parser.parse_args()
     if args.command is None:
