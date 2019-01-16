@@ -19,21 +19,66 @@ resample_method: bootstrap
 # Feature selection methods
 select_methods: [robust]
 
+zero_fraction_filter: true
+zero_fraction_filter_params:
+  threshold: 0.8
+log_transform: true
+log_transform_params:
+  base: 2
+rpm_filter: false
+rpm_filter_params:
+  threshold: 10
+fold_change_filter: true
+fold_change_filter_params:
+  direction: any
+fold_change_filter_direction: [any, up, down]
+scaler: robust
+scaler_params:
+  robust:
+    with_centering: true
+selector: robust
+selector_params:
+  robust:
+    cv:
+      splitter: stratified_shuffle_split
+      n_splits: 10
+      test_size: 0.2
+  rfe:
+    step: 0.2
+n_features_to_select: [10]
+classifier: [logistic_regression, linear_svm, decision_tree, random_forest]
 # Parameters for classifiers
 classifier_params:
   logistic_regression:
     penalty: l2
   random_forest:
-    n_estimators: 10
-# Parameters for grid search for classifier parameters
-grid_search:
-  logistic_regression:
-    C: [1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1, 1e2, 1e3, 1e4, 1e5]
+    n_estimators: 50
+    max_features: sqrt
   linear_svm:
-    C: [1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1, 1e2, 1e3, 1e4, 1e5]
-  random_forest:
-    n_estimators: [25, 50, 75]
-    max_depth: [3, 4, 5, 6, 7, 8]
+    dual: True
+cv_params:
+  splitter: stratified_shuffle_split
+  n_splits: 50
+  test_size: 0.2
+sample_weight: auto
+
+# Parameters for grid search for classifier parameters
+grid_search: true
+grid_search_params:
+  param_grid:
+    logistic_regression:
+      C: [0.00001, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000, 10000, 100000]
+    linear_svm:
+      C: [0.00001, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000, 10000, 100000]
+    random_forest:
+      n_estimators: [10, 20, 30]
+      max_depth: [3, 4, 5]
+    decision_tree:
+      max_depth: [2, 3, 4, 5, 6, 7, 8]
+  cv:
+    splitter: stratified_kfold
+    n_splits: 5
+
 # Splitter for cross-validation
 cv_splitter: stratified_shuffle_split
 # Number of cross-validation folds for grid search
@@ -66,6 +111,10 @@ cross_validation_splits: 50
 count_method: domains_combined
 # Define low expression value as read counts below this value
 filtercount: 10
+# Threshold for filtering low expression features
+filterexpv: 10
+# Quantification method for low expression filter
+filtermethod: filterrpkm
 # Keep features with high expression in fraction of samples above this value
 filtersample: 0.2
 # Imputation methods to try (set to "null" to skip imputation)
@@ -87,6 +136,9 @@ temp_dir: "tmp"
 tools_dir: "tools"
 # Directory for exSeek scripts
 bin_dir: "bin"
+
+# Input files are clean reads
+input_clean_reads: false
 
 # Number of threads for uncompression and compression
 threads_compress: 1
