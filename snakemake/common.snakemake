@@ -56,12 +56,13 @@ def get_preprocess_methods():
 
 def auto_gzip_input(template):
     def get_filename(wildcards):
-        original_names = expand(template, **wildcards)
-        if all(os.path.exists(f) for f in original_names):
-            return original_names
         gzip_names = expand(template + '.gz', **wildcards)
         if all(os.path.exists(f) for f in gzip_names):
             return gzip_names
+        original_names = expand(template, **wildcards)
+        #if all(os.path.exists(f) for f in original_names):
+        return original_names
+        
     return get_filename
 
 def parse_fastqc_data(fp):
