@@ -13,11 +13,14 @@ exseek.py feature_selection -d ${dataset}
 ### Outuput directory
 
 Feature selection results using one combination of parameters are saved in a separate directory:
-`${output_dir}/cross_validation/${preprocess_method}.${count_method}/${compare_group}/${classifier}.${n_select}.${selector}.${fold_change_filter_direction}`
+```
+${output_dir}/cross_validation/${preprocess_method}.${count_method}/${compare_group}/${classifier}.${n_select}.${selector}.${fold_change_filter_direction}
+```
 
 **Variables in file patterns**
 
 | Variable | Descrpition |
+| --------- | ----------- |
 | `output_dir` | Output directory for the dataset, e.g. `output/dataset` |
 | `preprocess_method` | Combination of matrix processing methods |
 | `count_method` | Type of feature counts, e.g. `domains_combined`, `domains_long`, `transcript`, `featurecounts` |
@@ -32,6 +35,7 @@ Feature selection results using one combination of parameters are saved in a sep
 | File name pattern | Descrpition |
 | --------- | ----------- |
 | `features.txt` | Selected features. Plain text with one column: feature names |
+| `feature_importances.txt` | Plain text with two columns: feature name, feature importance |
 | `samples.txt` | Sample IDs in input matrix selected for feature selection |
 | `classes.txt` | Sample class labels selected for feature selection |
 | `final_model.pkl` | Final model fitted on all samples in Python pickle format |
