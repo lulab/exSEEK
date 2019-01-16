@@ -12,67 +12,6 @@ def command_handler(f):
     command_handlers[f.__name__] = f
     return f
 
-
-def parse_params(s):
-    if s:
-        params = s
-        try:
-            params = json.loads(s)
-        except json.JSONDecodeError as e:
-            pass
-        finally:
-            return params
-    else:
-        return {}
-
-def make_estimator(
-    feature_names=None,
-    zero_fraction_filter=None,
-    fold_change_filter=None,
-    rpkm_filter=None,
-    log_transform=None,
-    scaler=None,
-    scaler_params=None,
-    selector=None,
-    selector_params=None,
-    classifier=None,
-    classifier_params=None):
-    from sklearn.pipeline import Pipeline
-    import numpy as np
-    from estimators import get_splitter, get_classifier, get_selector, get_scaler
-
-    steps = []
-    if zero_fraction_filter is not None:
-        steps.append(('zero_fraction_filter', get_selector('zero_fraction_filter', 
-            **parse_params(zero_fraction_filter))))
-    if rpkm_filter != 'none':
-        if feature_names is None:
-            raise ValueError('feature_names is required for rpkm_filter')
-        gene_lengths = get_gene_lengths_from_feature_names(feature_names)
-        step = get_selector('rpkm_filter', **parse_params(rpkm_filter))
-        step.set_gene_lengths(gene_lengths)
-        steps.append(('rpkm_filter', step))
-    if fold_change_filter != 'none':
-        steps.append(('fold_change_filter', get_selector(
-            'fold_change_filter', **parse_params(fold_change_filter))))
-    if log_transform != 'none':
-        steps.append(('log_transform', get_scaler(
-            'log_transform', **parse_params(log_transform))))
-    if scaler:
-        steps.append(('scaler', get_scaler(scaler, **parse_params(scaler))))
-    if selector:
-        if selector in ('robust', 'rfe', 'rfe_cv'):
-            estimator = get_classifier(classifier, **parse_params(classifier_params))
-        else:
-            estimator = None
-        steps.append(('selector', get_selector(
-            selector, estimator=estimator, **parse_params(selector_params))))
-    steps.append(('classifier', get_classifier(
-        classifier, **parse_params(classifier_params))))
-    
-    pipeline = Pipeline(steps)
-    return pipeline
-
 def read_data_matrix(matrix, sample_classes, transpose=False, positive_class=None, negative_class=None):
     # read data matrix
     logger.info('read data matrix: ' + matrix)
@@ -119,46 +58,107 @@ def read_data_matrix(matrix, sample_classes, transpose=False, positive_class=Non
 
     return X, y, sample_ids, feature_names
 
+def search_params_in_args(args, prefix):
+    params = {}
+    for key, val in args.items():
+        if key.startswith(prefix) and (val is not None):
+            params[key[len(prefix):]] = val
+    return params
+
 @command_handler
 def cross_validation(args):
-    from estimators2 import search_dict, CollectMetrics, CollectPredictions, FeatureSelectionMatrix,\
-        CombinedEstimator, get_features_from_pipeline
+    from estimators2 import search_dict, CollectMetrics, CollectPredictions, CollectTrainIndex, FeatureSelectionMatrix,\
+        CombinedEstimator, get_features_from_pipeline, parse_params
     from estimators2 import cross_validation as _cross_validation
     import pandas as pd
     import numpy as np
+    import h5py
+    import pickle
 
-    logger.info('parameters: {}'.format(vars(args)))
-    # read data matrix
     X, y, sample_ids, feature_names = read_data_matrix(args.matrix, args.sample_classes,
         **search_dict(vars(args), ('transpose', 'positive_class', 'negative_class')))
+    if X.shape[0] < 20:
+        raise ValueError('too few samples for machine learning')
+    if not os.path.isdir(args.output_dir):
+        logger.info('create output directory: ' + args.output_dir)
+        os.makedirs(args.output_dir)
+    logger.info('save class labels to: ' + os.path.join(args.output_dir, 'classes.txt'))
+    pd.Series(y).to_csv(os.path.join(args.output_dir, 'classes.txt'), header=False, index=False)
+    logger.info('save sample ids to: ' + os.path.join(args.output_dir, 'samples.txt'))
+    pd.Series(sample_ids).to_csv(os.path.join(args.output_dir, 'samples.txt'), header=False, index=False)
     
-    #estimator = make_estimator(feature_names,
-    #    **search_dict(vars(args), ('zero_fraction_filter', 'rpkm_filter', 'fold_change_filter',
-    #    'log_transform', 'scaler', 'scaler_params',
-    #    'selector', 'selector_params', 'classifier', 'classifier_params')))
-    estimator = CombinedEstimator(feature_names,
-        **search_dict(vars(args), ('zero_fraction_filter', 'rpkm_filter', 'fold_change_filter',
-        'log_transform', 'scaler', 'scaler_params',
-        'selector', 'selector_params', 'classifier', 'classifier_params',
-        'grid_search', 'grid_search_param_grid', 'grid_search_cv_params', 'grid_search_scoring')))
-    
-    #for name in estimator.named_steps:
-    #    logger.info('step: {}'.format(name))
+    argdict = vars(args)
+    params = search_dict(argdict, (
+        'zero_fraction_filter', 'zero_fraction_filter_params',
+        'rpm_filter', 'rpm_filter_params',
+        'rpkm_filter', 'rpkm_filter_params',
+        'fold_change_filter', 'fold_change_filter_params',
+        'log_transform','log_transform_params',
+        'scaler', 'scaler_params',
+        'selector', 'selector_params', 'n_features_to_select',
+        'classifier', 'classifier_params',
+        'grid_search', 'grid_search_params'
+    ))
+
+    for key in ('rpkm_filter_params', 'rpm_filter_params', 'fold_change_filter_params',
+        'zero_fraction_filter_params', 'log_transform_params',
+        'scaler_params', 'classifier_params', 'selector_params', 'grid_search_params'):
+        params[key] = parse_params(argdict[key])
+
+    logger.info('build combined estimator')
+    estimator = CombinedEstimator(**params)
 
     logger.info('start cross-validation')
-    cv_callbacks = [CollectMetrics(), CollectPredictions(), FeatureSelectionMatrix()]
+    collect_metrics = CollectMetrics()
+    collect_predictions = CollectPredictions()
+    collect_train_index = CollectTrainIndex()
+    cv_callbacks = [collect_metrics, collect_predictions, collect_train_index]
+    if args.selector == 'robust':
+        feature_selection_matrix = FeatureSelectionMatrix()
+        cv_callbacks.append(feature_selection_matrix)
     cv_params = parse_params(args.cv_params)
-    _cross_validation(estimator, X, y, params=cv_params, callbacks=cv_callbacks)
+    if args.sample_weight is not None:
+        if args.sample_weight == 'auto':
+            sample_weight = 'auto'
+        else:
+            sample_weight = pd.read_table(args.sample_weight, header=None, index_col=0).iloc[:, 0]
+    else:
+        sample_weight = None
+    _cross_validation(estimator, X, y, sample_weight=sample_weight, params=cv_params, callbacks=cv_callbacks)
     logger.info('collect_metrics:')
-    print(cv_callbacks[0].get_metrics())
+    #print(cv_callbacks[0].get_metrics())
     logger.info('fit estimator on full dataset')
     estimator.fit(X, y)
+    logger.info('save final model to: ' + os.path.join(args.output_dir, 'final_model.pkl'))
+    with open(os.path.join(args.output_dir, 'final_model.pkl'), 'wb') as f:
+        pickle.dump(estimator, f)
     logger.info('classifier params: {}'.format(estimator.classifier_.get_params()))
     if args.selector is not None:
         feature_index = estimator.features_
         logger.info('number of selected features: {}'.format(feature_index.shape[0]))
-        logger.info('selected features')
-        print(feature_names[feature_index])
+        logger.info('save features to: ' + os.path.join(args.output_dir, 'features.txt'))
+        pd.Series(feature_names[feature_index]).to_csv(os.path.join(args.output_dir, 'features.txt'), index=False, header=False)
+        logger.info('save feature importances to: ' + os.path.join(args.output_dir, 'feature_importances.txt'))
+        pd.Series(estimator.feature_importances_, index=feature_names[feature_index])\
+            .to_csv(os.path.join(args.output_dir, 'feature_importances.txt'), sep='\t', header=False, index=True)
+        #logger.info('save feature selection matrix to: ' + os.path.join(args.output_dir, 'feature_selection_matrix.txt'))
+        #m = pd.DataFrame(feature_selection_matrix.get_matrix(), columns=feature_names)
+        #m.columns.name = 'feature'
+        #m.T.to_csv(os.path.join(args.output_dir, 'feature_selection_matrix.txt'), sep='\t', header=True, index=False)
+    
+    metrics = collect_metrics.get_metrics()
+    for name in ('train', 'test'):
+        logger.info('save metrics to: ' + os.path.join(args.output_dir, 'metrics.{}.txt'.format(name)))
+        metrics[name].to_csv(os.path.join(args.output_dir, 'metrics.{}.txt'.format(name)), header=True, index=True, na_rep='NA', sep='\t')
+
+    logger.info('save cross-validation details to: ' + os.path.join(args.output_dir, 'cross_validation.h5'))
+    with h5py.File(os.path.join(args.output_dir, 'cross_validation.h5'), 'w') as f:
+        f.create_dataset('labels', data=y)
+        f.create_dataset('predicted_labels', data=collect_predictions.get_pred_labels())
+        f.create_dataset('predictions', data=collect_predictions.get_pred_probs())
+        f.create_dataset('train_index', data=collect_train_index.get_train_index())
+        if args.selector is not None:
+            f.create_dataset('feature_selection', data=feature_selection_matrix.get_matrix())
 
 if __name__ == '__main__':
     main_parser = argparse.ArgumentParser(description='Machine learning module')
@@ -178,18 +178,30 @@ if __name__ == '__main__':
         help='transpose the feature matrix')
 
     g_filter = parser.add_argument_group('filter')
-    g_filter.add_argument('--zero-fraction-filter', type=str, nargs='?', default='none')
-    g_filter.add_argument('--rpkm-filter', type=str, nargs='?', default='none')
-    g_filter.add_argument('--fold-change-filter', type=str, nargs='?', default='none')
+    g_filter.add_argument('--zero-fraction-filter', action='store_true')
+    #g_filter.add_argument('--zero-fraction-filter-threshold', type=float, metavar='NUMBER')
+    g_filter.add_argument('--zero-fraction-filter-params', type=str, metavar='STRING')
+    g_filter.add_argument('--rpkm-filter', action='store_true')
+    #g_filter.add_argument('--rpkm-filter-threshold', type=float, metavar='NUMBER')
+    g_filter.add_argument('--rpkm-filter-params', type=str, metavar='STRING')
+    g_filter.add_argument('--rpm-filter', action='store_true')
+    #g_filter.add_argument('--rpm-filter-threshold', type=float, metavar='NUMBER')
+    g_filter.add_argument('--rpm-filter-params', type=str, metavar='STRING')
+    g_filter.add_argument('--fold-change-filter', action='store_true')
+    #g_filter.add_argument('--fold-change-filter-direction', type=str, default='any', metavar='STRING')
+    g_filter.add_argument('--fold-change-filter-params', type=str, metavar='STRING')
 
     g_scaler = parser.add_argument_group('scaler')
-    g_scaler.add_argument('--log-transform', type=str, nargs='?', default='none')
+    g_scaler.add_argument('--log-transform', action='store_true')
+    #g_scaler.add_argument('--log-transform-base', type=float, metavar='NUMBER')
+    g_scaler.add_argument('--log-transform-params', type=str, metavar='STRING')
     g_scaler.add_argument('--scaler', type=str, metavar='NAME', default='robust')
     g_scaler.add_argument('--scaler-params', type=str, metavar='STRING')
 
     g_select = parser.add_argument_group('feature_selection')
     g_select.add_argument('--selector', type=str, metavar='NAME', default='robust')
     g_select.add_argument('--selector-params', type=str, metavar='STRING')
+    g_select.add_argument('--n-features-to-select', type=int, metavar='INTEGER')
 
     g_classifier = parser.add_argument_group('classifier')
     g_classifier.add_argument('--classifier', type=str, metavar='NAME', default='random_forest')
@@ -198,13 +210,14 @@ if __name__ == '__main__':
     g_cv = parser.add_argument_group('cross_validation')
     g_cv.add_argument('--cv-params', type=str, metavar='STRING', nargs='?')
     g_cv.add_argument('--grid-search', action='store_true')
-    g_cv.add_argument('--grid-search-param-grid', type=str, metavar='STRING')
-    g_cv.add_argument('--grid-search-cv-params', type=str, metavar='STRING')
-    g_cv.add_argument('--grid-search-scoring', type=str, metavar='STRING')
+    g_cv.add_argument('--grid-search-params', type=str, metavar='STRING')
 
     g_misc= parser.add_argument_group('misc')
-    g_misc.add_argument('--compute-sample-weight', action='store_true',
-        help='compute sample weight to balance classes')
+    g_misc.add_argument('--sample-weight', type=str, default='auto',
+        help='''sample weight to balance classes. 
+        Compute from data if set to "auto". 
+        Can be a tab-separated file with two columns (no header): sample_id, weight.
+        No sample weight if set to "none".''')
     
     g_output= parser.add_argument_group('output')
     g_output.add_argument('--output-dir', '-o', type=str, metavar='DIR', 
