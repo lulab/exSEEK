@@ -1,0 +1,40 @@
+options:
+    genome: hg38
+    reference:
+        id: hg38
+        name: hg38
+        fastaURL: genome/hg38/fasta/genome.fa
+        indexURL: genome/hg38/fasta/genome.fa.fai
+        cytobandURL: genome/hg38/igv/cytoBandIdeo.txt
+    search:
+        type: json
+        url: 'locus?genome=$GENOME$&name=$FEATURE$'
+        coords: 0
+        chromosomeField: chromosome
+        startField: start
+        endField: end
+        geneField: gene
+        snpField: snp
+tracks:
+  GENCODE_V27:
+      name: GENCODE_V27
+      type: annotation
+      format: bed
+      url: genome/hg38/bed/gencode.bed
+      indexURL: genome/hg38/bed/gencode.bed.idx
+      displayMode: "EXPANDED"
+      searchable: true
+      visibilityWindow:  300000000
+      height: 100
+      show: true
+  long_RNA_gene:
+      name: long_RNA_gene
+      type: annotation
+      format: bed
+      url: genome/hg38/bed/long_RNA.gene.bed
+      indexURL: genome/hg38/bed/long_RNA.gene.bed.idx
+      displayMode: "EXPANDED"
+      searchable: true
+      visibilityWindow:  300000000
+      height: 100
+      show: true
