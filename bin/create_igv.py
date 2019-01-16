@@ -16,23 +16,51 @@ def color_palette(n_colors):
     palette = [colors[i%len(colors)] for i in range(n_colors)]
     return palette
 
+def read_dict_path(d, path):
+    path = path.strip('/')
+    for v in path.split('/'):
+        d_new = d.get(v)
+        if d_new is not None:
+            d = d_new
+    return d
+
+def write_dict_path(d, path, value):
+    path = path.strip('/')
+    for v in path.split('/'):
+        d_new = d.get(v)
+        if d_new is None:
+            d[v] = {}
+            d_new = d
+    d[v] = value
+    return d
+
 @command_handler
 def generate_config(args):
-    import pandas as pd
+    #import pandas as pd
     import yaml
     from jinja2 import Template, Environment
     from collections import defaultdict, OrderedDict
 
-    sample_classes = pd.read_table(args.sample_classes, sep='\t', index_col=0, dtype='str').iloc[:, 0]
+    unique_classes = set()
+    sample_classes = OrderedDict()
+    samples_by_group = defaultdict(list)
+    with open(args.sample_classes, 'r') as f:
+        f.readline()
+        for line in f:
+            c = line.strip().split('\t')
+            sample_classes[c[0]] = c[1]
+            unique_classes.add(c[1])
+            samples_by_group[c[1]].append(c[0])
+    #sample_classes = pd.read_table(args.sample_classes, sep='\t', index_col=0, dtype='str').iloc[:, 0]
     # set track colors
-    unique_classes = sample_classes.unique()
     config = {}
+    config['options'] = {}
+    logger.info('load reference: ' + args.reference)
     config.update(yaml.load(open(args.reference, 'r')))
     for key in ('reference', 'genome'):
-        if key not in config:
+        if key not in config['options']:
             raise KeyError('key "{}" is not defined in reference file: {}'.format(key, args.reference))
-
-    config['locus'] = args.locus
+    config['options']['locus'] = args.locus
     # define groups
     config['groups'] = {}
     colors = {}
@@ -53,7 +81,7 @@ def generate_config(args):
     if args.strand is not None:
         strands = [args.strand]
     for sample_class in unique_classes:
-        for sample_id in sample_classes[sample_classes == sample_class].index.values[:args.max_samples_per_class]:
+        for sample_id in samples_by_group[sample_class][:args.max_samples_per_class]:
             for strand in strands:
                 config['tracks']['{0}({1})'.format(sample_id, strand)] = dict(
                     name='{0}({1})'.format(sample_id, strand),
@@ -74,14 +102,16 @@ def generate_config(args):
     config['tracks'] = dict(sorted(config['tracks'].items(), key=lambda x: x[1]['order']))
     # add base_url
     for key in ('fastaURL', 'indexURL', 'cytobandURL'):
-        if key in config['reference']:
-            config['reference'][key] = args.base_url + '/' + config['reference'][key]
+        if key in config['options']['reference']:
+            config['options']['reference'][key] = args.base_url + '/' + config['options']['reference'][key]
     if 'tracks' in config:
         for name, track in config['tracks'].items():
             for key in ('url', 'indexURL'):
                 if key in track:
                     track[key] = args.base_url + '/' + track[key]
-    
+    if 'search' in config['options']:
+        if 'url' in config['options']['search']:
+            config['options']['search']['url'] = args.base_url + '/' + config['options']['search']['url']
     with open(args.output_file, 'w') as fout:
         yaml.dump(config, fout, default_flow_style=False)
 
@@ -91,6 +121,7 @@ def render(args):
     from ioutils import open_file_or_stdout
     from collections import defaultdict
     import yaml
+    import json
 
     env = Environment(lstrip_blocks=True, trim_blocks=True, undefined=StrictUndefined)
     with open(args.input_file, 'r') as f:
@@ -98,6 +129,8 @@ def render(args):
 
     config = yaml.load(open(args.config, 'r'))
     config['tracks'] = dict(sorted(config['tracks'].items(), key=lambda x: x[1]['order']))
+    config['tracks_json'] = json.dumps(config['tracks'], indent=4)
+    config['options_json'] = json.dumps(config['options'], indent=4)
     with open_file_or_stdout(args.output_file) as f:
         f.write(template.render(**config))
 
@@ -244,6 +277,7 @@ if __name__ == '__main__':
     parser.add_argument('--locus', '-l', type=str, default='',
         help='genomic locus, e.g. chr1:1000000-1000100')
     parser.add_argument('--base-url',  type=str, default='.')
+    parser.add_argument('--extra-config', type=str)
     parser.add_argument('--strand', '-s', type=str)
     parser.add_argument('--output-file', '-o', type=str, required=True)
 
