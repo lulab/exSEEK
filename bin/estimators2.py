@@ -1,23 +1,24 @@
 import numpy as np
-
+import pandas as pd
 from sklearn.base import BaseEstimator, ClassifierMixin, TransformerMixin, MetaEstimatorMixin, is_classifier
 from sklearn.base import clone
 from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
+from sklearn.tree import DecisionTreeClassifier
 from sklearn.svm import LinearSVC
-from sklearn.metrics import roc_auc_score, accuracy_score, roc_curve
+from sklearn.metrics import roc_auc_score, accuracy_score, roc_curve, \
+    precision_score, recall_score, f1_score, \
+    average_precision_score
 from sklearn.feature_selection.base import SelectorMixin
 from sklearn.preprocessing import StandardScaler, RobustScaler, MinMaxScaler, MaxAbsScaler
 from sklearn.model_selection import KFold, StratifiedKFold, ShuffleSplit, LeaveOneOut, \
         RepeatedKFold, RepeatedStratifiedKFold, LeaveOneOut, StratifiedShuffleSplit
 from sklearn.utils.class_weight import compute_sample_weight
 from sklearn.model_selection import GridSearchCV, check_cv
-from sklearn.feature_selection import RFE, RFECV
+from sklearn.feature_selection import RFE, RFECV, SelectFromModel
 from sklearn.utils.validation import check_is_fitted
 from sklearn.utils import check_X_y
 from abc import ABC, abstractmethod
-import pandas as pd
-
 from tqdm import tqdm
 import pickle
 import json
@@ -25,9 +26,18 @@ from scipy.cluster import hierarchy
 from scipy.spatial.distance import pdist, squareform
 from tqdm import tqdm
 import logging
+import copy
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] [%(levelname)s] %(name)s: %(message)s')
+logger = logging.getLogger(__name__)
 
 def parse_params(s):
+    '''Parse param dict from string
+    
+    Returns:
+        params: dict
+        If s is None, return empty dict
+        If s is in JSON format, return parsed object
+    '''
     if s is not None:
         params = s
         try:
@@ -41,8 +51,21 @@ def parse_params(s):
 
 def search_dict(data, keys):
     '''Intersect given keys with a dict and return the subset
+
+    Parameters:
+        data: dict
+        keys: list of keys to search
+    Returns:
+        dict
     '''
     return {key:data[key] for key in keys if key in data}
+
+def predict_proba(estimator, X):
+    try:
+        proba = estimator.predict_proba(X)
+    except AttributeError:
+        proba = estimator.decision_function(X)
+    return proba
 
 def get_scorer(scoring):
     if scoring == 'roc_auc':
@@ -52,6 +75,17 @@ def get_scorer(scoring):
     else:
         raise ValueError('unknonwn scoring: {}'.format(scoring))
 
+def classification_scores(y_true, y_pred_labels, y_pred_probs):
+    scores = {
+        'roc_auc': roc_auc_score(y_true, y_pred_probs),
+        'average_precision': average_precision_score(y_true, y_pred_probs),
+        'accuracy': accuracy_score(y_true, y_pred_labels),
+        'precision': precision_score(y_true, y_pred_labels),
+        'recall': recall_score(y_true, y_pred_labels),
+        'f1_score': f1_score(y_true, y_pred_labels)
+    }
+    return scores
+
 def get_classifier(name, **params):
     if name == 'logistic_regression':
         return LogisticRegression(**search_dict(params, 
@@ -60,7 +94,7 @@ def get_classifier(name, **params):
     elif name == 'random_forest':
         return RandomForestClassifier(**search_dict(params,
             ('n_estimators', 'criterion', 'max_depth', 'min_samples_split', 'min_samples_leaf', 
-             'min_weight_fraction_leaf', 'max_fetures', 'max_leaf_nodes', 
+             'min_weight_fraction_leaf', 'max_features', 'max_leaf_nodes', 
              'min_impurity_decrease', 'min_impurity_split', 'oob_score',
              'n_jobs', 'verbose', 'random_state', 'class_weight')))
     elif name == 'linear_svm':
@@ -68,27 +102,45 @@ def get_classifier(name, **params):
             ('penalty', 'loss', 'dual', 'tol', 'C', 'fit_intercept', 
              'intercept_scaling', 'class_weight', 'verbose',
              'random_state', 'max_iter')))
+    elif name == 'decision_tree':
+        return DecisionTreeClassifier(**search_dict(params,
+            ('criterion', 'splitter', 'max_depth', 'min_samples_split', 'min_samples_leaf',
+             'min_weight_fraction_leaf', 'max_features', 'max_leaf_nodes', 'min_impurity_decrease',
+             'min_impurity_split')))
+    elif name == 'extra_trees':
+        return ExtraTreesClassifier(**search_dict(params,
+            ('n_estimators', 'criterion', 'max_depth', 'min_samples_split', 'min_samples_leaf', 
+             'min_weight_fraction_leaf', 'max_features', 'max_leaf_nodes', 
+             'min_impurity_decrease', 'min_impurity_split', 'oob_score',
+             'n_jobs', 'verbose', 'random_state', 'class_weight')))
     else:
         raise ValueError('unknown classifier: {}'.format(name))
 
-def get_selector(name, estimator=None, **params):
+def get_selector(name, estimator=None, n_features_to_select=None, **params):
     if name == 'robust':
-        return RobustSelector(estimator, **search_dict(params,
-         ('cv', 'n_features_to_select', 'verbose')))
+        return RobustSelector(estimator, n_features_to_select=n_features_to_select, **search_dict(params,
+         ('cv', 'verbose')))
+    elif name == 'max_features':
+        return SelectFromModel(estimator, threshold=-np.inf, max_features=n_features_to_select)
+    elif name == 'feature_importance_threshold':
+        return SelectFromModel(estimator, **search_dict(params, 'threshold'))
     elif name == 'rfe':
-        return RFE(estimator, **search_dict(params, 
-        ('n_features_to_select', 'step', 'verbose')))
+        return RFE(estimator, n_features_to_select=n_features_to_select, **search_dict(params, 
+        ('step', 'verbose')))
     elif name == 'rfecv':
-        return RFECV(estimator, **search_dict(params,
-         ('n_features_to_select', 'step', 'cv', 'verbose')))
-    elif name == 'fold_change':
+        return RFECV(estimator, n_features_to_select=n_features_to_select, **search_dict(params,
+         ('step', 'cv', 'verbose')))
+    elif name == 'fold_change_filter':
         return FoldChangeFilter(**search_dict(params,
         ('threshold', 'direction', 'below', 'pseudo_count')))
-    elif name == 'zero_fraction':
+    elif name == 'zero_fraction_filter':
         return ZeroFractionFilter(**search_dict(params,
-        ('max_zero_fractino',)))
+        ('threshold',)))
     elif name == 'rpkm_filter':
         return RpkmFilter(**search_dict(params,
+        ('threshold',)))
+    elif name == 'rpm_filter':
+        return RpmFilter(**search_dict(params,
         ('threshold',)))
     else:
         raise ValueError('unknown selector: {}'.format(name))
@@ -100,7 +152,7 @@ def get_splitter(**params):
     if splitter == 'kfold':
         return KFold(**search_dict(params, ('n_splits', 'shuffle', 'random_state')))
     elif splitter == 'stratified_kfold':
-        return StratifiedKFold(**search_dict('n_splits', 'shuffle', 'random_state'))
+        return StratifiedKFold(**search_dict(params, ('n_splits', 'shuffle', 'random_state')))
     elif splitter == 'repeated_stratified_kfold':
         return RepeatedStratifiedKFold(**search_dict(params, ('n_splits', 'n_repeats', 'random_state')))
     elif splitter == 'shuffle_split':
@@ -216,162 +268,6 @@ def jackknife(*arrays, remove=1, indices=None):
         indices = np.random.choice(n_samples, replace=False, size=n_remove)
     return (np.delete(a, indices, axis=0) for a in arrays)
 
-class RobustEstimator(BaseEstimator, ClassifierMixin):
-    '''A wrapper to select robust features based on feature reccurence
-
-    Parameters:
-    ----------
-    estimator: sklearn.base.BaseEstimator object
-        Base estimator for feature selection
-    
-    n_select: int
-        Number of features to select
-
-    resample_method: str, choices: ('jackknife', 'bootstrap')
-        Resampling method
-
-    remove: float or int
-        Fraction (float, 0.0-1.0) or number (int, >= 1) of samples to remove for each round of resampling
-    
-    max_runs: int
-        Maximum rounds of jackknife resampling
-    
-    recurring_fraction: float
-        Minimum required fraction of reccuring samples to select features
-    
-    grid_search: dict or None
-        Parameter grid for optimizing hyper-parameters using GridSearchCV
-    
-    rfe: bool
-        Whether to use RFE to select features rather than select features with higest importance during each run
-
-    Attributes:
-    ----------
-    feature_recurrence_: array-like, shape (n_features,)
-        Number of resampling rounds in which each feature is retained
-    
-    features_: array-like, shape (n_features,)
-        Indices of selected features
-    
-    feature_selection_matrix_: array-like, (max_runs, n_select), type int
-        Indicator matrix for selected features during each run
-
-    feature_importance_matrix_: array-like, (max_runs, n_features)
-        Feature importance during each resampling run
-    
-    feature_importances_mean_: array-like, (n_features,)
-        Feature importances averaged across resampling runs
-    
-    feature_importance_std_: array-like, (n_features,)
-        Standard deviation of feature importances across resampling runs
-    
-    estimator_: sklearn.base.BaseEstimator object
-        Estimator fitted on all data using selected features
-    
-    feature_importances_: array-like, (n_select,)
-        Feature importances trained on all data using selected features
-
-    '''
-    def __init__(self, estimator, n_select=None, cv=10):
-        self.estimator = estimator
-        self.n_select = n_select
-        self.cv = cv
-
-    def fit(self, X, y, sample_weight=None):
-        n_samples, n_features = X.shape
-        feature_rank_matrix = np.zeros(n_samples)
-        if self.remove == 1:
-            max_runs = n_samples
-        else:
-            max_runs = self.max_runs
-        n_select = self.n_select
-        if n_select is None:
-            n_select = n_features
-        feature_rank_matrix = np.zeros((max_runs, n_features))
-        feature_importances_matrix = np.zeros((max_runs, n_features))
-        # compute sample weight
-        if sample_weight is None:
-            sample_weight = np.ones(n_samples)
-        feature_rank_matrix = np.zeros((max_runs, n_features), dtype=np.int32)
-        feature_importances_matrix = np.zeros((max_runs, n_features))
-
-        for train_index, _ in cv.split(X, y, sample_weight):
-            estimator = clone(self.estimator)
-            estimator.fit(X[train_index], y[train_index], sample_weight=sample_weight[train_index])
-            feature_importances = get_feature_importances(estimator)
-            feature_importances_matrix.append(feature_importances)
-            feature_rank_matrix.append(get_feature_ranking(feature_importances))
-            
-        estimator = clone(self.estimator)
-        estimator.fit(X, y, sample_weight=sample_weight)
-
-        for i_run in range(max_runs):
-            if self.resample_method == 'bootstrap':
-                X_, y_, sample_weight_ = bootstrap(X, y, sample_weight)
-            elif self.resample_method == 'jackknife':  
-                indices_remove = None
-                if self.remove == 1:
-                    indices_remove = i_run
-                X_, y_, sample_weight_ = jackknife(X, y, sample_weight,
-                    remove=self.remove, indices=indices_remove)
-            if self.grid_search is not None:
-                cv = GridSearchCV(self.estimator, param_grid=self.grid_search, cv=3)
-                cv.fit(X_, y_, sample_weight=sample_weight_)
-                self.estimator = cv.best_estimator_
-            else:
-                self.estimator.fit(X_, y_, sample_weight=sample_weight_)
-            if self.rfe:
-                rfe = RFE(self.estimator, n_select, step=0.1)
-                rfe.fit(X_, y_)
-                feature_importances_matrix[i_run] = rfe.support_.astype('float')
-                feature_rank_matrix[i_run] = rfe.ranking_
-            else:
-                if hasattr(self.estimator, 'coef_'):
-                    feature_importances = np.square(self.estimator.coef_.flatten())
-                else:
-                    feature_importances = self.estimator.feature_importances_
-                feature_importances_matrix[i_run] = feature_importances
-                feature_orders = np.argsort(-feature_importances)
-                feature_rank_matrix[i_run, feature_orders] = np.arange(n_features)
-        if self.rfe:
-            feature_selection_matrix = (feature_rank_matrix == 1).astype(np.int32)
-        else:
-            feature_selection_matrix = (feature_rank_matrix < n_select).astype(np.int32)
-        feature_recurrence = np.sum(feature_selection_matrix, axis=0)
-        #robust_features = np.nonzero(feature_recurrence > round(n_samples)*self.recurring_fraction)[0]
-        #robust_features = robust_features[np.argsort(feature_recurrence[robust_features])][::-1]
-        robust_features = np.argsort(-feature_recurrence)[:n_select]
-        feature_selection_matrix = feature_selection_matrix[:, robust_features]
-
-        # refit the estimator
-        if self.grid_search is not None:
-            cv = GridSearchCV(self.estimator, param_grid=self.grid_search, cv=3)
-            cv.fit(X[:, robust_features], y, sample_weight=sample_weight)
-            self.estimator = cv.best_estimator_
-        else:
-            self.estimator.fit(X[:, robust_features], y, sample_weight=sample_weight)
-
-        # save attributes
-        self.feature_recurrence_ = feature_recurrence
-        self.features_ = robust_features
-        self.feature_selection_matrix_ = feature_selection_matrix
-        self.feature_importances_matrix_ = feature_importances_matrix
-        self.feature_importances_mean_ = np.mean(feature_importances_matrix, axis=0)
-        self.feature_importances_std_ = np.std(feature_importances_matrix, axis=0)
-        self.estimator_ = self.estimator
-        if hasattr(self.estimator, 'coef_'):
-            self.feature_importances_ = np.square(self.estimator.coef_.flatten())
-        else:
-            self.feature_importances_ = self.estimator.feature_importances_
-        
-        return self
-
-    def predict(self, X):
-        return self.estimator_.predict(X)
-    
-    def score(self, X):
-        return self.estimator_.score(X)
-
 class RobustSelector(BaseEstimator, SelectorMixin):
     def __init__(self, estimator, cv=None, n_features_to_select=10, verbose=0):
         self.estimator = estimator
@@ -409,7 +305,7 @@ class RobustSelector(BaseEstimator, SelectorMixin):
         return self.support_
 
 class RpkmFilter(BaseEstimator, SelectorMixin):
-    def __init__(self, threshold=1, below=False, pseudo_count=0.001):
+    def __init__(self, threshold=1, below=False, pseudo_count=0.01):
         self.threshold = threshold
         self.below = below
         self.pseudo_count = pseudo_count
@@ -422,14 +318,33 @@ class RpkmFilter(BaseEstimator, SelectorMixin):
             raise ValueError('gene_lengths is required for RpkmFilter')
         rpkm = 1e3*X/self.gene_lengths.reshape((1, -1))
         self.rpkm_mean_ = np.exp(np.mean(np.log(rpkm + self.pseudo_count), axis=0)) - self.pseudo_count
+        if self.below:
+            self.support_ = self.rpkm_mean_ < self.threshold
+        else:
+            self.support_ = self.rpkm_mean_ > self.threshold
         return self
     
     def _get_support_mask(self):
-        check_is_fitted(self, 'rpkm_mean_')
+        check_is_fitted(self, 'support_')
+        return self.support_
+        
+class RpmFilter(BaseEstimator, SelectorMixin):
+    def __init__(self, threshold=1, below=False, pseudo_count=0.01):
+        self.threshold = threshold
+        self.below = below
+        self.pseudo_count = pseudo_count
+
+    def fit(self, X, y=None):
+        self.rpm_mean_ = np.exp(np.mean(np.log(X + self.pseudo_count), axis=0)) - self.pseudo_count
         if self.below:
-            return self.rpkm_mean_ < self.threshold
+            self.support_ = self.rpm_mean_ < self.threshold
         else:
-            return self.rpkm_mean_ > self.threshold
+            self.support_ = self.rpm_mean_ > self.threshold
+        return self
+    
+    def _get_support_mask(self):
+        check_is_fitted(self, 'support_')
+        return self.support_
 
 class FoldChangeFilter(BaseEstimator, SelectorMixin):
     '''Feature selection based on fold change
@@ -452,7 +367,7 @@ class FoldChangeFilter(BaseEstimator, SelectorMixin):
         Pseudo-count to add to input expression matrix
 
     '''
-    def __init__(self, threshold=1, direction='any', below=False, pseudo_count=0.001):
+    def __init__(self, threshold=1, direction='any', below=False, pseudo_count=0.01):
         if threshold <= 0:
             raise ValueError('fold change threshold should be > 0')
         self.direction = direction
@@ -467,7 +382,7 @@ class FoldChangeFilter(BaseEstimator, SelectorMixin):
         # calculate geometric mean
         X = X + self.pseudo_count
         X_log = np.log(X)
-        log_mean = np.zeros(2)
+        log_mean = np.zeros((2, X.shape[1]))
         for i, c in enumerate(unique_classes):
             log_mean[i] = np.mean(X_log[y == c], axis=0)
         logfc = log_mean[1] - log_mean[0]
@@ -479,32 +394,33 @@ class FoldChangeFilter(BaseEstimator, SelectorMixin):
             self.logfc_ = logfc
         else:
             raise ValueError('unknown fold change direction: {}'.format(self.direction))
-        return self
-    
-    def _get_support_mask(self):
-        check_is_fitted(self, 'logfc_')
         
         if self.below:
-            return self.logfc_ < np.log(self.threshold)
+            self.support_ = self.logfc_ < np.log(self.threshold)
         else:
-            return self.logfc_ > np.log(self.threshold)
-
+            self.support_ = self.logfc_ > np.log(self.threshold)
+        return self
+    
+    def _get_support_mask(self):
+        check_is_fitted(self, 'support_')
+        return self.support_
 
 class ZeroFractionFilter(BaseEstimator, SelectorMixin):
-    def __init__(self, max_zero_fraction=0.8):
-        self.max_zero_fraction = max_zero_fraction
+    def __init__(self, threshold=0.8):
+        self.threshold = threshold
     
     def fit(self, X, y=None):
-        self.zero_fractions_ = np.mean(np.close(X, 0), axis=0)
+        self.zero_fractions_ = np.mean(np.isclose(X, 0), axis=0)
+        self.support_ = self.zero_fractions_ < self.threshold
         return self
 
     def _get_support_mask(self):
-        check_is_fitted(self, 'zero_fractions_')
-        return self.zero_fractions_ < self.max_zero_fraction
+        check_is_fitted(self, 'support_')
+        return self.support_
 
 
 class LogTransform(BaseEstimator, TransformerMixin):
-    def __init__(self, base=None, pseudo_count=0.001):
+    def __init__(self, base=None, pseudo_count=0.01):
         self.base = None
         self.pseudo_count = pseudo_count
     
@@ -541,156 +457,127 @@ def get_features_from_pipeline(pipeline, n_features):
 
 class CVCallback(ABC):
     @abstractmethod
-    def __call__(self, estimator, X, y, y_pred, train_index, test_index):
+    def __call__(self, estimator, X, y, y_pred_labels, y_pred_probs, train_index, test_index):
         pass
 
 class CollectMetrics(CVCallback):
     def __init__(self, scoring='roc_auc', classifier='classifier'):
         self.scoring = scoring
-        self.metrics = []
+        self.metrics = {'train': [], 'test': []}
         self.classifier = classifier
     
-    def __call__(self, estimator, X, y, y_pred, train_index, test_index):
+    def __call__(self, estimator, X, y, y_pred_labels, y_pred_probs, train_index, test_index):
         scorer = get_scorer(self.scoring)
-        metrics = {}
-        metrics['train_{}'.format(self.scoring)] = scorer(y[train_index], y_pred[train_index])
-        if test_index.shape[0] > 1:
-            metrics['test_{}'.format(self.scoring)] = scorer(y[test_index], y_pred[test_index])
-        self.metrics.append(metrics)
+        self.metrics['train'].append(classification_scores(
+            y[train_index], y_pred_labels[train_index], y_pred_probs[train_index]))
+        self.metrics['test'].append(classification_scores(
+            y[test_index], y_pred_labels[test_index], y_pred_probs[test_index]))
+        #metrics['train_{}'.format(self.scoring)] = scorer(y[train_index], y_pred_probs[train_index])
+        #if test_index.shape[0] > 1:
+        #    metrics['test_{}'.format(self.scoring)] = scorer(y[test_index], y_pred_probs[test_index])
+        #self.metrics.append(metrics)
     
     def get_metrics(self):
-        if isinstance(self.metrics, list):
-            self.metrics = pd.DataFrame.from_records(self.metrics)
+        for name in ('train', 'test'):
+            if isinstance(self.metrics[name], list):
+                self.metrics[name] = pd.DataFrame.from_records(self.metrics[name])
+                self.metrics[name].index.name = 'split'
         return self.metrics
 
 class CollectPredictions(CVCallback):
     def __init__(self):
-        self.predictions = []
+        self.pred_labels = []
+        self.pred_probs = []
     
-    def __call__(self, estimator, X, y, y_pred, train_index, test_index):
-        self.predictions.append(np.ravel(y_pred))
+    def __call__(self, estimator, X, y, y_pred_labels, y_pred_probs, train_index, test_index):
+        self.pred_labels.append(np.ravel(y_pred_labels))
+        self.pred_probs.append(y_pred_probs)
     
-    def get_predictions(self):
-        if isinstance(self.predictions, list):
-            self.predictions = np.vstack(self.predictions)
-        return self.predictions
+    def get_pred_labels(self):
+        if isinstance(self.pred_labels, list):
+            self.pred_labels = np.vstack(self.pred_labels)
+        return self.pred_labels
+    
+    def get_pred_probs(self):
+        if isinstance(self.pred_probs, list):
+            self.pred_probs = np.vstack(self.pred_probs)
+        return self.pred_probs
 
 class FeatureSelectionMatrix(CVCallback):
     def __init__(self, selector='selector'):
         self.matrix = []
         self.selector = selector
     
-    def __call__(self, estimator, X, y, y_pred, train_index, test_index):
+    def __call__(self, estimator, X, y, y_pred_labels, y_pred_probs, train_index, test_index):
         if hasattr(estimator, 'selector_'):
-            self.matrix.append(estimator.selector_.support_)
+            support = np.zeros(X.shape[1], dtype='bool')
+            support[estimator.features_] = True
+            self.matrix.append(support)
     
     def get_matrix(self):
         if isinstance(self.matrix, list):
             self.matrix = np.vstack(self.matrix)
         return self.matrix
 
-def make_estimator(
-    feature_names=None,
-    zero_fraction_filter=None,
-    fold_change_filter=None,
-    rpkm_filter=None,
-    log_transform=None,
-    scaler=None,
-    scaler_params=None,
-    selector=None,
-    selector_params=None,
-    classifier=None,
-    classifier_params=None,
-    grid_search=None,
-    grid_search_param_grid=None,
-    grid_search_scoring=None,
-    grid_search_cv_params=None
-    ):
-
-
-    steps = []
-    if zero_fraction_filter is not None:
-        steps.append(('zero_fraction_filter', get_selector('zero_fraction_filter', 
-            **parse_params(zero_fraction_filter))))
-    if rpkm_filter != 'none':
-        if feature_names is None:
-            raise ValueError('feature_names is required for rpkm_filter')
-        gene_lengths = get_gene_lengths_from_feature_names(feature_names)
-        step = get_selector('rpkm_filter', **parse_params(rpkm_filter))
-        step.set_gene_lengths(gene_lengths)
-        steps.append(('rpkm_filter', step))
-    if fold_change_filter != 'none':
-        steps.append(('fold_change_filter', get_selector(
-            'fold_change_filter', **parse_params(fold_change_filter))))
-    if log_transform != 'none':
-        steps.append(('log_transform', get_scaler(
-            'log_transform', **parse_params(log_transform))))
-    print('scaler_params: {}'.format(scaler_params))
-    if scaler is not None:
-        steps.append(('scaler', get_scaler(scaler, **parse_params(scaler_params))))
-    if grid_search is not None:
-        steps.append(('grid_search', GridSearchCV(
-            classifier, param_grid=parse_params(grid_search_), scoring=grid_search_scoring, cv=get_splitter(*grid_search_cv_params))))
-
-    if selector is not None:
-        if selector in ('robust', 'rfe', 'rfe_cv'):
-            estimator = get_classifier(classifier, **parse_params(classifier_params))
-        else:
-            estimator = None
-        steps.append(('selector', get_selector(
-            selector, estimator=estimator, **parse_params(selector_params))))
-    steps.append(('classifier', get_classifier(
-        classifier, **parse_params(classifier_params))))
+class CollectTrainIndex(CVCallback):
+    def __init__(self):
+        self.train_index = []
     
-    pipeline = Pipeline(steps)
-    return pipeline
+    def __call__(self, estimator, X, y, y_pred_labels, y_pred_probs, train_index, test_index):
+        ind = np.zeros(X.shape[0], dtype='bool')
+        ind[train_index] = True
+        self.train_index.append(ind)
+    
+    def get_train_index(self):
+        if isinstance(self.train_index, list):
+            self.train_index = np.vstack(self.train_index)
+        return self.train_index
 
 class CombinedEstimator(BaseEstimator, MetaEstimatorMixin):
-    def __init__(self, feature_names=None,
-        zero_fraction_filter=None,
-        fold_change_filter=None,
-        rpkm_filter=None,
-        log_transform=None,
+    def __init__(self,
+        zero_fraction_filter=False,
+        zero_fraction_filter_params=None,
+        fold_change_filter=False,
+        fold_change_filter_params=None,
+        rpkm_filter=False,
+        rpkm_filter_params=None,
+        rpm_filter=False,
+        rpm_filter_params=None,
+        log_transform=False,
+        log_transform_params=None,
         scaler=None,
         scaler_params=None,
         selector=None,
         selector_params=None,
+        n_features_to_select=None,
         classifier=None,
         classifier_params=None,
         grid_search=False,
-        grid_search_param_grid=None,
-        grid_search_scoring=None,
-        grid_search_cv_params=None):
-
-        preprocess_steps = []
-        if zero_fraction_filter is not None:
-            preprocess_steps.append(('zero_fraction_filter', get_selector('zero_fraction_filter', 
-                **parse_params(zero_fraction_filter))))
-        if rpkm_filter != 'none':
-            if feature_names is None:
-                raise ValueError('feature_names is required for rpkm_filter')
-            gene_lengths = self.get_gene_lengths_from_feature_names(feature_names)
-            step = get_selector('rpkm_filter', **parse_params(rpkm_filter))
-            step.set_gene_lengths(gene_lengths)
-            preprocess_steps.append(('rpkm_filter', step))
-        if fold_change_filter != 'none':
-            preprocess_steps.append(('fold_change_filter', get_selector(
-                'fold_change_filter', **parse_params(fold_change_filter))))
-        if log_transform != 'none':
-            preprocess_steps.append(('log_transform', get_scaler(
-                'log_transform', **parse_params(log_transform))))
-        if scaler is not None:
-            preprocess_steps.append(('scaler', get_scaler(scaler, **parse_params(scaler_params))))
-        self.preprocess_steps = preprocess_steps
-
+        grid_search_params=None):
+        self.zero_fraction_filter = zero_fraction_filter
+        self.zero_fraction_filter_params = zero_fraction_filter_params
+        
+        self.rpkm_filter = rpkm_filter
+        self.rpkm_filter_params = rpkm_filter_params
+        
+        self.rpm_filter = rpm_filter
+        self.rpm_filter_params = rpm_filter_params
+        
+        self.fold_change_filter = fold_change_filter
+        self.fold_change_filter_params = fold_change_filter_params
+        
+        self.log_transform = log_transform
+        self.log_transform_params = log_transform_params
+        
+        self.scaler = scaler
+        self.scaler_params = scaler_params
         self.grid_search = grid_search
-        self.grid_search_param_grid = parse_params(grid_search_param_grid)
-        self.grid_search_scoring = grid_search_scoring
-        self.grid_search_cv_params = parse_params(grid_search_cv_params)
-        self.classifier_name = classifier
-        self.classifier_params = parse_params(classifier_params)
-        self.selector_name = selector
-        self.selector_params = parse_params(selector_params)
+        self.grid_search_params = grid_search_params
+        self.classifier = classifier
+        self.classifier_params = classifier_params
+        self.selector = selector
+        self.selector_params = selector_params
+        self.n_features_to_select = n_features_to_select
     
     @staticmethod
     def get_gene_lengths_from_feature_names(feature_names):
@@ -702,53 +589,104 @@ class CombinedEstimator(BaseEstimator, MetaEstimatorMixin):
         return feature_info['length'].values
     
     def fit(self, X, y=None, sample_weight=None):
+        self.preprocess_steps_ = []
+        if self.zero_fraction_filter:
+            logger.debug('add zero_fraction_filter with parameters: {}'.format(self.zero_fraction_filter_params))
+            self.preprocess_steps_.append(('zero_fraction_filter', 
+                get_selector('zero_fraction_filter', **self.zero_fraction_filter_params)))
+        '''
+        if self.rpkm_filter:
+            logger.debug('add rpkm_filter with parameters: {}'.format(self.rpkm_filter_params))
+            if self.feature_names is None:
+                raise ValueError('feature_names is required for rpkm_filter')
+            gene_lengths = self.get_gene_lengths_from_feature_names(feature_names)
+            step = get_selector('rpkm_filter', **rpkm_filter_params)
+            step.set_gene_lengths(gene_lengths)
+            preprocess_steps.append(('rpkm_filter', step))
+        '''
+        if self.rpm_filter:
+            logger.debug('add rpm_filter with parameters: {}'.format(self.rpm_filter_params))
+            self.preprocess_steps_.append(('rpm_filter', get_selector('rpm_filter', **self.rpkm_filter_params)))
+        if self.fold_change_filter:
+            logger.debug('add fold_change_filter with parameters: {}'.format(self.fold_change_filter_params))
+            self.preprocess_steps_.append(('fold_change_filter',
+                get_selector('fold_change_filter', **self.fold_change_filter_params)))
+        if self.log_transform:
+            logger.debug('add log_transform with parameters: {}'.format(self.log_transform_params))
+            self.preprocess_steps_.append(('log_transform', 
+                get_scaler('log_transform', **self.log_transform_params)))
+        if self.scaler is not None:
+            logger.debug('add scaler "{}" with parameters: {}'.format(self.scaler, self.scaler_params))
+            self.preprocess_steps_.append(('scaler', 
+                get_scaler(self.scaler, **self.scaler_params)))
+
         X_new = X
         self.features_ = np.arange(X.shape[1])
-        for name, step in self.preprocess_steps:
+        for name, step in self.preprocess_steps_:
             X_new = step.fit_transform(X_new, y)
             setattr(self, name + '_', step)
             if isinstance(step, SelectorMixin):
                 self.features_ = self.features_[step.get_support()]
-        self.classifier_ = get_classifier(self.classifier_name, **self.classifier_params)
+        logger.debug('add classifier "{}" with parameters: {}'.format(self.classifier, self.classifier_params))
+        self.classifier_ = get_classifier(self.classifier, **self.classifier_params)
         if self.grid_search:
-            self.grid_search_ = GridSearchCV(estimator=self.classifier_, 
-                param_grid=self.grid_search_param_grid, 
-                scoring=self.grid_search_scoring, 
-                cv=get_splitter(**self.grid_search_cv_params))
+            logger.debug('add grid_search with parameters: {}'.format(self.grid_search_params))
+            grid_search_params = copy.deepcopy(self.grid_search_params)
+            if 'cv' in grid_search_params:
+                grid_search_params['cv'] = get_splitter(**grid_search_params['cv'])
+            grid_search_params['param_grid'] = grid_search_params['param_grid'][self.classifier]
+            self.grid_search_ = GridSearchCV(estimator=self.classifier_, **grid_search_params)
             self.grid_search_.fit(X_new, y)
             self.classfier_ = self.grid_search_.best_estimator_
             self.best_classifier_params_ = self.grid_search_.best_params_
             self.classifier_.set_params(**self.grid_search_.best_params_)
-        if self.selector_name:
-            self.selector_ = get_selector(self.selector_name, estimator=self.classifier_, **self.selector_params)
+        if self.selector:
+            logger.debug('add selector "{}" with parameters: {}'.format(self.selector, self.selector_params))
+            logger.debug('number of features to select: {}'.format(self.n_features_to_select))
+            self.selector_ = get_selector(self.selector, estimator=self.classifier_, 
+                n_features_to_select=self.n_features_to_select, **self.selector_params)
             X_new = self.selector_.fit_transform(X_new, y)
             self.features_ = self.features_[self.selector_.get_support()]
         self.classifier_.fit(X_new, y)
+        self.feature_importances_ = get_feature_importances(self.classifier_)
         return self
     
     def transform(self, X, y=None):
         check_is_fitted(self, 'classifier_')
-        for name, step in self.preprocess_steps:
+        for name, step in self.preprocess_steps_:
             X = step.transform(X)
-        if self.selector_name:
+        if self.selector is not None:
             X = self.selector_.transform(X)
         return X
     
     def predict(self, X):
         X = self.transform(X)
         return self.classifier_.predict(X)
+    
+    def predict_proba(self, X):
+        X = self.transform(X)
+        try:
+            proba = self.classifier_.predict_proba(X)[:, 1]
+        except AttributeError:
+            proba = self.classifier_.decision_function(X)
+        return proba
 
-def cross_validation(estimator, X, y, params=None, sample_weight=None, callbacks=None):
+def cross_validation(estimator, X, y, sample_weight='auto', params=None, callbacks=None):
     splitter = get_splitter(**params)
-    logger.info('params: {}'.format(params))
-    logger.info(str(splitter))
-    logger.info(str(splitter.get_n_splits(X, y)))
-    pbar = tqdm(unit='split', total=splitter.get_n_splits())
+    logger.debug('start cross-validation')
+    logger.debug('cross-validation parameters: {}'.format(params))
+    logger.debug('number of cross-validation splits: {}'.format(splitter.get_n_splits(X, y)))
+    pbar = tqdm(unit='split', total=splitter.get_n_splits(X, y))
     for index in splitter.split(X, y):
         train_index, test_index = index
-        estimator.fit(X[train_index], y[train_index])
-        y_pred = estimator.predict(X)
+        estimator = clone(estimator)
+        sample_weight_ = sample_weight
+        if sample_weight == 'auto':
+            sample_weight_ = compute_sample_weight(class_weight=None, y=y[train_index])
+        estimator.fit(X[train_index], y[train_index], sample_weight=sample_weight_)
+        y_pred_labels = estimator.predict(X)
+        y_pred_probs = estimator.predict_proba(X)
         for callback in callbacks:
-            callback(estimator, X, y, y_pred, train_index, test_index)
+            callback(estimator, X, y, y_pred_labels, y_pred_probs, train_index, test_index)
         pbar.update(1)
     pbar.close()
