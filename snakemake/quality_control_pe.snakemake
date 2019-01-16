@@ -7,11 +7,12 @@ def get_all_inputs(wildcards):
     available_inputs = dict(
         clean_reads=expand('{output_dir}/unmapped/{sample_id}/clean_{pair_index}.fa.gz',
             output_dir=output_dir, sample_id=sample_ids, pair_index=[1, 2]),
-        fastqc=expand('{output_dir}/summary/{fastqc_step}.html',
-            output_dir=output_dir, fastqc_step=['fastqc', 'fastqc_clean']),
         summarize_cutadapt=expand('{output_dir}/summary/cutadapt.html',
             output_dir=output_dir)
     )
+    if not config['input_clean_reads']:
+        available_inputs['fastqc'] = expand('{output_dir}/summary/{fastqc_step}.html',
+            output_dir=output_dir, fastqc_step=['fastqc', 'fastqc_clean'])
     enabled_inputs = list(available_inputs.keys())
     inputs = []
     for key, l in available_inputs.items():
