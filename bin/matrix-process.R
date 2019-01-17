@@ -179,6 +179,7 @@ scimpute_count <- function(mat,tmp_path=".",impute_path=".", K = 5, N = 3) {
     print('start imputation using scImpute')
     mat_correct <- names(mat)
     names(mat) <-  paste('C_',seq_len(length(names(mat))))
+    tmp_path <- impute_path
     write.csv(mat, paste(tmp_path,"tmpsave.csv",sep=""), sep=',')
     scimpute(count_path = paste(tmp_path,"tmpsave.csv",sep=""), infile = "csv", outfile = "txt", out_dir = impute_path , Kcluster = K, ncores = N)
     mat <- read.table(paste(impute_path,"scimpute_count.txt",sep=""),sep=' ',header=TRUE,  check.names=FALSE, row.names=1, stringsAsFactors=FALSE)
