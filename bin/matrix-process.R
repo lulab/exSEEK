@@ -13,6 +13,10 @@ parser$add_argument("--imputeout", required=TRUE, help="output imputation path")
 parser$add_argument("--normalizeout", required=TRUE, help="output normalization file")
 parser$add_argument("--batchremoveout", required=TRUE, help="output batchremoved file")
 
+parser$add_argument("--filtercount", type="integer", default=10, help="count threshold for filtering")
+parser$add_argument("--filtercpm", type="double", default=10, help="CPM threshold for filtering")
+parser$add_argument("--filterrpkm", type="double", help="RPKM threshold for filtering")
+
 parser$add_argument( "--filtermethod", type="character", default="filtercount",
                     metavar="STRING",
                     help="the filter algorithm to use [default = %(default)s], and return count matrix")
@@ -786,13 +790,26 @@ plot_refer_violin <- function(mat, refer_gene_id, refer_gene_name = refer_gene_i
 # filter
 if (args$step =='filter'){
 mat_raw <- read.table(args$input,sep='\t',header=TRUE,  check.names=FALSE, row.names=1, stringsAsFactors=FALSE)
-if (args$filtermethod=='filtercout'){
-mat_filter <-filter_low(mat_raw,args$filterexpv, args$filtersample)
-} else if(args$filtermethod=='filtercpm'){
-mat_filter <-filter_low_cpm(mat_raw,args$filterexpv, args$filtersample)
-} else if(args$filtermethod=='filterrpkm'){
-mat_filter <-filter_low_rpkm(mat_raw,args$filterexpv, args$filtersample)
-}
+#if (args$filtermethod=='filtercout'){
+#mat_filter <-filter_low(mat_raw,args$filterexpv, args$filtersample)
+#} else if(args$filtermethod=='filtercpm'){
+#mat_filter <-filter_low_cpm(mat_raw,args$filterexpv, args$filtersample)
+#} else if(args$filtermethod=='filterrpkm'){
+#mat_filter <-filter_low_rpkm(mat_raw,args$filterexpv, args$filtersample)
+#}
+    mat_filter <- mat_raw
+    if(!is.null(args$filtercount)){
+        #message(sprintf('Filter features with count <= %d in %f %% samples', args$filtercount, args$filtersample*100))
+        mat_filter <- filter_low(mat_filter, args$filtercount, args$filtersample)
+    }
+    if(!is.null(args$filtercpm)){
+        #message(sprintf('Filter features with CPM <= %d in %f %% samples', args$filtercpm, args$filtersample*100))
+        mat_filter <- filter_low_cpm(mat_filter, args$filtercpm, args$filtersample)
+    }
+    if(!is.null(args$filterrpkm)){
+        #message(sprintf('Filter features with RPKM <= %d in %f %% samples', args$filterrpkm, args$filtersample*100))
+        mat_filter <- filter_low_rpkm(mat_filter, args$filterrpkm, args$filtersample)
+    }
 write.table(mat_filter, paste(args$filterout, 'filter','.',splitname,sep=''),sep='\t')
 } else if(args$step =='imputation'){
 # imputation
