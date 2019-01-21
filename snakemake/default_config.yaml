@@ -46,7 +46,7 @@ selector_params:
   rfe:
     step: 0.2
 n_features_to_select: [10]
-classifier: [logistic_regression, linear_svm, decision_tree, random_forest]
+classifier: [logistic_regression, linear_svm, random_forest]
 # Parameters for classifiers
 classifier_params:
   logistic_regression:
@@ -68,6 +68,10 @@ grid_search_params:
   param_grid:
     logistic_regression:
       C: [0.00001, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000, 10000, 100000]
+    logistic_regression_l1:
+      C: [0.00001, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000, 10000, 100000]
+    logistic_regression_l2:
+      C: [0.00001, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000, 10000, 100000]
     linear_svm:
       C: [0.00001, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000, 10000, 100000]
     random_forest:
@@ -78,6 +82,12 @@ grid_search_params:
   cv:
     splitter: stratified_kfold
     n_splits: 5
+
+evaluation_features:
+  classifier: logistic_regression
+  classifier_params:
+    logistic_regression:
+      penalty: l2
 
 # Splitter for cross-validation
 cv_splitter: stratified_shuffle_split
@@ -118,9 +128,10 @@ filtermethod: filterrpkm
 # Keep features with high expression in fraction of samples above this value
 filtersample: 0.2
 # Imputation methods to try (set to "null" to skip imputation)
-imputation_methods: ["scimpute_count", "viper_count", "null"]
+#imputation_methods: ["scimpute_count", "viper_count", "null"]
+imputation_methods: ["null"]
 # Read depth normalization methods to try
-normalization_methods: ["SCnorm", "TMM", "RLE", "CPM", "CPM_top", "CPM_rm"]
+normalization_methods: ["SCnorm", "TMM", "RLE", "CPM", "CPM_top"]
 # Batch effect removal methods to try (set "null" to skip batch effect removal)
 batch_removal_methods: ["null", "Combat", "RUV"]
 # Column index of batch effect in batch_info.txt to considier for Combat
@@ -197,8 +208,12 @@ umi_length: 0
 # Evaluate published biomarkers
 evaluate_features_preprocess_methods: []
 # Differential expression method
+# Available methods: deseq2, edger_glmlrt, edger_glmqlf, edger_exact, wilcox
 diffexp_method: deseq2
 # Count multi-mapping reads
 count_multimap_reads: true
 # Count overlapping features
 count_overlapping_features: true
+
+# Base URL for IGV web server
+igv_base_url: http://172.22.220.21:5000
