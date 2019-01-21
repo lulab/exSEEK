@@ -21,10 +21,10 @@ Then you can run the command, you can specify the module you want to run and dat
 ${exseek_path}/bin/exseek.py quality_control --dataset ${dataset}
 ```
 
-### What is Snakemake
+## What is Snakemake
 The [Snakemake](https://snakemake.readthedocs.io/en/stable/) workflow management system is a tool to create reproducible and scalable data analyses. We have hide the details of snakemake and you only need to run one single command. However you can customize some of the codes if you are familiar with snakemake.
 
-### How to set configurations in config file
+## How to set configurations in config file
 There are many parameters to be specified. You should make a new copy of config file in config directory. For example you can nake one copy of scirep.yaml. Then rename the file to config/${dataset}.yaml. 
 
 Other parameters are defined in snakemake/default_config.yaml. You may also change parameters. 
@@ -49,4 +49,23 @@ The quickest way is to create a [new issue](https://github.com/lulab/exSeek/issu
 
 If you want us to add more functions in exseek, please create a [new issue](https://github.com/lulab/exSeek/issues)
 
+## Why did some jobs occasionally fail with no extra error message except 'CalledProcessError'?
+
+The most possible cause is no available memory. You can confirm the problem by running the linux command `dmesg` or open
+and examine the most recent message. Message like "Out of memory: Kill process ** or sacrifice child" clearly indicates that memory problem occurred.
+Some jobs (e.g. mapping using STAR, samtools sort, bedtools sort)requires large amount memory especially
+ when the input number of reads is large. Try to reduce the number of parallels
+with the `-j` option or set memory limit in `config/cluster.yaml` for a particular job if you run the jobs on a
+computer cluster. 
+
+## How to rerun downstream steps from a specific step in a pipeline
+
+Sometimes we need to rerun a pipeline from a step, usually after changing the configuration file.
+Snakemake is not aware of changes in configuration file and we need to rerun the pipeline by ourselves.
+The `--forcerun` option in snakemake allows rerunning a step and all steps that depend on the output files
+of the step. For example, to rerun the `count_matrix` step, just run:
+
+```bash
+exseek.py count_matrix -d $dataset --forcerun count_matrix
+```
 
