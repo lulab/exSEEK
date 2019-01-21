@@ -2,6 +2,7 @@
 import argparse, sys, os, errno
 import logging
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] [%(levelname)s] %(name)s: %(message)s')
+logger = logging.getLogger('machine_learning')
 
 import json
 from abc import ABC, abstractmethod
@@ -12,7 +13,9 @@ def command_handler(f):
     command_handlers[f.__name__] = f
     return f
 
-def read_data_matrix(matrix, sample_classes, transpose=False, positive_class=None, negative_class=None):
+def read_data_matrix(matrix, sample_classes, features=None, transpose=False, positive_class=None, negative_class=None):
+    import pandas as pd
+    import numpy as np
     # read data matrix
     logger.info('read data matrix: ' + matrix)
     X = pd.read_table(matrix, index_col=0, sep='\t')
@@ -20,6 +23,13 @@ def read_data_matrix(matrix, sample_classes, transpose=False, positive_class=Non
     if transpose:
         logger.info('transpose feature matrix')
         X = X.T
+    if features is not None:
+        logger.info('read subset of feature names from: ' + features)
+        features = pd.read_table(features, header=False).iloc[:, 0].values
+        matrix = matrix.reindex(columns=features)
+        na_features = matrix.columns.values[matrix.isna().any(axis=0)]
+        if na_features.shape[0] > 0:
+            raise ValueError('some given features are not found in matrix file: {}'.format(na_features[:10].tolist()))
     logger.info('number of features: {}'.format(X.shape[1]))
     # read sample classes
     logger.info('read sample classes: ' + sample_classes)
@@ -47,8 +57,9 @@ def read_data_matrix(matrix, sample_classes, transpose=False, positive_class=Non
     logger.info('number of positive samples: {}, negative samples: {}, class ratio: {}'.format(
         X_pos.shape[0], X_neg.shape[0], float(X_pos.shape[0])/X_neg.shape[0]))
     X = pd.concat([X_pos, X_neg], axis=0)
+    # set negative class to 0 and positive class to 1
     y = np.zeros(X.shape[0], dtype=np.int32)
-    y[X_pos.shape[0]:] = 1
+    y[:X_pos.shape[0]] = 1
     del X_pos
     del X_neg
     n_samples, n_features = X.shape
@@ -76,7 +87,7 @@ def cross_validation(args):
     import pickle
 
     X, y, sample_ids, feature_names = read_data_matrix(args.matrix, args.sample_classes,
-        **search_dict(vars(args), ('transpose', 'positive_class', 'negative_class')))
+        **search_dict(vars(args), ('features', 'transpose', 'positive_class', 'negative_class')))
     if X.shape[0] < 20:
         raise ValueError('too few samples for machine learning')
     if not os.path.isdir(args.output_dir):
@@ -84,6 +95,8 @@ def cross_validation(args):
         os.makedirs(args.output_dir)
     logger.info('save class labels to: ' + os.path.join(args.output_dir, 'classes.txt'))
     pd.Series(y).to_csv(os.path.join(args.output_dir, 'classes.txt'), header=False, index=False)
+    logger.info('save feature names to: ' + os.path.join(args.output_dir, 'feature_names.txt'))
+    pd.Series(feature_names).to_csv(os.path.join(args.output_dir, 'feature_names.txt'), header=False, index=False)
     logger.info('save sample ids to: ' + os.path.join(args.output_dir, 'samples.txt'))
     pd.Series(sample_ids).to_csv(os.path.join(args.output_dir, 'samples.txt'), header=False, index=False)
     
@@ -172,10 +185,12 @@ if __name__ == '__main__':
         help='input file containing sample classes with 2 columns: sample_id, sample_class')
     g_input.add_argument('--positive-class', type=str, metavar='STRING',
         help='comma-separated list of sample classes to use as positive class')
-    g_input.add_argument('--negative-class', type=str,metavar='STRING',
+    g_input.add_argument('--negative-class', type=str, metavar='STRING',
         help='comma-separates list of sample classes to use as negative class')
     g_input.add_argument('--transpose', action='store_true', default=False,
         help='transpose the feature matrix')
+    g_input.add_argument('--features', type=str, metavar='FILE',
+        help='input file containing subset of feature names')
 
     g_filter = parser.add_argument_group('filter')
     g_filter.add_argument('--zero-fraction-filter', action='store_true')
@@ -195,11 +210,11 @@ if __name__ == '__main__':
     g_scaler.add_argument('--log-transform', action='store_true')
     #g_scaler.add_argument('--log-transform-base', type=float, metavar='NUMBER')
     g_scaler.add_argument('--log-transform-params', type=str, metavar='STRING')
-    g_scaler.add_argument('--scaler', type=str, metavar='NAME', default='robust')
+    g_scaler.add_argument('--scaler', type=str, metavar='NAME')
     g_scaler.add_argument('--scaler-params', type=str, metavar='STRING')
 
     g_select = parser.add_argument_group('feature_selection')
-    g_select.add_argument('--selector', type=str, metavar='NAME', default='robust')
+    g_select.add_argument('--selector', type=str, metavar='NAME')
     g_select.add_argument('--selector-params', type=str, metavar='STRING')
     g_select.add_argument('--n-features-to-select', type=int, metavar='INTEGER')
 
@@ -228,7 +243,6 @@ if __name__ == '__main__':
         print('Errror: missing command', file=sys.stdout)
         main_parser.print_help()
         sys.exit(1)
-    logger = logging.getLogger('machine_learning.' + args.command)
 
     import pandas as pd
     import numpy as np
