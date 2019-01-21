@@ -1,0 +1,62 @@
+shell.prefix('set -x;')
+include: 'common.snakemake'
+
+def get_all_inputs(wildcards):
+    if config['small_rna']:
+        map_steps = ['transcriptome', 'genome']
+    else:
+        if config['remove_duplicates_long']:
+            map_steps = ['genome_rmdup', 'rRNA_rmdup']
+        else:
+            map_steps = ['genome', 'rRNA']
+    inputs = []
+    inputs += expand('igv/html/{dataset}/{map_step}.html',
+        dataset=dataset, map_step=map_steps)
+    inputs += expand('igv/config/{dataset}/{map_step}.yaml',
+        dataset=dataset, map_step=map_steps)
+    return inputs
+
+rule all:
+    input:
+        get_all_inputs
+
+def get_reference(wildcards):
+    if wildcards.map_step in ('transcriptome', 'genome', 'genome_rmdup'):
+        return 'templates/igv/config/genome.yaml'
+    elif wildcards.map_step in ('rRNA', 'rRNA_rmdup'):
+        return 'templates/igv/config/rRNA.yaml'
+    elif wildcards.map_step == ('circRNA', 'circRNA_rmdup'):
+        return 'templates/igv/config/circRNA.yaml'
+    else:
+        raise ValueError('unknown map_step: {}'.format(wildcards.map_step))
+
+rule igv_config:
+    input:
+        reference=get_reference,
+        sample_classes=data_dir + '/sample_classes.txt'
+    output:
+        config='igv/config/{dataset}/{map_step}.yaml',
+    params:
+        igv_base_url=config['igv_base_url'],
+        max_samples_per_class=10,
+        strand=lambda wildcards: '--strand "+"' if wildcards.map_step not in ('transcriptome', 'genome', 'genome_rmdup') else ''
+    shell:
+        '''{bin_dir}/create_igv.py generate_config {params.strand} \
+            --sample-classes {input.sample_classes} \
+            --bigwig-pattern 'bigwig/{wildcards.dataset}/{{sample_id}}.{wildcards.map_step}.{{strand}}.bigWig' \
+            --base-url '{params.igv_base_url}' \
+            --max-samples-per-class {params.max_samples_per_class} \
+            --reference '{input.reference}' \
+            -o '{output.config}'
+        '''
+
+rule igv_html:
+    input:
+        config='igv/config/{dataset}/{map_step}.yaml',
+        template='templates/igv/main.html'
+    output:
+        html='igv/html/{dataset}/{map_step}.html'
+    shell:
+        '''{bin_dir}/create_igv.py render -i {input.template} \
+            -c {input.config} -o {output.html}
+        '''
