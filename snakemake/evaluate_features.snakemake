@@ -1,21 +1,26 @@
 shell.prefix('set -x; set -e;')
 include: 'common.snakemake'
 
+import os
 import yaml
 with open(data_dir + '/compare_groups.yaml', 'r') as f:
     compare_groups = yaml.load(f)
 
-count_method = config['count_method']
 # read selected matrix preprocessing methods
 feature_sets = config['evaluate_feature_sets']
 
+preprocess_methods = {}
+for count_method in to_list(config['count_method']):
+    with open(output_dir + '/select_preprocess_method/uca_score/{count_method}/selected_methods.txt'.format(count_method=count_method), 'r') as f:
+        preprocess_methods[count_method] = f.readline().strip()
 
 def get_all_inputs(wildcards):
     inputs = []
-    for compare_group, feature_set in feature_sets.items():
-        inputs += expand('{output_dir}/evaluate_features/result/{compare_group}/{feature_set}/{classifier}',
-            output_dir=output_dir, feature_set=feature_set,
-            classifier=config['classifiers'], compare_group=compare_group)
+    for count_method, preprocess_method in preprocess_methods.items():
+        for compare_group, feature_set in get_known_biomarkers():
+                inputs += expand('{output_dir}/evaluate_features/{feature_set}/{preprocess_method}.{count_method}/{compare_group}/{classifier}',
+                    output_dir=output_dir, count_method=count_method, preprocess_method=preprocess_method,
+                    classifier=config['classifier'], compare_group=compare_group, feature_set=feature_set)
     return inputs
 
 rule all:
@@ -34,7 +39,8 @@ rule preprocess_features:
         '''{bin_dir}/feature_selection.py preprocess_features -i {input} --scaler {params.scaler} \
             --use-log --transpose -o {output}
         '''
-        
+
+"""
 rule evaluate_features:
     input:
         matrix='{output_dir}/evaluate_features/preprocess_features/{compare_group}/{feature_set}.txt',
@@ -56,3 +62,44 @@ rule evaluate_features:
             --compute-sample-weight \
             -o {output}
         '''
+"""
+
+rule evaluate_features:
+    input:
+        matrix=get_input_matrix,
+        sample_classes=data_dir+ '/sample_classes.txt',
+        features=data_dir + '/known_biomarkers/{compare_group}/{feature_set}.txt'
+    output:
+        directory('{output_dir}/evaluate_features/{feature_set}/{preprocess_method}.{count_method}/{compare_group}/{classifier}')
+    params:
+        count_method=count_method_regex
+    run:
+        import json
+        import os
+        import subprocess
+        from shlex import quote
+        from copy import deepcopy
+
+        command = [
+            os.path.join(config['bin_dir'], 'machine_learning.py'), 'cross_validation',
+            '--matrix', input.matrix,
+            '--sample-classes', input.sample_classes,
+            '--output-dir', output[0],
+            '--transpose',
+            '--positive-class', compare_groups[wildcards.compare_group][1],
+            '--negative-class', compare_groups[wildcards.compare_group][0],
+            '--cv-params', json.dumps(config['cv_params'])
+        ]
+        if config['log_transform']:
+            command += ['--log-transform', '--log-transform-params', json.dumps(config['log_transform_params'])]
+        if config['scaler']:
+            command += ['--scaler', config['scaler'], '--scaler-params', json.dumps(config['scaler_params'].get(config['scaler'], {}))]
+        #if config['grid_search']:
+        #    command += ['--grid-search', '--grid-search-params', json.dumps(config['grid_search_params'])]
+        if config['sample_weight']:
+            command += ['--sample-weight', config['sample_weight']]
+        command += ['--classifier', wildcards.classifier, 
+            '--classifier-params', json.dumps(config['classifier_params'].get(wildcards.classifier, {}))]
+        command = list(map(str, command))
+        print(' '.join(map(quote, command)))
+        subprocess.check_call(command)
