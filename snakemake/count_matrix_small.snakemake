@@ -5,9 +5,10 @@ rna_types = list(filter(lambda x: x not in ('rRNA', 'spikein'), rna_types))
 
 def get_all_inputs(wildcards):
     available_inputs = dict(
-        counts_by_biotype=expand('{output_dir}/counts_by_biotype/transcript/{sample_id}/{rna_type}',
-            output_dir=output_dir, sample_id=sample_ids, rna_type=rna_types),
-        count_matrix=expand('{output_dir}/count_matrix/transcript.txt', output_dir=output_dir)
+        count_matrix=expand('{output_dir}/count_matrix/transcript.txt', output_dir=output_dir),
+        count_matrix_small=expand('{output_dir}/count_matrix/transcript_small.txt', output_dir=output_dir),
+        count_matrix_long=expand('{output_dir}/count_matrix/transcript_long.txt', output_dir=output_dir),
+        count_matrix_long_bg=expand('{output_dir}/count_matrix/transcript_long_bg.txt', output_dir=output_dir)
     )
     enabled_inputs = list(available_inputs.keys())
     inputs = []
@@ -48,16 +49,71 @@ rule merge_featurecounts_by_biotype:
         '''cat {input} | awk 'BEGIN{{OFS="\t";FS="\t"}}!($0 ~ /^#/)&& !($0 ~/^Geneid/) {{print $1,$NF}}' > {output}
         '''
 
+rule count_matrix_small:
+    input:
+        '{output_dir}/count_matrix/transcript.txt'
+    output:
+        '{output_dir}/count_matrix/transcript_small.txt'
+    shell:
+        '''awk 'NR==1{{print}}NR>1{{split($0,a,"|");if((a[2] == "miRNA") || (a[2] == "piRNA")) print}}' {input} > {output}
+        '''
+
+rule count_matrix_long:
+    input:
+        '{output_dir}/count_matrix/transcript.txt'
+    output:
+        '{output_dir}/count_matrix/transcript_long.txt'
+    shell:
+        '''awk 'NR==1{{print}}NR>1{{split($0,a,"|");if((a[2] != "miRNA") && (a[2] != "piRNA")) print}}' {input} > {output}
+        '''
+
+rule count_matrix_long_bg:
+    '''Subtract reads in domains from long RNA reads
+    '''
+    input:
+        transcript_long='{output_dir}/count_matrix/transcript_long.txt',
+        domains_long='{output_dir}/count_matrix/domains_long.txt'
+    output:
+        '{output_dir}/count_matrix/transcript_long_bg.txt'
+    run:
+        import pandas as pd
+        import numpy as np
+
+        # read full-length transcript read counts
+        transcript = pd.read_table(input.transcript_long, index_col=0, sep='\t')
+        feature_info_transcript = transcript.index.to_series().str.split('|', expand=True)
+        feature_info_transcript.columns = ['gene_id', 'gene_type', 'gene_name', 'domain_id', 'transcript_id', 'start', 'end']
+        # read domain read count
+        domains = pd.read_table(input.domains_long, index_col=0, sep='\t')
+        sample_ids = domains.columns.values
+        feature_info_domains = domains.index.to_series().str.split('|', expand=True)
+        feature_info_domains.columns = ['gene_id', 'gene_type', 'gene_name', 'domain_id', 'transcript_id', 'start', 'end']
+        domains = pd.concat([feature_info_domains, domains], axis=1)
+        # filter out genomic domains
+        domains = domains.query('gene_type != "genomic"')
+        # sum up read counts of all domains by gene_id
+        domains_by_gene_id = domains.groupby('gene_id')[sample_ids].sum()
+        # match domain read counts matrix with full-length read count matrix
+        domains_by_gene_id = domains_by_gene_id.reindex(index=feature_info_transcript['gene_id'].values, 
+                                                        columns=transcript.columns.values, fill_value=0)
+        # subtract full-length read counts by domain read counts
+        domains_removed = transcript - domains_by_gene_id.values
+        # ensure that read counts are positive
+        domains_removed = np.maximum(domains_removed, 0)
+        # save to output file
+        domains_removed.to_csv(output[0], sep='\t', header=True, index=True)
+
+
 rule count_matrix_full_length:
     input:
-        counts=lambda wildcards: expand('{output_dir}/counts/{count_method}/{sample_id}',
-            output_dir=wildcards.output_dir, count_method=wildcards.count_method, sample_id=sample_ids),
+        counts=lambda wildcards: expand('{output_dir}/counts/transcript/{sample_id}',
+            output_dir=wildcards.output_dir, sample_id=sample_ids),
         transcript_table=expand(genome_dir + '/transcript_table/{rna_type}.txt', rna_type=rna_types),
         transcript_sizes=genome_dir + '/chrom_sizes/transcriptome'
     output:
-        '{output_dir}/count_matrix/{count_method}.txt'
+        '{output_dir}/count_matrix/transcript.txt'
     params:
-        feature_type=lambda wildcards: {'featurecounts': 'gene_id', 'htseq': 'gene_id', 'transcript': 'transcript_id'}[wildcards.count_method]
+        feature_type='transcript_id'
     run:
         import pandas as pd
         import os
