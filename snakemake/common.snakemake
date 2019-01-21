@@ -1,6 +1,7 @@
 shell.prefix('set -x;')
 import os
 import yaml
+import re
 
 with open('snakemake/default_config.yaml', 'r') as f:
     default_config = yaml.load(f)
@@ -18,6 +19,7 @@ def require_variable(variable, condition=None):
         raise ValueError('cannot find input file {}: {}'.format(variable, value))
     return value
 
+dataset = config['dataset']
 root_dir = require_variable('root_dir', 'input_dir')
 data_dir = require_variable('data_dir', 'input_dir')
 genome_dir = require_variable('genome_dir', 'input_dir')
@@ -85,6 +87,28 @@ def parse_fastqc_data(fp):
         basic_statistics[key] = val
     return basic_statistics
     
+def get_input_matrix(wildcards):
+    # Use RPM for small RNA
+    if config['small_rna']:
+        return '{output_dir}/matrix_processing/{preprocess_method}.{count_method}.txt'.format(**wildcards)
+    # Use RPKM for long RNA
+    else:
+        return '{output_dir}/rpkm/{preprocess_method}.{count_method}.txt'.format(**wildcards)
+    
+def get_known_biomarkers():
+    if os.path.isdir(os.path.join(data_dir, 'known_biomarkers')):
+        for compare_group in os.listdir(os.path.join(data_dir, 'known_biomarkers')):
+            for feature_file in os.listdir(os.path.join(data_dir, 'known_biomarkers', compare_group)):
+                feature_set = os.path.splitext(feature_file)[0]
+                yield (compare_group, feature_set)
+
+def to_list(obj):
+    if isinstance(obj, list):
+        return obj
+    if isinstance(obj, str) or isinstance(obj, bytes):
+        return [obj]
+    return list(obj)
+
 # template for nbconvert
 nbconvert_command = '''cp {input.jupyter} {output.jupyter}
 jupyter nbconvert --execute --to html \
@@ -104,3 +128,9 @@ rule make_temp:
         temp_dir
     shell:
         'mkdir -p {output}'
+
+count_method_regex = '(featurecounts)|(htseq)|(domains_combined)|(domains_long)|(transcript)|(transcript_small)|(transcript_long)|(transcript_long_bg)'
+imputation_method_regex = '(scimpute_count)|(viper_count)|(null)'
+normalization_method_regex = '(SCnorm)|(TMM)|(RLE)|(CPM)|(CPM_top)|(CPM_rm)|(CPM_refer)|(null)'
+batch_removal_method_with_batchinfo_regex = '(Combat)'
+batch_removal_method_without_batchinfo_regex = '(RUV)|(null)'
