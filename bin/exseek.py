@@ -21,8 +21,9 @@ if __name__ == '__main__':
 
     parser.add_argument('step', type=str, 
         choices=('quality_control', 'fastq_to_fasta', 'prepare_genome', 'bigwig',
-        'mapping', 'count_matrix', 'call_domains', 'combine_domains', 'normalization', 'feature_selection', 
-        'differential_expression', 'evaluate_features',
+        'mapping', 'count_matrix', 'call_domains', 'combine_domains',
+        'normalization', 'feature_selection', 
+        'differential_expression', 'evaluate_features', 'igv',
         'update_sequential_mapping', 'update_singularity_wrappers')
     )
     parser.add_argument('--dataset', '-d', type=str, required=True,
@@ -34,10 +35,8 @@ if __name__ == '__main__':
         help='cluster configuration file ({config_dir}/cluster.yaml by default)')
     parser.add_argument('--cluster-command', type=str,
         help='command for submitting job to cluster (default read from {config_dir}/cluster_command.txt')
-    parser.add_argument('--singularity', type=str, 
-        help='singularity image file')
-    parser.add_argument('--singularity-wrapper-dir', type=str, default='singularity/wrappers',
-        help='directory for singularity wrappers')
+    parser.add_argument('--singularity', action='store_true',
+        help='use singularity')
     args, extra_args = parser.parse_known_args()
 
     logger = logging.getLogger('exseek')
@@ -45,6 +44,10 @@ if __name__ == '__main__':
     snakefile = None
     root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
     logger.info('root directory: {}'.format(root_dir))
+
+    logger.info('read default config file')
+    with open('snakemake/default_config.yaml', 'r') as f:
+        default_config = yaml.load(f)
 
     # find snakemake executable
     snakemake_path = shutil.which('snakemake')
@@ -93,10 +96,10 @@ if __name__ == '__main__':
             raise ValueError('cannot find singularity')
         logger.info('generate singularity wrappers')
         subprocess.check_call([os.path.join(root_dir, 'bin/make_singularity_wrappers.py'), 
-            '--image', args.singularity,
+            '--image', default_config['singularity']['image'],
             '--list-file', os.path.join(root_dir, 'singularity/exports.txt'),
             '--singularity-path', singularity_path,
-            '-o', 'singularity/wrappers'
+            '-o', default_config['singularity']['wrapper_dir']
         ], shell=False)
         
     # find proper version of snakemake
@@ -150,15 +153,16 @@ if __name__ == '__main__':
     # set root_dir and bin_dir
     extra_config['bin_dir'] = os.path.join(root_dir, 'bin')
     extra_config['root_dir'] = root_dir
+    extra_config['dataset'] = args.dataset
     # extra args
     snakemake_args = [str(s) for s in snakemake_args]
     snakemake_args += extra_args
 
     if args.singularity is not None:
-        if not os.path.isdir('singularity/wrappers'):
+        if not os.path.isdir(default_config['singularity']['wrapper_dir']):
             update_singularity_wrappers()
-        logger.info('export singularity wrappers to snakemake')
-        extra_config['singularity_wrappers'] = 'singularity/wrappers'
+        logger.info('enable singularity')
+        extra_config['use_singularity'] = True
     
     # extra config
     snakemake_args += ['--config'] + ['{}={}'.format(key, val) for key, val in extra_config.items()]
