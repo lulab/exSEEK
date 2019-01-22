@@ -52,6 +52,7 @@ bin/create_igv.py create_reference --genome rRNA --name 'Human (rRNA)' \
 ```
 
 The `create_reference` command generates a directory names `genome/hg38/igv/rRNA` that contains the following files:
+
 | Filename | Description |
 | -------- | ----------- |
 | `reference.fa` | Reference genome sequences |
@@ -84,10 +85,10 @@ The directory structure of IGV should be like:
             gencode.bed.idx
             long_RNA.bed
             long_RNA.bed.idx
-/genome_browser
+/igv
     config/
         ${dataset}_${map_step}.yaml
-    igv/
+    html/
         ${dataset}_${map_step}.html
     
 ```
@@ -127,6 +128,8 @@ Create a feature database for searching genomic locus with feature names from a 
 [ -d "igv/database" ] || mkdir -p "igv/database"
 bin/web_server.py --build-database --genome hg38 \
     -i genome/hg38/gtf/gencode.gtf \
+    -i genome/hg38/gtf/gencode_tRNA.gtf \
+    -i genome/hg38/gff3/refseq.gff3 \
     -i genome/hg38/gtf/mitranscriptome_lncRNA.gtf \
     -i genome/hg38/gtf/mitranscriptome_tucp.gtf \
     -i genome/hg38/gff3/miRBase.gff3 \
