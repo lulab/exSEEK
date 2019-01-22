@@ -4,6 +4,7 @@ map_steps = ['clean', 'genome', 'rRNA', 'circRNA']
 if config['remove_duplicates_long']:
     map_steps += ['genome_rmdup', 'rRNA_rmdup', 'circRNA_rmdup']
 
+count_method_regex = '(featurecounts)|(htseq)'
 rule all:
     input:
         count_matrix=expand('{output_dir}/count_matrix/{count_method}.txt',
@@ -165,6 +166,24 @@ rule count_matrix:
         matrix.index.name = 'feature'
         
         matrix.to_csv(output[0], sep='\t', header=True, index=True, na_rep='NA')
+
+rule count_matrix_mrna:
+    input:
+        '{output_dir}/count_matrix/{count_method}.txt'
+    output:
+        '{output_dir}/count_matrix/{count_method}_mrna.txt'
+    shell:
+        '''awk 'NR==1{{print}}NR>1{{split($0,a,"|");if(a[2] == "mRNA") print}}' {input} > {output}
+        '''
+
+rule count_matrix_lncrna:
+    input:
+        '{output_dir}/count_matrix/{count_method}.txt'
+    output:
+        '{output_dir}/count_matrix/{count_method}_lncrna.txt'
+    shell:
+        '''awk 'NR==1{{print}}NR>1{{split($0,a,"|");if(a[2] == "lncRNA") print}}' {input} > {output}
+        '''
 
 rule summarize_fragment_counts:
     input:
