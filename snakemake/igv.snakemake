@@ -9,11 +9,12 @@ def get_all_inputs(wildcards):
             map_steps = ['genome_rmdup', 'rRNA_rmdup']
         else:
             map_steps = ['genome', 'rRNA']
+    track_types = ['bigwig', 'bam']
     inputs = []
-    inputs += expand('igv/html/{dataset}/{map_step}.html',
-        dataset=dataset, map_step=map_steps)
-    inputs += expand('igv/config/{dataset}/{map_step}.yaml',
-        dataset=dataset, map_step=map_steps)
+    inputs += expand('igv/html/{dataset}/{map_step}.{track_type}.html',
+        dataset=dataset, map_step=map_steps, track_type=track_types)
+    inputs += expand('igv/config/{dataset}/{map_step}.{track_type}.yaml',
+        dataset=dataset, map_step=map_steps, track_type=track_types)
     return inputs
 
 rule all:
@@ -30,20 +31,29 @@ def get_reference(wildcards):
     else:
         raise ValueError('unknown map_step: {}'.format(wildcards.map_step))
 
+def get_track_pattern(wildcards):
+    if wildcards.track_type == 'bigwig':
+        return 'bigwig/{dataset}/{{sample_id}}.{map_step}.{{strand}}.bigWig'.format(**wildcards)
+    elif wildcards.track_type == 'bam':
+        return 'bam/{dataset}/{{sample_id}}/{map_step}.bam'.format(**wildcards)
+    else:
+        raise ValueError('unknown track type: {}'.format(wildcards.track_type))
+
 rule igv_config:
     input:
         reference=get_reference,
         sample_classes=data_dir + '/sample_classes.txt'
     output:
-        config='igv/config/{dataset}/{map_step}.yaml',
+        config='igv/config/{dataset}/{map_step}.{track_type}.yaml',
     params:
         igv_base_url=config['igv_base_url'],
-        max_samples_per_class=10,
-        strand=lambda wildcards: '--strand "+"' if wildcards.map_step not in ('transcriptome', 'genome', 'genome_rmdup') else ''
+        max_samples_per_class=lambda wildcards: 10 if wildcards.track_type == 'bigwig' else 1,
+        strand=lambda wildcards: '--strand "+"' if wildcards.map_step not in ('transcriptome', 'genome', 'genome_rmdup') else '',
+        track_pattern=get_track_pattern
     shell:
         '''{bin_dir}/create_igv.py generate_config {params.strand} \
             --sample-classes {input.sample_classes} \
-            --bigwig-pattern 'bigwig/{wildcards.dataset}/{{sample_id}}.{wildcards.map_step}.{{strand}}.bigWig' \
+            --track-pattern '{params.track_pattern}' \
             --base-url '{params.igv_base_url}' \
             --max-samples-per-class {params.max_samples_per_class} \
             --reference '{input.reference}' \
