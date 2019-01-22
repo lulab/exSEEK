@@ -18,6 +18,10 @@ def get_all_inputs(wildcards):
             output_dir=output_dir, sample_id=sample_ids, map_step=map_step, strand=strands)
         available_inputs[map_step + '_normalized'] = expand('{output_dir}/bigwig_normalized/{sample_id}.{map_step}.{strand}.bigWig',
             output_dir=output_dir, sample_id=sample_ids, map_step=map_step, strand=strands)
+        available_inputs[map_step + '_bam'] = expand('{output_dir}/bam_sorted_by_coord/{sample_id}/{map_step}.bam',
+            output_dir=output_dir, sample_id=sample_ids, map_step=map_step)
+        available_inputs[map_step + '_bai'] = expand('{output_dir}/bam_sorted_by_coord/{sample_id}/{map_step}.bam.bai',
+            output_dir=output_dir, sample_id=sample_ids, map_step=map_step)
     enabled_inputs = list(available_inputs.keys())
     inputs = []
     for key, l in available_inputs.items():
@@ -29,7 +33,7 @@ rule all:
     input:
         get_all_inputs
 
-rule sort_bam:
+rule sort_bam_by_coord:
     input:
         '{output_dir}/bam/{sample_id}/{map_step}.bam'
     output:
@@ -38,6 +42,15 @@ rule sort_bam:
         temp_dir=config['temp_dir']
     shell:
         '''samtools sort -T {params.temp_dir} -o {output} {input}
+        '''
+
+rule index_bam_by_coord:
+    input:
+        '{output_dir}/bam_sorted_by_coord/{sample_id}/{map_step}.bam'
+    output:
+        '{output_dir}/bam_sorted_by_coord/{sample_id}/{map_step}.bam.bai'
+    shell:
+        '''samtools index {input}
         '''
 
 rule genomecov:
