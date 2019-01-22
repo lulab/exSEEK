@@ -18,7 +18,7 @@ rule all:
 
 rule fastq_to_fasta_pe:
     input:
-        '{output_dir}/cutadapt/{sample_id}_{pair_index}.fastq.gz'
+        auto_gzip_input('{output_dir}/cutadapt/{sample_id}_{pair_index}.fastq')
     output:
         '{output_dir}/unmapped/{sample_id}/clean_{pair_index}.fa.gz'
     threads:
@@ -26,20 +26,20 @@ rule fastq_to_fasta_pe:
     wildcard_constraints:
         pair_index='[12]'
     shell:
-        '''pigz -p {threads} -d -c {input} \
+        '''{bin_dir}/auto_uncompress {input} \
             | fastq_to_fasta -r -n \
             | pigz -p {threads} -c > {output}
         '''
 
 rule fastq_to_fasta_se:
     input:
-        '{output_dir}/cutadapt/{sample_id}.fastq.gz'
+        auto_gzip_input('{output_dir}/cutadapt/{sample_id}.fastq')
     output:
         '{output_dir}/unmapped/{sample_id}/clean.fa.gz'
     threads:
         config['threads_compress']
     shell:
-        '''pigz -p {threads} -d -c {input} \
+        '''{bin_dir}/auto_uncompress {input} \
             | fastq_to_fasta -r -n \
             | pigz -p {threads} -c > {output}
         '''
