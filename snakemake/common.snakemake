@@ -119,9 +119,9 @@ jupyter nbconvert --execute --to html \
 '''
 
 # export singularity wrappers
-singularity_wrappers = config.get('singularity_wrappers')
-if singularity_wrappers is not None:
-    os.environ['PATH'] = singularity_wrappers + ':' + os.environ['PATH']
+use_singularity = config.get('use_singularity')
+if use_singularity:
+    os.environ['PATH'] = config['singularity']['wrapper_dir'] + ':' + os.environ['PATH']
 
 rule make_temp:
     output:
@@ -129,7 +129,7 @@ rule make_temp:
     shell:
         'mkdir -p {output}'
 
-count_method_regex = '(featurecounts)|(htseq)|(domains_combined)|(domains_long)|(transcript)|(transcript_small)|(transcript_long)|(transcript_long_bg)'
+count_method_regex = '(featurecounts)|(htseq)|(domains_combined)|(domains_long)|(transcript)|(transcript_small)|(transcript_long)|(transcript_long_bg)|(mirna_and_domains)|(mirna_and_long_bg)|(transcript_mirna)'
 imputation_method_regex = '(scimpute_count)|(viper_count)|(null)'
 normalization_method_regex = '(SCnorm)|(TMM)|(RLE)|(CPM)|(CPM_top)|(CPM_rm)|(CPM_refer)|(null)'
 batch_removal_method_with_batchinfo_regex = '(Combat)'
