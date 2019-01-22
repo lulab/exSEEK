@@ -2,11 +2,14 @@ include: 'common.snakemake'
 
 rule all:
     input:
-        expand('{output_dir}/count_matrix/domains_combined.txt', output_dir=output_dir)
+        expand('{output_dir}/count_matrix/mirna_and_domains.txt', output_dir=output_dir),
+        expand('{output_dir}/count_matrix/mirna_and_long_bg.txt', output_dir=output_dir)
 
-rule combine_full_length_and_domain:
+rule domains_combined:
+    '''Count matrix of miRNA and domains
+    '''
     input:
-        full_length='{output_dir}/count_matrix/transcript.txt',
+        full_length='{output_dir}/count_matrix/transcript_mirna.txt',
         domain_long='{output_dir}/count_matrix/domains_long.txt',
         transcript_table=genome_dir + '/transcript_table/all.txt'
     output:
@@ -31,3 +34,33 @@ rule combine_full_length_and_domain:
         combined = pd.concat([full_length, domain_long], axis=0)
         combined.index.name = 'feature'
         combined.to_csv(output[0], sep='\t', index=True, header=True, na_rep='NA')
+
+rule combine_mirna_and_domains:
+    '''Count matrix of miRNA and domains
+    '''
+    input:
+        mirna='{output_dir}/count_matrix/transcript_mirna.txt',
+        domains_long='{output_dir}/count_matrix/domains_long.txt'
+    output:
+        '{output_dir}/count_matrix/mirna_and_domains.txt'
+    shell:
+        '''{{
+            cat {input.mirna} 
+            awk 'NR>1' {input.domains_long}
+        }} > {output}
+        '''
+
+rule combine_mirna_and_long_bg:
+    '''Count matrix of miRNA and long RNAs with domain reads subtracted
+    '''
+    input:
+        mirna='{output_dir}/count_matrix/transcript_mirna.txt',
+        transcript_long_bg='{output_dir}/count_matrix/transcript_long_bg.txt'
+    output:
+        '{output_dir}/count_matrix/mirna_and_long_bg.txt'
+    shell:
+        '''{{
+                cat {input.mirna} 
+                awk 'NR>1' {input.transcript_long_bg}
+          }} > {output}
+        '''
