@@ -266,6 +266,13 @@ def query_locus():
 def serve_bigwig_file(dataset, filename):
     return send_file(os.path.join(root_dir, 'output', dataset, 'bigwig', filename), conditional=True)
 
+@app.route('/bam/<dataset>/<sample_id>/<filename>')
+def serve_bam_file(dataset, sample_id, filename):
+    for bam_search_dir in ('bam_sorted_by_coord', 'gbam_sorted'):
+        bam_dir = os.path.join(root_dir, 'output', dataset, bam_search_dir)
+        if os.path.isdir(bam_dir):
+            return send_file(os.path.join(bam_dir, sample_id, filename), conditional=True)
+
 @app.route('/genome/hg38/<path:filename>')
 def serve_genome_dir(filename):
     return send_from_directory(os.path.join(root_dir, 'genome', 'hg38'), filename, conditional=True)
@@ -317,5 +324,5 @@ if __name__ == "__main__":
     if not args.build_database:
         import flask_silk
         from flask_autoindex import AutoIndex
-        AutoIndex(app, browse_root=args.root_dir)
+        AutoIndex(app, browse_root=os.path.join(args.root_dir, 'igv', 'html'))
         app.run(host=args.host, port=args.port, debug=args.debug, threaded=True)
