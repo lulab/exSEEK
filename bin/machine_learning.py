@@ -106,6 +106,7 @@ def cross_validation(args):
         'rpm_filter', 'rpm_filter_params',
         'rpkm_filter', 'rpkm_filter_params',
         'fold_change_filter', 'fold_change_filter_params',
+        'diffexp_filter', 'diffexp_filter_params',
         'log_transform','log_transform_params',
         'scaler', 'scaler_params',
         'selector', 'selector_params', 'n_features_to_select',
@@ -114,10 +115,13 @@ def cross_validation(args):
     ))
 
     for key in ('rpkm_filter_params', 'rpm_filter_params', 'fold_change_filter_params',
-        'zero_fraction_filter_params', 'log_transform_params',
+        'zero_fraction_filter_params', 'log_transform_params', 'diffexp_filter_params',
         'scaler_params', 'classifier_params', 'selector_params', 'grid_search_params'):
         params[key] = parse_params(argdict[key])
-
+    # set temp_dir for diffexp_selector
+    if args.diffexp_filter:
+        params['diffexp_filter_params']['temp_dir'] = os.path.join(args.output_dir, 'diffexp')
+        logger.info('set temp_dir of diffexp_filter: {}'.format(params['diffexp_filter_params']['temp_dir']))
     logger.info('build combined estimator')
     estimator = CombinedEstimator(**params)
 
@@ -126,7 +130,7 @@ def cross_validation(args):
     collect_predictions = CollectPredictions()
     collect_train_index = CollectTrainIndex()
     cv_callbacks = [collect_metrics, collect_predictions, collect_train_index]
-    if args.selector == 'robust':
+    if args.selector is not None:
         feature_selection_matrix = FeatureSelectionMatrix()
         cv_callbacks.append(feature_selection_matrix)
     cv_params = parse_params(args.cv_params)
@@ -205,6 +209,8 @@ if __name__ == '__main__':
     g_filter.add_argument('--fold-change-filter', action='store_true')
     #g_filter.add_argument('--fold-change-filter-direction', type=str, default='any', metavar='STRING')
     g_filter.add_argument('--fold-change-filter-params', type=str, metavar='STRING')
+    g_filter.add_argument('--diffexp-filter', action='store_true')
+    g_filter.add_argument('--diffexp-filter-params', type=str, metavar='STRING')
 
     g_scaler = parser.add_argument_group('scaler')
     g_scaler.add_argument('--log-transform', action='store_true')
