@@ -53,6 +53,7 @@
 <body>
 
 <script type="text/javascript">
+    var dataTrackTypes = {"wig": 0, "alignment": 0};
     var tracks = {{ tracks_json }};
 
     var groups = [
@@ -71,7 +72,7 @@
     var sampleIds = [];
     var showSample = {};
     for(name in tracks){
-        if(tracks[name].type == "wig"){
+        if(tracks[name].type in dataTrackTypes){
             if(!(tracks[name].sample_id in showSample))
                 sampleIds.push(tracks[name].sample_id);
             showSample[tracks[name].sample_id] = tracks[name].show;
@@ -80,7 +81,7 @@
 
     applyForAllTracks = function(func){
         for(name in tracks){
-            if(tracks[name].type == "wig"){
+            if(tracks[name].type in dataTrackTypes){
                 func(tracks[name]);
             }
         }
@@ -129,7 +130,7 @@
 
     updateTrackViews = function(items){
         for(name in tracks){
-            if(tracks[name].type != "wig")
+            if(!(tracks[name].type in dataTrackTypes))
                 continue;
             igv.browser.findTracks("name", name).forEach(function(track){
                 for(let i = 0; i < items.length; i ++){
@@ -158,8 +159,11 @@
         for(name in tracks){
             track = tracks[name];
             currentTrack = igv.browser.findTracks("name", name);
-            if(track.type == "wig"){
-                showTrack = track.show && showStrand[track.strand] && showGroup[track.group];
+            if(track.type in dataTrackTypes){
+                showTrack = track.show && showGroup[track.group];
+                if(track.type == "wig"){
+                    showTrack = showTrack && showStrand[track.strand];
+                }
             }else{
                 showTrack = track.show;
             }
@@ -182,7 +186,7 @@
         var c = element.name.split("-");
         var group = groups[parseInt(c[c.length - 1])];
         showGroup[group.name] = element.checked;
-        group.show = element.checked
+        group.show = element.checked;
         toggleTracks();
     };
 
