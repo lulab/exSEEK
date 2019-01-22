@@ -6,34 +6,35 @@ import re
 with open(data_dir + '/compare_groups.yaml', 'r') as f:
     compare_groups = yaml.load(f)
 
-count_method = config['count_method']
-# read selected matrix preprocessing methods
-if not isinstance(config['count_method'], list):
-    count_methods = [config['count_method']]
-else:
-    count_methods = config['count_method']
+# Read best preprocess from output file of select_preprocess_method 
+# key: count_method, value: preprocess_method
+preprocess_methods = {}
+for count_method in to_list(config['count_method']):
+    with open(output_dir + '/select_preprocess_method/uca_score/{count_method}/selected_methods.txt'.format(count_method=count_method), 'r') as f:
+            preprocess_methods[count_method] = f.readline().strip()
 
 def get_all_inputs(wildcards):
     inputs = []
-    for count_method in count_methods:
-        with open(output_dir + '/select_preprocess_method/uca_score/{count_method}/selected_methods.txt'.format(count_method=count_method), 'r') as f:
-            preprocess_methods = f.read().split()
-        # feature_selection
-        #inputs += expand('{output_dir}/feature_selection/{preprocess_method}.{count_method}/{compare_group}/{classifier}.{n_select}.{select_method}',
-        #    output_dir=output_dir, count_method=count_method, preprocess_method=preprocess_methods,
-        #    classifier=config['classifiers'], select_method=config['select_methods'], 
-        #    compare_group=list(compare_groups.keys()), n_select=config['n_selects'])
+    for count_method, preprocess_method in preprocess_methods.items():
         # cross_validation
+        '''
         inputs += expand('{output_dir}/cross_validation/{preprocess_method}.{count_method}/{compare_group}/{classifier}.{n_select}.{select_method}.{fold_change_filter_direction}',
-            output_dir=output_dir, count_method=count_method, preprocess_method=preprocess_methods,
-            classifier=config['classifier'], select_method=config['selector'], 
-            compare_group=list(compare_groups.keys()), n_select=config['n_selects'], fold_change_filter_direction=config['fold_change_filter_direction'])
-        # preprocess_features
-        #inputs += expand('{output_dir}/preprosess_features/{preprocess_method}.{count_method}.txt',
-        #    output_dir=output_dir, count_method=count_method, preprocess_method=preprocess_methods)
-        # evaluate single features
-        #inputs += expand('{output_dir}/evaluate_single_features/{preprocess_method}.{count_method}/{compare_group}.txt',
-        #    output_dir=output_dir, count_method=count_method, preprocess_method=preprocess_methods, compare_group=list(compare_groups.keys()))
+            output_dir=output_dir, count_method=count_method, 
+            preprocess_method=preprocess_methods[count_method],
+            classifier=config['classifier'], 
+            select_method=config['selector'], 
+            compare_group=list(compare_groups.keys()), 
+            n_select=config['n_selects'], 
+            fold_change_filter_direction=config['fold_change_filter_direction'])
+        '''
+        inputs += expand('{output_dir}/cross_validation_diffexp/{count_method}/{compare_group}/{classifier}.{n_select}.{diffexp_method}.{fold_change_filter_direction}',
+            output_dir=output_dir, count_method=count_method, 
+            preprocess_method=preprocess_methods[count_method],
+            classifier=config['classifier'], 
+            diffexp_method=config['diffexp_method'], 
+            compare_group=list(compare_groups.keys()), 
+            n_select=config['n_selects'],
+            fold_change_filter_direction=config['fold_change_filter_direction'])
     return inputs
         
 rule all:
@@ -132,17 +133,60 @@ rule cross_validation:
         if config['scaler']:
             command += ['--scaler', config['scaler'], '--scaler-params', json.dumps(config['scaler_params'].get(config['scaler'], {}))]
         if config['selector']:
-            command += ['--selector', wildcards.selector, '--selector-params', json.dumps(config['selector_params'].get(wildcards.selector, {})),
+            command += ['--selector', wildcards.selector, 
+                '--selector-params', json.dumps(config['selector_params'].get(wildcards.selector, {})),
                 '--n-features-to-select', wildcards.n_select]
         if config['grid_search']:
             command += ['--grid-search', '--grid-search-params', json.dumps(config['grid_search_params'])]
         if config['sample_weight']:
             command += ['--sample-weight', config['sample_weight']]
-        command += ['--classifier', wildcards.classifier, '--classifier-params', json.dumps(config['classifier_params'].get(wildcards.classifier, {}))]
+        command += ['--classifier', wildcards.classifier, 
+            '--classifier-params', json.dumps(config['classifier_params'].get(wildcards.classifier, {}))]
         command = list(map(str, command))
         print(' '.join(map(quote, command)))
         subprocess.check_call(command)
 
+rule cross_validation_diffexp:
+    '''Feature selection using differential expression with cross-validation
+    '''
+    input:
+        matrix='{output_dir}/matrix_processing/filter.{count_method}.txt',
+        sample_classes=data_dir+ '/sample_classes.txt'
+    output:
+        directory('{output_dir}/cross_validation_diffexp/{count_method}/{compare_group}/{classifier}.{n_select}.{diffexp_method}.{fold_change_direction}')
+    run:
+        import json
+        import os
+        import subprocess
+        from shlex import quote
+        from copy import deepcopy
+
+        diffexp_filter_params = deepcopy(config.get('diffexp_filter_params', {}))
+        diffexp_filter_params['method'] = wildcards.diffexp_method
+        diffexp_filter_params['max_features'] = int(wildcards.n_select)
+        diffexp_filter_params['fold_change_direction'] = wildcards.fold_change_direction
+        diffexp_filter_params['script'] = os.path.join(bin_dir, 'differential_expression.R')
+        command = [
+            os.path.join(config['bin_dir'], 'machine_learning.py'), 'cross_validation',
+            '--matrix', input.matrix,
+            '--sample-classes', input.sample_classes,
+            '--output-dir', output[0],
+            '--transpose',
+            '--positive-class', compare_groups[wildcards.compare_group][1],
+            '--negative-class', compare_groups[wildcards.compare_group][0],
+            '--diffexp-filter', '--diffexp-filter-params', json.dumps(diffexp_filter_params),
+            '--cv-params', json.dumps(config['cv_params']),
+            '--selector', 'null',
+        ]
+        if config['grid_search']:
+            command += ['--grid-search', '--grid-search-params', json.dumps(config['grid_search_params'])]
+        if config['sample_weight']:
+            command += ['--sample-weight', config['sample_weight']]
+        command += ['--classifier', wildcards.classifier, 
+            '--classifier-params', json.dumps(config['classifier_params'].get(wildcards.classifier, {}))]
+        command = list(map(str, command))
+        print(' '.join(map(quote, command)))
+        subprocess.check_call(command)
 
 rule evaluate_single_features:
     input:
