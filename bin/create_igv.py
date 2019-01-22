@@ -3,6 +3,7 @@ import argparse, sys, os, errno
 import logging
 import shutil
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] [%(levelname)s] %(name)s: %(message)s')
+from copy import deepcopy
 
 command_handlers = {}
 def command_handler(f):
@@ -80,23 +81,56 @@ def generate_config(args):
     strands = ['+', '-']
     if args.strand is not None:
         strands = [args.strand]
+    
+    track_extensions = {
+        'bigwig': {'type': 'wig', 'format': 'bigwig'},
+        'bam': {'type': 'alignment', 'format': 'bam'},
+        'bed': {'type': 'annotation', 'format': 'bed'},
+        'genepred': {'type': 'annotation', 'format': 'genepred'},
+        'genepredext': {'type': 'annotation', 'format': 'genepredext'},
+        'gff3': {'type': 'annotation', 'format': 'gff3'},
+        'gtf': {'type': 'annotation', 'format': 'gtf'}
+    }
+    track_extension = args.track_pattern.split('.')[-1].lower()
+    if track_extension not in track_extensions:
+        raise ValueError('unknown track file extension: {}'.format(track_extension))
+    track_type = track_extensions[track_extension]['type']
+    track_format = track_extensions[track_extension]['format']
+
     for sample_class in unique_classes:
-        for sample_id in samples_by_group[sample_class][:args.max_samples_per_class]:
-            for strand in strands:
-                config['tracks']['{0}({1})'.format(sample_id, strand)] = dict(
-                    name='{0}({1})'.format(sample_id, strand),
-                    sample_id=sample_id,
-                    url=args.bigwig_pattern.format(sample_id=sample_id, strand=strand),
-                    type='wig',
-                    format='bigwig',
-                    height=25,
-                    group=sample_class,
-                    strand=strand,
-                    order=order,
-                    color=colors[sample_class],
-                    autoscale=True,
-                    show=True
-                )
+        for sample_index, sample_id in enumerate(samples_by_group[sample_class]):
+            track_config = dict(
+                name=sample_id,
+                sample_id=sample_id,
+                url=args.track_pattern.format(sample_id=sample_id, strand='.'),
+                type=track_type,
+                format=track_format,
+                height=25,
+                group=sample_class,
+                strand='.',
+                order=order,
+                color=colors[sample_class],
+                autoscale=True,
+                show=False
+            )
+            # only show first N tracks
+            if sample_index < args.max_samples_per_class:
+                track_config['show'] = True
+            if track_type == 'wig':
+                # separate tracks by strand for wig type
+                for strand in strands:
+                    track_config_by_strand = deepcopy(track_config)
+                    track_config_by_strand['name'] = '{0}({1})'.format(sample_id, strand)
+                    track_config_by_strand['strand'] = strand
+                    track_config_by_strand['order'] = order
+                    track_config_by_strand['url'] = args.track_pattern.format(sample_id=sample_id, strand=strand)
+                    config['tracks'][track_config_by_strand['name']] = track_config_by_strand
+                    order += 1
+            else:
+                if track_config['format'] == 'bam':
+                    track_config['height'] = 400
+                    track_config['indexURL'] = track_config['url'] + '.bai'
+                config['tracks'][track_config['name']] = track_config
                 order += 1
     # sort tracks
     config['tracks'] = dict(sorted(config['tracks'].items(), key=lambda x: x[1]['order']))
@@ -272,7 +306,7 @@ if __name__ == '__main__':
     parser.add_argument('--reference', type=str, required=True,
         help='config file for reference genome')
     parser.add_argument('--max-samples-per-class', type=int, default=10)
-    parser.add_argument('--bigwig-pattern', type=str, required=True,
+    parser.add_argument('--track-pattern', type=str, required=True,
         help='format string with one variables; sample_id, strand')
     parser.add_argument('--locus', '-l', type=str, default='',
         help='genomic locus, e.g. chr1:1000000-1000100')
