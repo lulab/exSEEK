@@ -15,6 +15,8 @@ rule all:
             output_dir=output_dir, sample_id=sample_ids, rna_type=['other', 'genome', 'transcriptome'], strand=['+', '-'])
         
 rule sort_gbam:
+    '''Sort genomic BAM file by coordinate
+    '''
     input:
         '{output_dir}/gbam/{sample_id}/{rna_type}.bam'
     output:
