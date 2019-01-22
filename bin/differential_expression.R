@@ -115,7 +115,10 @@ if(args$method == 'deseq2'){
         wilcox.test(x[group == 'negative'], x[group == 'positive'], alternative='two.sided')$p.value
     }
     pvalues <- apply(matrix_cpm, 1, test_func)
-    res <- data.frame(pvalue=pvalues, 
+    logFC <- apply(log2(matrix_cpm[,which(group == 'positive')]), 1, mean) -
+        apply(log2(matrix_cpm[,which(group == 'negative')]), 1, mean)
+    res <- data.frame(log2FoldChange=logFC,
+        pvalue=pvalues, 
         padj=p.adjust(pvalues, method='BH'),
         baseMean=apply(matrix_cpm, 1, mean))
     message('Write results to output file: ', args$output_file)
