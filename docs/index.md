@@ -1,6 +1,6 @@
 # exSeek
 
-** A bioinformatics tool for exRNA biomarker discovery**
+**A bioinformatics tool for exRNA biomarker discovery**
 
 [![Build Status](https://travis-ci.com/lulab/exSeek-dev.svg?token=CyRgUWsqWCctKvAxMXto&branch=master)](https://travis-ci.com/lulab/exSeek-dev)
 
