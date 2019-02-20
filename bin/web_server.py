@@ -264,18 +264,29 @@ def query_locus():
 
 @app.route('/bigwig/<dataset>/<filename>')
 def serve_bigwig_file(dataset, filename):
-    return send_file(os.path.join(root_dir, 'output', dataset, 'bigwig', filename), conditional=True)
+    sample_id, map_step, strand, _ = filename.split('.')
+    if map_step.startswith('circRNA'):
+        return send_file(os.path.join(root_dir, 'output', dataset, 'bigwig_pseudo_genome', filename), conditional=True)
+    else:
+        return send_file(os.path.join(root_dir, 'output', dataset, 'bigwig', filename), conditional=True)
 
 @app.route('/bam/<dataset>/<sample_id>/<filename>')
 def serve_bam_file(dataset, sample_id, filename):
-    for bam_search_dir in ('bam_sorted_by_coord', 'gbam_sorted'):
-        bam_dir = os.path.join(root_dir, 'output', dataset, bam_search_dir)
-        if os.path.isdir(bam_dir):
-            return send_file(os.path.join(bam_dir, sample_id, filename), conditional=True)
+    if filename.startswith('circRNA'):
+        return send_file(os.path.join(root_dir, 'output', dataset, 'bam_pseudo_genome', sample_id, filename), conditional=True)
+    else:
+        for bam_search_dir in ('bam_sorted_by_coord', 'gbam_sorted'):
+            bam_dir = os.path.join(root_dir, 'output', dataset, bam_search_dir)
+            if os.path.isdir(bam_dir):
+                return send_file(os.path.join(bam_dir, sample_id, filename), conditional=True)
 
 @app.route('/genome/hg38/<path:filename>')
 def serve_genome_dir(filename):
     return send_from_directory(os.path.join(root_dir, 'genome', 'hg38'), filename, conditional=True)
+
+@app.route('/igv_reference/<dataset>/<genome>/<filename>')
+def serve_igv_reference(dataset, genome, filename):
+    return send_from_directory(os.path.join(output_dir, dataset, 'igv_reference', genome), filename, conditional=True)
 
 if __name__ == "__main__":
     #app.run(host='0.0.0.0', debug=True)
@@ -288,6 +299,8 @@ if __name__ == "__main__":
     parser.add_argument('--genome', type=str)
     parser.add_argument('--root-dir', type=str, 
         help='root directory to serve files. Default is current directory')
+    parser.add_argument('--output-dir', type=str,
+        help='output base directory. Default is {root_dir}/output')
     parser.add_argument('--debug', action='store_true', default=False)
     args = parser.parse_args()
 
@@ -320,6 +333,10 @@ if __name__ == "__main__":
         root_dir = os.getcwd()
     else:
         root_dir = args.root_dir
+    if args.output_dir is None:
+        output_dir = os.path.join(args.root_dir, 'output')
+    else:
+        output_dir = args.output_dir
 
     if not args.build_database:
         import flask_silk
