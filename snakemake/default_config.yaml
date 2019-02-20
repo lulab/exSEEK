@@ -49,7 +49,7 @@ scaler_params:
 diffexp_filter: false
 # Parameters for differential expression filter
 diffexp_filter_params:
-  method: deseq2
+  method: [deseq2]
   score_type: pi_value
   fold_change_direction: any
 # Wrapper feature selection method
@@ -152,14 +152,16 @@ filtermethod: filterrpkm
 # Keep features with high expression in fraction of samples above this value
 filtersample: 0.2
 # Imputation methods to try (set to "null" to skip imputation)
-#imputation_methods: ["scimpute_count", "viper_count", "null"]
+#imputation_methods: ["viper_count", "null"]
 imputation_methods: ["null"]
 # Read depth normalization methods to try
-normalization_methods: ["SCnorm", "TMM", "RLE", "CPM", "CPM_top"]
+normalization_methods: ["TMM", "RLE", "CPM", "CPM_top"]
 # Batch effect removal methods to try (set "null" to skip batch effect removal)
 batch_removal_methods: ["null", "Combat", "RUV"]
 # Column index of batch effect in batch_info.txt to considier for Combat
 batch_indices: []
+# Batch index for kBET score calculation
+kbet_batch_index: 1
     
 # Root directory
 root_dir: "."
