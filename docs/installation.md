@@ -33,6 +33,7 @@ conda install -y tqdm snakemake h5py bokeh
 conda install -y umap jinja2
 pip install mlxtend 
 pip install flask Flask-AutoIndex
+pip install multiqc
 ```
 
 ### Install Bioconda packages
@@ -65,7 +66,7 @@ install.packages(c('devtools', 'sva', 'VGAM', 'argparse', 'magrittr', 'readr', '
 # From Bioconductor
 source('https://bioconductor.org/biocLite.R')
 biocLite(c('SingleCellExperiment', 'scater', 'scran', 'SCnorm',
-    'EDASeq', 'RUVSeq', 'DESeq2', 'edgeR', 'sva', 'apeglm'))
+    'EDASeq', 'RUVSeq', 'DESeq2', 'edgeR', 'sva', 'apeglm', 'gglasso'))
 # From R-forge
 install.packages('countreg', repos = c('http://R-Forge.R-project.org', 'https://mirrors.tuna.tsinghua.edu.cn/CRAN/'), dep = TRUE)
 # From GitHub
@@ -74,6 +75,7 @@ install_github('ChenMengjie/VIPER')
 install_github('kassambara/easyGgplot2')
 install_github("Vivianstats/scImpute")
 install_github("hemberg-lab/scRNA.seq.funcs")
+install_github('theislab/kBET')
 ```
 
 ### Other packages
