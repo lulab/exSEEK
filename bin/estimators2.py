@@ -723,10 +723,11 @@ class CVCallback(ABC):
         pass
 
 class CollectMetrics(CVCallback):
-    def __init__(self, scoring='roc_auc', classifier='classifier'):
+    def __init__(self, scoring='roc_auc', classifier='classifier', has_missing_features=False):
         self.scoring = scoring
         self.metrics = {'train': [], 'test': []}
         self.classifier = classifier
+        self.has_missing_features = has_missing_features
     
     def __call__(self, estimator, X, y, y_pred_labels, y_pred_probs, train_index, test_index):
         scorer = get_scorer(self.scoring)
@@ -734,16 +735,14 @@ class CollectMetrics(CVCallback):
             y[train_index], y_pred_labels[train_index], y_pred_probs[train_index]))
         self.metrics['test'].append(classification_scores(
             y[test_index], y_pred_labels[test_index], y_pred_probs[test_index]))
-        #metrics['train_{}'.format(self.scoring)] = scorer(y[train_index], y_pred_probs[train_index])
-        #if test_index.shape[0] > 1:
-        #    metrics['test_{}'.format(self.scoring)] = scorer(y[test_index], y_pred_probs[test_index])
-        #self.metrics.append(metrics)
     
     def get_metrics(self):
         for name in ('train', 'test'):
             if isinstance(self.metrics[name], list):
                 self.metrics[name] = pd.DataFrame.from_records(self.metrics[name])
                 self.metrics[name].index.name = 'split'
+                if self.has_missing_features:
+                    self.metrics[name][:] = np.nan
         return self.metrics
 
 class CollectPredictions(CVCallback):
