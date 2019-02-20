@@ -11,21 +11,24 @@ feature_sets = config['evaluate_feature_sets']
 
 preprocess_methods = {}
 for count_method in to_list(config['count_method']):
-    with open(output_dir + '/select_preprocess_method/uca_score/{count_method}/selected_methods.txt'.format(count_method=count_method), 'r') as f:
-        preprocess_methods[count_method] = f.readline().strip()
+    for filename in expand('{output_dir}/select_preprocess_method/{score}/{count_method}/selected_methods.txt',
+        output_dir=output_dir, score=clustering_scores, count_method=count_method):
+        with open(filename, 'r') as f:
+            preprocess_methods[count_method] = f.readline().strip()
 
-def get_all_inputs(wildcards):
-    inputs = []
-    for count_method, preprocess_method in preprocess_methods.items():
-        for compare_group, feature_set in get_known_biomarkers():
-                inputs += expand('{output_dir}/evaluate_features/{feature_set}/{preprocess_method}.{count_method}/{compare_group}/{classifier}',
-                    output_dir=output_dir, count_method=count_method, preprocess_method=preprocess_method,
-                    classifier=config['classifier'], compare_group=compare_group, feature_set=feature_set)
-    return inputs
+inputs = {'evaluate_features': []}
+for count_method, preprocess_method in preprocess_methods.items():
+    for compare_group in compare_groups:
+        feature_set = get_known_biomarkers(compare_group)
+        inputs['evaluate_features'] += expand('{output_dir}/evaluate_features/{feature_set}/{preprocess_method}.{count_method}/{compare_group}/{classifier}',
+                output_dir=output_dir, count_method=count_method, preprocess_method=preprocess_method,
+                classifier=config['classifier'], compare_group=compare_group, feature_set=feature_set)
+inputs['summarize_evaluate_features'] = expand('{output_dir}/summary/evaluate_features/{summary_name}.txt',
+    output_dir=output_dir, summary_name=['metrics.train', 'metrics.test'])
 
 rule all:
     input:
-        get_all_inputs
+        unpack(lambda wildcards: inputs)
 
 
 rule preprocess_features:
@@ -66,7 +69,7 @@ rule evaluate_features:
 
 rule evaluate_features:
     input:
-        matrix=get_input_matrix,
+        matrix='{output_dir}/matrix_processing/{preprocess_method}.{count_method}.txt',
         sample_classes=data_dir+ '/sample_classes.txt',
         features=data_dir + '/known_biomarkers/{compare_group}/{feature_set}.txt'
     output:
@@ -88,7 +91,9 @@ rule evaluate_features:
             '--transpose',
             '--positive-class', compare_groups[wildcards.compare_group][1],
             '--negative-class', compare_groups[wildcards.compare_group][0],
-            '--cv-params', json.dumps(config['cv_params'])
+            '--cv-params', json.dumps(config['cv_params']),
+            '--selector', 'null',
+            '--features', input.features
         ]
         if config['log_transform']:
             command += ['--log-transform', '--log-transform-params', json.dumps(config['log_transform_params'])]
@@ -103,3 +108,14 @@ rule evaluate_features:
         command = list(map(str, command))
         print(' '.join(map(quote, command)))
         subprocess.check_call(command)
+
+rule summarize_evaluate_features:
+    input:
+        input_dir=inputs['evaluate_features'],
+        selected_methods=lambda wildcards: expand('{output_dir}/select_preprocess_method/{score}/{count_method}/selected_methods.txt',
+            output_dir=wildcards.output_dir, score=clustering_scores, count_method=config['count_method'])
+    output:
+        metrics_test='{output_dir}/summary/{cross_validation}/metrics.test.txt',
+        metrics_train='{output_dir}/summary/{cross_validation}/metrics.train.txt'
+    script:
+        'scripts/summarize_cross_validation.py'
