@@ -20,7 +20,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='exSeek main program')
 
     parser.add_argument('step', type=str, 
-        choices=('quality_control', 'fastq_to_fasta', 'prepare_genome', 'bigwig',
+        choices=('quality_control', 'quality_control_clean',
+        'fastq_to_fasta', 'prepare_genome', 'bigwig',
         'mapping', 'count_matrix', 'call_domains', 'combine_domains',
         'normalization', 'feature_selection', 
         'differential_expression', 'evaluate_features', 'igv',
@@ -108,6 +109,11 @@ if __name__ == '__main__':
             snakefile = os.path.join(root_dir, 'snakemake', 'quality_control_pe.snakemake')
         else:
             snakefile = os.path.join(root_dir, 'snakemake', 'quality_control_se.snakemake')
+    elif args.step == 'quality_control_clean':
+        if config['paired_end']:
+            snakefile = os.path.join(root_dir, 'snakemake', 'quality_control_clean_pe.snakemake')
+        else:
+            snakefile = os.path.join(root_dir, 'snakemake', 'quality_control_clean_se.snakemake')
     elif args.step == 'mapping':
         if config['small_rna']:
             if not os.path.exists(os.path.join(root_dir, 'snakemake', 'sequential_mapping.snakemake')):
@@ -158,7 +164,7 @@ if __name__ == '__main__':
     snakemake_args = [str(s) for s in snakemake_args]
     snakemake_args += extra_args
 
-    if args.singularity is not None:
+    if args.singularity:
         if not os.path.isdir(default_config['singularity']['wrapper_dir']):
             update_singularity_wrappers()
         logger.info('enable singularity')
