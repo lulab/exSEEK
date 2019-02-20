@@ -1,0 +1,19 @@
+options:
+    genome: rRNA
+    reference:
+        id: rRNA
+        name: Human (rRNA)
+        fastaURL: genome/hg38/fasta/rRNA.fa
+        indexURL: genome/hg38/fasta/rRNA.fa.fai
+        cytobandURL: genome/hg38/cytoband/rRNA.txt
+tracks:
+  rRNA:
+      name: rRNA
+      type: annotation
+      format: genepred
+      url: genome/hg38/genePred/rRNA.genePred
+      displayMode: "EXPANDED"
+      searchable: true
+      visibilityWindow:  300000000
+      height: 100
+      show: true
