@@ -33,7 +33,7 @@ message('number of bins:', nrow(bed))
 # remove bins with 1 read
 #bed <- bed[bed[, 5] > 1,]
 x <- as.integer(bed[, 5])
-bg = x[x < quantile(x, 0.99)]
+bg = x[x < quantile(x, args$background)]
 if(length(bg) > 0){
     message('fit ZTNB distribution')
     fit <- zerotrunc(bg ~ 1, dist='negbin')
