@@ -25,11 +25,13 @@ def read_data_matrix(matrix, sample_classes, features=None, transpose=False, pos
         X = X.T
     if features is not None:
         logger.info('read subset of feature names from: ' + features)
-        features = pd.read_table(features, header=False).iloc[:, 0].values
-        matrix = matrix.reindex(columns=features)
-        na_features = matrix.columns.values[matrix.isna().any(axis=0)]
+        features = pd.read_table(features, header=None).iloc[:, 0].values
+        logger.info('select {} features'.format(len(features)))
+        X = X.reindex(columns=features)
+        na_features = X.columns.values[X.isna().any(axis=0)]
         if na_features.shape[0] > 0:
-            raise ValueError('some given features are not found in matrix file: {}'.format(na_features[:10].tolist()))
+            logger.warn('missing features found in matrix file: {}'.format(na_features[:10].tolist()))
+            #raise ValueError('some given features are not found in matrix file: {}'.format(na_features[:10].tolist()))
     logger.info('number of features: {}'.format(X.shape[1]))
     # read sample classes
     logger.info('read sample classes: ' + sample_classes)
@@ -88,6 +90,11 @@ def cross_validation(args):
 
     X, y, sample_ids, feature_names = read_data_matrix(args.matrix, args.sample_classes,
         **search_dict(vars(args), ('features', 'transpose', 'positive_class', 'negative_class')))
+    has_missing_features = np.any(np.isnan(X))
+    if has_missing_features:
+        # fill missing features with 0
+        X[np.isnan(X)] = 0
+    
     if X.shape[0] < 20:
         raise ValueError('too few samples for machine learning')
     if not os.path.isdir(args.output_dir):
@@ -126,7 +133,7 @@ def cross_validation(args):
     estimator = CombinedEstimator(**params)
 
     logger.info('start cross-validation')
-    collect_metrics = CollectMetrics()
+    collect_metrics = CollectMetrics(has_missing_features=has_missing_features)
     collect_predictions = CollectPredictions()
     collect_train_index = CollectTrainIndex()
     cv_callbacks = [collect_metrics, collect_predictions, collect_train_index]
@@ -166,6 +173,7 @@ def cross_validation(args):
     metrics = collect_metrics.get_metrics()
     for name in ('train', 'test'):
         logger.info('save metrics to: ' + os.path.join(args.output_dir, 'metrics.{}.txt'.format(name)))
+        # if there are missing features, set metrics to NA
         metrics[name].to_csv(os.path.join(args.output_dir, 'metrics.{}.txt'.format(name)), header=True, index=True, na_rep='NA', sep='\t')
 
     logger.info('save cross-validation details to: ' + os.path.join(args.output_dir, 'cross_validation.h5'))
