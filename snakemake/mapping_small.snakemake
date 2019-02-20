@@ -53,7 +53,7 @@ rule read_counts_mapped:
     output:
         '{output_dir}/stats/read_counts_mapped/{sample_id}/{rna_type}'
     wildcard_constraints:
-        rna_type='(?!promoter$)(?!enhancer$)(?!intron$)(?!repeats$).*'
+        rna_type='(?!promoter$)(?!enhancer$)(?!intron$)(?!repeats$)(?!genome).*'
     shell:
         '''bamtools count -in {input} > {output}
         '''
