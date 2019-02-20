@@ -24,7 +24,8 @@ def get_all_inputs(wildcards):
                 batch_removal_method=batch_removal_method,
                 count_method=config['count_method'])
     available_inputs += expand('{output_dir}/select_preprocess_method/{score}/{count_method}/selected_methods.txt',
-        output_dir=output_dir, score='uca_score', count_method=config['count_method'])
+        output_dir=output_dir, score=clustering_scores, count_method=config['count_method'])
+    
     return available_inputs
 
 rule all:
@@ -179,17 +180,45 @@ rule batch_removal_step_without_batchinfo:
         --batchmethod {wildcards.batch_removal_method}
         '''
 
-rule clustering_score:
+rule uca_score:
     input:
         matrix='{output_dir}/matrix_processing/{preprocess_method}.{count_method}.txt',
         sample_classes=data_dir + '/sample_classes.txt'
     output:
-        '{output_dir}/clustering_scores/{score}/{count_method}/{preprocess_method}'
+        '{output_dir}/clustering_scores/uca_score/{count_method}/{preprocess_method}'
     shell:
         '''{bin_dir}/feature_selection.py calculate_clustering_score \
         --matrix {input.matrix} \
         --sample-classes {input.sample_classes} --transpose --use-log > {output}
-    '''
+        '''
+
+rule kbet_score:
+    input:
+        matrix='{output_dir}/matrix_processing/{preprocess_method}.{count_method}.txt',
+        batch=data_dir + '/batch_info.txt'
+    output:
+        '{output_dir}/clustering_scores/kbet_score/{count_method}/{preprocess_method}'
+    params:
+        batch_index=config['kbet_batch_index']
+    shell:
+        '''{bin_dir}/calculate_kbet_score.R --matrix {input.matrix} \
+        --batch {input.batch} --batch-index {params.batch_index} -o {output}
+        '''
+
+rule combined_score:
+    input:
+        kbet_score='{output_dir}/clustering_scores/kbet_score/{count_method}/{preprocess_method}',
+        clustering_score='{output_dir}/clustering_scores/uca_score/{count_method}/{preprocess_method}'
+    output:
+        '{output_dir}/clustering_scores/combined_score/{count_method}/{preprocess_method}'
+    run:
+        with open(input.kbet_score, 'r') as f:
+            kbet_score = float(f.read().strip())
+        with open(input.clustering_score, 'r') as f:
+            clustering_score = float(f.read().strip())
+        combined_score = 0.5*(kbet_score + clustering_score)
+        with open(output[0], 'w') as f:
+            f.write(str(combined_score))
 
 rule select_preprocess_method:
     input:
