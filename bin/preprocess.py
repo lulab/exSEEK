@@ -172,25 +172,6 @@ def extract_longest_transcript(args):
                 fout.write(line)
 
 @command_handler
-def gff3_to_transcript_table(args):
-    from ioutils import open_file_or_stdin, open_file_or_stdout
-    from collections import OrderedDict
-
-    fout = open_file_or_stdout(args.output_file)
-    with open_file_or_stdin(args.input_file) as fin:
-        transcripts = OrderedDict()
-        for line in fin:
-            if line.startswith('#'):
-                continue
-            c = line.strip().split('\t')
-            attrs = {}
-            for a in c[8].split(';'):
-                key, value = a.split('=')
-                attrs[key] = value
-            
-
-
-@command_handler
 def gtf_to_transcript_table(args):
     from ioutils import open_file_or_stdin, open_file_or_stdout
     from collections import OrderedDict
@@ -478,6 +459,52 @@ def extract_mature_mirna_location(args):
     fout.close()
 
 @command_handler
+def gtf_to_bed(args):
+    from ioutils import open_file_or_stdin, open_file_or_stdout
+
+    exon_feature = 'exon'
+    # use transcript_id attribute as key
+    transcripts = {}
+    logger.info('read input GTF file: ' + args.input_file)
+    for lineno, record in enumerate(read_gtf(args.input_file)):
+        c, attrs, line = record
+        if c[2] == exon_feature:
+            gene_id = attrs.get('gene_id')
+            if gene_id is None:
+                raise ValueError('gene_id attribute not found in GTF file {}:{}'.format(args.input_file, lineno))
+            transcript_id = attrs.get('transcript_id')
+            if transcript_id is None:
+                raise ValueError('transcript_id attribute not found in GTF file {}:{}'.format(args.input_file, lineno))
+            transcript = transcripts.get(transcript_id)
+            if transcript is None:
+                # new transcript
+                transcript = {
+                    'chrom': c[0],
+                    'strand': c[6],
+                    'gene_id': gene_id,
+                    'gene_name': attrs.get('gene_name', gene_id),
+                    'transcript_name': attrs.get('transcript_name', transcript_id),
+                    'exons': []
+                }
+                transcripts[transcript_id] = transcript
+            # add a new exon
+            transcript['exons'].append((int(c[3]) - 1, int(c[4])))
+    
+    fout = open_file_or_stdout(args.output_file)
+    bed_template = '{chrom}\t{start}\t{end}\t{name}\t0\t{strand}\t0\t0\t0\t{n_exons}\t{exon_sizes}\t{exon_starts}\n'
+    for transcript_id, transcript in transcripts.items():
+        # sort exons by start position
+        transcript['exons'] = sorted(transcript['exons'], key=lambda x: x[0])
+        transcript['n_exons'] = len(transcript['exons'])
+        transcript['start'] = transcript['exons'][0][0]
+        transcript['end'] = transcript['exons'][-1][1]
+        transcript['exon_starts'] = ','.join(str(e[0] - transcript['start']) for e in transcript['exons'])
+        transcript['exon_sizes'] = ','.join(str(e[1] - e[0]) for e in transcript['exons'])
+        transcript['name'] = '{gene_id}'.format(**transcript)
+        fout.write(bed_template.format(**transcript))
+
+
+@command_handler
 def calculate_gene_length(args):
     import HTSeq
     from collections import defaultdict
@@ -549,6 +576,164 @@ def calc_rpkm(args):
     matrix = 1000.0*matrix.div(feature_info['length'], axis=0)
     matrix.to_csv(open_file_or_stdout(args.output_file), index=True, header=True, sep='\t', na_rep='NA')
 
+@command_handler
+def create_pseudo_genome(args):
+    from pyfaidx import Fasta, Faidx
+    import numpy as np
+
+    src = Fasta(args.input_file)
+    lengths = np.array([len(r) for r in src])
+    padded_lengths = lengths + args.padding
+    padded_seq = ''.join(['N']*args.padding)
+    cum_lengths = np.cumsum(padded_lengths)
+    chrom_indices = cum_lengths//args.max_chrom_size
+    chrom_starts = cum_lengths%args.max_chrom_size - padded_lengths
+    prev_chrom_index = -1
+
+    # write FASTA file
+    logger.info('write FASTA file: ' + args.output_fasta)
+    with open(args.output_fasta, 'w') as fout:
+        for i, record in enumerate(src):
+            # new chromosome
+            if chrom_indices[i] != prev_chrom_index:
+                if i > 0:
+                    fout.write('\n')
+                fout.write('>c{}\n'.format(i + 1))
+                prev_chrom_index = chrom_indices[i]
+            # write sequence
+            fout.write(str(record))
+            fout.write(padded_seq)
+    # build fasta index
+    logger.info('build FASTA index')
+    dst_index = Faidx(args.output_fasta)
+    dst_index.build_index()
+    # chrom sizes
+    logger.info('write chrom sizes: ' + args.output_chrom_sizes)
+    fout = open(args.output_chrom_sizes, 'w')
+    with open(args.output_fasta + '.fai', 'r') as f:
+        for line in f:
+            c = line.strip().split('\t')
+            fout.write(c[0] + '\t' + c[1] + '\n')
+    fout.close()
+    # cytoband file
+    logger.info('write cytoband file: ' + args.output_cytoband)
+    fout = open(args.output_cytoband, 'w')
+    with open(args.output_fasta + '.fai', 'r') as f:
+        for i, line in enumerate(f):
+            c = line.strip().split('\t')
+            fout.write('{0}\t0\t{1}\tp{2}.1\tgned\n'.format(c[0], c[1], i + 1))
+    fout.close()
+
+    # annotation file 
+    logger.info('write annotation file: ' + args.output_annotation)
+    with open(args.output_annotation, 'w') as fout:
+        for i, record in enumerate(src):
+            record = ['c%d'%(chrom_indices[i] + 1), 
+                str(chrom_starts[i]), 
+                str(chrom_starts[i] + lengths[i]),
+                record.name,
+                '0',
+                '+']
+            fout.write('\t'.join(record))
+            fout.write('\n')
+            # create junction annotation
+            if args.circular_rna:
+                junction_pos = (int(record[1]) + int(record[2]))//2
+                record[1] = str(junction_pos - 1)
+                record[2] = str(junction_pos + 1)
+                record[3] = record[3] + '|junction'
+                fout.write('\t'.join(record))
+                fout.write('\n')
+
+@command_handler
+def map_bam_to_pseudo_genome(args):
+    import pysam
+
+    def as_paired_reads(sam):
+        read1 = None
+        for read in sam:
+            if read.is_read1:
+                read1 = read
+            elif read.is_read2:
+                yield (read1, read)
+            else:
+                raise ValueError('input SAM is not paired-end')
+    
+    chrom_sizes = {}
+    logger.info('read chrom sizes: ' + args.chrom_sizes)
+    with open(args.chrom_sizes, 'r') as fin:
+        for line in fin:
+            c = line.strip().split('\t')
+            chrom_sizes[c[0]] = int(c[1])
+    
+    chrom_starts = {}
+    chrom_names = {}
+    with open(args.bed, 'r') as fin:
+        for line in fin:
+            c = line.strip().split('\t')
+            c[1] = int(c[1])
+            c[2] = int(c[2])
+            chrom_names[c[3]] = c[0]
+            chrom_starts[c[3]] = c[1]
+    
+    logger.info('read input BAM file: ' + args.input_file)
+    sam = pysam.AlignmentFile(args.input_file, 'rb')
+
+    if args.circular_rna:
+        junction_positions = {sq['SN']:sq['LN']//2 for sq in sam.header['SQ']}
+
+    output_header = {
+    'HD': sam.header['HD'],
+    'SQ': [{'SN': chrom, 'LN': size} for chrom, size in chrom_sizes.items()],
+    'PG': [{'ID': 'map_bam_to_pseudo_genome', 
+            'PN': 'map_bam_to_pseudo_genome',
+            'VN': '1.0',
+            'CL': ' '.join(sys.argv)}
+          ]
+    }
+    logger.info('create output BAM file: ' + args.output_file)
+    output_sam = pysam.AlignmentFile(args.output_file, 'wb', header=output_header)
+
+    def map_read(read):
+        d = read.to_dict()
+        ref_name = d['ref_name']
+        d['ref_name'] = chrom_names[ref_name]
+        d['ref_pos'] = str(int(d['ref_pos']) + chrom_starts[ref_name])
+        return pysam.AlignedSegment.from_dict(d, output_sam.header)
+
+    strandness = args.strandness
+    is_circular_rna = args.circular_rna
+
+    n_reads = 0
+    if args.paired_end:
+        for read1, read2 in as_paired_reads(sam):
+            if (read1.is_unmapped) or (read2.is_unmapped):
+                continue
+            if read1.reference_name != read2.reference_name:
+                continue
+            if is_circular_rna:
+                if (strandness == 'forward') and ((not read1.is_reverse) and read2.is_reverse):
+                    continue
+                if (strandness == 'reverse') and ((not read2.is_reverse) and read1.is_reverse):
+                    continue
+                pos = junction_positions[read1.reference_name]
+                if not (read1.reference_start < pos <= read2.reference_end):
+                    continue
+            output_sam.write(map_read(read1))
+            output_sam.write(map_read(read2))
+            n_reads += 1
+    else:
+        for read in sam:
+            if read.is_unmapped:
+                continue
+            output_sam.write(map_read(read))
+            n_reads += 1
+    logger.info('number of written reads: {}'.format(n_reads))
+
+    output_sam.close()
+
+
+
 if __name__ == '__main__':
     main_parser = argparse.ArgumentParser(description='Preprocessing module')
     subparsers = main_parser.add_subparsers(dest='command')
@@ -597,6 +782,15 @@ if __name__ == '__main__':
         help='output BED file')
     parser.add_argument('--feature', type=str,
         help='feature to use in input GTF file (Column 3)')
+    
+    parser = subparsers.add_parser('gtf_to_bed',
+        help='convert transcripts from GTF to BED')
+    parser.add_argument('--input-file', '-i', type=str, default='-',
+        help='input GTF file')
+    parser.add_argument('--output-file', '-o', type=str, default='-',
+        help='output BED file')
+    parser.add_argument('--feature', type=str,
+        help='features to treat as exons in input GTF file (Column 3)')
     
     parser = subparsers.add_parser('extract_circrna_junction',
         help='extract circular RNA junction sequences from spliced sequences')
@@ -690,6 +884,40 @@ if __name__ == '__main__':
         help='input expression (RPM) matrix file')
     parser.add_argument('--output-file', '-o', type=str, default='-',
         help='output expression (RPKM) matrix file')
+    
+    parser = subparsers.add_parser('create_pseudo_genome')
+    parser.add_argument('--input-file', '-i', type=str, required=True,
+        help='input transcript FASTA file (with FASTA index)')
+    parser.add_argument('--max-chrom-size', type=int, default=100000000,
+        help='maximum size for each chromosome')
+    parser.add_argument('--padding', type=int, default=50,
+        help='number of N bases padded after each sequence')
+    parser.add_argument('--circular-rna', action='store_true',
+        help='write circular RNA junction to annotation file')
+    parser.add_argument('--output-fasta', type=str, required=True,
+        help='output FASTA and index file')
+    parser.add_argument('--output-chrom-sizes', type=str, required=True,
+        help='output chrom sizes file')
+    parser.add_argument('--output-annotation', type=str, required=True,
+        help='output annotation BED file')
+    parser.add_argument('--output-cytoband', type=str, required=True,
+        help='output cytoband file')
+    
+    parser = subparsers.add_parser('map_bam_to_pseudo_genome')
+    parser.add_argument('--input-file', '-i', type=str, required=True,
+        help='input BAM file')
+    parser.add_argument('--bed', type=str, required=True,
+        help='input BED file of genes in the pseudo-genome')
+    parser.add_argument('--chrom-sizes', type=str, required=True,
+        help='input chrom sizes of the pseudo-genome')
+    parser.add_argument('--strandness', '-s', type=str, default='forward',
+        help='strandness for circular RNA')
+    parser.add_argument('--paired-end', action='store_true',
+        help='input is paired-end reads')
+    parser.add_argument('--circular-rna', action='store_true',
+        help='requires the read to be mapped to circular RNA junctions')
+    parser.add_argument('--output-file', '-o', type=str, required=True,
+        help='output BAM file')
     
     args = main_parser.parse_args()
     if args.command is None:
