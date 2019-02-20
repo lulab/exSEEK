@@ -172,6 +172,8 @@ rule count_matrix_mrna:
         '{output_dir}/count_matrix/{count_method}.txt'
     output:
         '{output_dir}/count_matrix/{count_method}_mrna.txt'
+    wildcard_constraints:
+        count_method=count_method_regex
     shell:
         '''awk 'NR==1{{print}}NR>1{{split($0,a,"|");if(a[2] == "mRNA") print}}' {input} > {output}
         '''
@@ -181,6 +183,8 @@ rule count_matrix_lncrna:
         '{output_dir}/count_matrix/{count_method}.txt'
     output:
         '{output_dir}/count_matrix/{count_method}_lncrna.txt'
+    wildcard_constraints:
+        count_method=count_method_regex
     shell:
         '''awk 'NR==1{{print}}NR>1{{split($0,a,"|");if(a[2] == "lncRNA") print}}' {input} > {output}
         '''
@@ -189,9 +193,11 @@ rule summarize_fragment_counts:
     input:
         fragment_counts=lambda wildcards: expand('{output_dir}/stats/fragment_counts/{sample_id}/{map_step}',
             output_dir=wildcards.output_dir, sample_id=sample_ids, map_step=map_steps),
-        count_matrix='{{output_dir}}/count_matrix/{count_method}.txt'.format(count_method=config['count_method'])
+        count_matrix='{output_dir}/count_matrix/featurecounts.txt'
     output:
         '{output_dir}/summary/read_counts.txt'
+    wildcard_constraints:
+        count_method=count_method_regex
     run:
         import pandas as pd
         # read fragment counts for each mapping step
