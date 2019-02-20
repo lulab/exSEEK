@@ -62,6 +62,7 @@ rule bin_coverage:
             | {bin_dir}/bin_coverage /dev/stdin {input.chrom_sizes} {output} {params.bin_size}
         '''
 
+"""
 rule call_domains:
     input:
         '{output_dir}/tbincov/{bin_size}/{sample_id}.bed'
@@ -73,6 +74,18 @@ rule call_domains:
         '''{piranha_path}/Piranha -b {wildcards.bin_size} -d {params.distribution} \
             -p 0.{wildcards.pvalue} -T bin_cov \
             {input} | awk 'NF>=6' > {output}
+        '''
+"""
+
+rule call_domains:
+    input:
+        '{output_dir}/tbincov/{bin_size}/{sample_id}.bed'
+    output:
+        '{output_dir}/domains_by_sample/{bin_size}/{pvalue}/{sample_id}.bed'
+    params:
+        background=0.99
+    shell:
+        '''{bin_dir}/call_domains.R -p 0.{wildcards.pvalue} -i {input} -b {params.background} -o {output}
         '''
 
 """
