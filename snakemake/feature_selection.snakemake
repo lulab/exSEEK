@@ -10,51 +10,49 @@ with open(data_dir + '/compare_groups.yaml', 'r') as f:
 # key: count_method, value: preprocess_method
 preprocess_methods = {}
 for count_method in to_list(config['count_method']):
-    with open(output_dir + '/select_preprocess_method/uca_score/{count_method}/selected_methods.txt'.format(count_method=count_method), 'r') as f:
+    for filename in expand('{output_dir}/select_preprocess_method/{score}/{count_method}/selected_methods.txt',
+        output_dir=output_dir, score=clustering_scores, count_method=count_method):
+        with open(filename, 'r') as f:
             preprocess_methods[count_method] = f.readline().strip()
 
+inputs = {
+    'cross_validation': [],
+    'cross_validation_diffexp': []
+}
+
+for count_method, preprocess_method in preprocess_methods.items():
+    # cross_validation
+    inputs['cross_validation'] += expand('{output_dir}/cross_validation/{preprocess_method}.{count_method}/{compare_group}/{classifier}.{n_select}.{select_method}.{fold_change_filter_direction}',
+        output_dir=output_dir, count_method=count_method, 
+        preprocess_method=preprocess_methods[count_method],
+        classifier=config['classifier'], 
+        select_method=config['selector'], 
+        compare_group=list(compare_groups.keys()), 
+        n_select=config['n_selects'], 
+        fold_change_filter_direction=config['fold_change_filter_direction'])
+    # cross_validation using differential expression for feature selection
+    inputs['cross_validation_diffexp'] += expand('{output_dir}/cross_validation_diffexp/{count_method}/{compare_group}/{classifier}.{n_select}.{diffexp_method}.{fold_change_filter_direction}',
+        output_dir=output_dir, count_method=count_method, 
+        preprocess_method=preprocess_methods[count_method],
+        classifier=config['classifier'], 
+        diffexp_method=config['diffexp_filter_params']['method'], 
+        compare_group=list(compare_groups.keys()), 
+        n_select=config['n_selects'],
+        fold_change_filter_direction=config['fold_change_filter_direction'])
+
+inputs['metrics_test'] = expand('{output_dir}/summary/{cross_validation}/metrics.test.txt', 
+    output_dir=output_dir, cross_validation=['cross_validation', 'cross_validation_diffexp'])
+inputs['metrics_train'] = expand('{output_dir}/summary/{cross_validation}/metrics.train.txt', 
+    output_dir=output_dir, cross_validation=['cross_validation', 'cross_validation_diffexp'])
+inputs['feature_stability'] = expand('{output_dir}/summary/{cross_validation}/feature_stability.txt',
+    output_dir=output_dir, cross_validation=['cross_validation', 'cross_validation_diffexp'])
+
 def get_all_inputs(wildcards):
-    inputs = []
-    for count_method, preprocess_method in preprocess_methods.items():
-        # cross_validation
-        '''
-        inputs += expand('{output_dir}/cross_validation/{preprocess_method}.{count_method}/{compare_group}/{classifier}.{n_select}.{select_method}.{fold_change_filter_direction}',
-            output_dir=output_dir, count_method=count_method, 
-            preprocess_method=preprocess_methods[count_method],
-            classifier=config['classifier'], 
-            select_method=config['selector'], 
-            compare_group=list(compare_groups.keys()), 
-            n_select=config['n_selects'], 
-            fold_change_filter_direction=config['fold_change_filter_direction'])
-        '''
-        inputs += expand('{output_dir}/cross_validation_diffexp/{count_method}/{compare_group}/{classifier}.{n_select}.{diffexp_method}.{fold_change_filter_direction}',
-            output_dir=output_dir, count_method=count_method, 
-            preprocess_method=preprocess_methods[count_method],
-            classifier=config['classifier'], 
-            diffexp_method=config['diffexp_method'], 
-            compare_group=list(compare_groups.keys()), 
-            n_select=config['n_selects'],
-            fold_change_filter_direction=config['fold_change_filter_direction'])
     return inputs
         
 rule all:
     input:
-        get_all_inputs
-
-            
-rule preprocess_features:
-    input:
-        '{output_dir}/matrix_processing/{preprocess_method}.{count_method}.txt'
-    output:
-        '{output_dir}/preprosess_features/{preprocess_method}.{count_method}.txt'
-    params:
-        scaler=config['scale_method'],
-        remove_zero_features=0.2,
-        rpkm_top={True: '--rpkm-top 2000', False: '--expr-top 2000'}[config['small_rna']]
-    shell:
-        '''{bin_dir}/feature_selection.py preprocess_features -i {input} --scaler {params.scaler} \
-            --use-log --transpose {params.rpkm_top} --remove-zero-features {params.remove_zero_features} -o {output}
-        '''
+        unpack(get_all_inputs)
     
 rule select_features:
     input:
@@ -101,7 +99,7 @@ def get_input_matrix(wildcards):
 
 rule cross_validation:
     input:
-        matrix=get_input_matrix,
+        matrix='{output_dir}/matrix_processing/{preprocess_method}.{count_method}.txt',
         sample_classes=data_dir+ '/sample_classes.txt'
     output:
         directory('{output_dir}/cross_validation/{preprocess_method}.{count_method}/{compare_group}/{classifier}.{n_select}.{selector}.{fold_change_filter_direction}')
@@ -204,4 +202,14 @@ rule evaluate_single_features:
             -o {output}
         '''
 
-
+rule summarize_cross_validation:
+    input:
+        input_dir=lambda wildcards: inputs[wildcards.cross_validation],
+        selected_methods=lambda wildcards: expand('{output_dir}/select_preprocess_method/{score}/{count_method}/selected_methods.txt',
+            output_dir=wildcards.output_dir, score=clustering_scores, count_method=config['count_method'])
+    output:
+        metrics_test='{output_dir}/summary/{cross_validation}/metrics.test.txt',
+        metrics_train='{output_dir}/summary/{cross_validation}/metrics.train.txt',
+        feature_stability='{output_dir}/summary/{cross_validation}/feature_stability.txt'
+    script:
+        'scripts/summarize_cross_validation.py'
