@@ -219,7 +219,6 @@ def create_reference(args):
             'searchable': True,
             'visibilityWindow':  300000000,
             'height': 100,
-            'logScale': false,
             'show': True
         }
     }
