@@ -330,6 +330,18 @@ samtools faidx genome/hg38/fasta/circRNA.fa
 STAR --runMode genomeGenerate --genomeSAindexNbases 10 --genomeChrBinNbits 7 --genomeDir genome/hg38/index/star/circRNA/ --genomeFastaFiles genome/hg38/fasta/circRNA.fa
 ```
 
+### Create pseudo-genome for IGV
+```bash
+bin/preprocess.py create_pseudo_genome \
+    -i genome/hg38/fasta/circRNA.fa \
+    --circular-rna \
+    --output-fasta genome/hg38/fasta/pseudo_genome.circRNA.fa \
+    --output-annotation genome/hg38/bed/pseudo_genome.circRNA.bed \
+    --output-chrom-sizes genome/hg38/chrom_sizes/pseudo_genome.circRNA \
+    --output-cytoband genome/hg38/cytoband/pseudo_genome.circRNA.txt
+bedtools sort -i genome/hg38/bed/pseudo_genome.circRNA.bed
+```
+
 ### Merge transcript table
 ```bash
 {
