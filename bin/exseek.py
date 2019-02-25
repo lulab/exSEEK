@@ -66,6 +66,7 @@ if __name__ == '__main__':
         raise ValueError('cannot find configuration file: {} '.format(configfile))
     with open(configfile, 'r') as f:
         config = yaml.load(f)
+        config.update(default_config)
     # check cluster configuration
     if args.cluster:
         cluster_config = os.path.join(args.config_dir, 'cluster.yaml')
