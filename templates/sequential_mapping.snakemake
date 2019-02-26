@@ -6,8 +6,10 @@ rule map_{{ rna_type }}:
         {% else %}
         reads='{output_dir}/unmapped/{sample_id}/{{ rna_types[loop.index0 - 1] }}.fa.gz',
         {% endif %}
-        {% if rna_type in ['rRNA', 'miRNA', 'circRNA', 'spikein'] %}
+        {% if rna_type in ['rRNA', 'miRNA', 'circRNA'] %}
         index=genome_dir + '/index/{{ aligner }}/{{ rna_type }}.1.bt2'
+        {% elif rna_type == 'spikein' %}
+        index=genome_dir + '/index/{{ aligner }}/spikein_small.1.bt2'
         {% else %}
         index=genome_dir + '/rsem_index/{{ aligner }}/{{ rna_type }}.1.bt2'
         {% endif %}
@@ -15,8 +17,10 @@ rule map_{{ rna_type }}:
         unmapped='{output_dir}/unmapped/{sample_id}/{{ rna_type }}.fa.gz',
         bam='{output_dir}/tbam/{sample_id}/{{ rna_type }}.bam'
     params:
-        {% if rna_type in ['rRNA', 'miRNA', 'circRNA', 'spikein'] %}
+        {% if rna_type in ['rRNA', 'miRNA', 'circRNA'] %}
         index=genome_dir + '/index/{{ aligner }}/{{ rna_type }}'
+        {% elif rna_type == 'spikein' %}
+        index=genome_dir + '/index/{{ aligner }}/spikein_small'
         {% else %}
         index=genome_dir + '/rsem_index/{{ aligner }}/{{ rna_type }}'
         {% endif %}
