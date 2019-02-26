@@ -65,8 +65,9 @@ if __name__ == '__main__':
     if not os.path.isfile(configfile):
         raise ValueError('cannot find configuration file: {} '.format(configfile))
     with open(configfile, 'r') as f:
-        config = yaml.load(f)
-        config.update(default_config)
+        config = default_config
+        user_config = yaml.load(f)
+        config.update(user_config)
     # check cluster configuration
     if args.cluster:
         cluster_config = os.path.join(args.config_dir, 'cluster.yaml')
@@ -88,9 +89,11 @@ if __name__ == '__main__':
     def update_sequential_mapping():
         snakefile = os.path.join(root_dir, 'snakemake', 'sequential_mapping.snakemake')
         logger.info('generate sequential_mapping.snakemake')
-        subprocess.check_call([os.path.join(root_dir, 'bin/generate_snakemake.py'), 'sequential_mapping',
+        update_command = [os.path.join(root_dir, 'bin/generate_snakemake.py'), 'sequential_mapping',
                 '--rna-types', ','.join(config['rna_types']), 
-                '-o', snakefile], shell=False)
+                '-o', snakefile]
+        logger.info('run ' + ' '.join(update_command))
+        subprocess.check_call(update_command, shell=False)
         
     def update_singularity_wrappers():
         singularity_path = shutil.which('singularity')

@@ -11,6 +11,9 @@ def get_all_inputs(wildcards):
         count_matrix_long_bg=expand('{output_dir}/count_matrix/transcript_long_bg.txt', output_dir=output_dir),
         count_matrix_mirna=expand('{output_dir}/count_matrix/transcript_mirna.txt', output_dir=output_dir)
     )
+    if 'spikein' in config['rna_types']:
+        available_inputs['count_matrix_spikein'] = expand('{output_dir}/count_matrix/spikein.txt', output_dir=output_dir)
+
     enabled_inputs = list(available_inputs.keys())
     inputs = []
     for key, l in available_inputs.items():
@@ -119,18 +122,36 @@ rule count_matrix_long_bg:
         # save to output file
         domains_removed.to_csv(output[0], sep='\t', header=True, index=True)
 
+def get_count_matrix_full_length_inputs(wildcards):
+    rna_types = [rna_type for rna_type in config['rna_types'] if rna_type not in ('rRNA', 'spikein')]
+    if wildcards.count_method == 'transcript':
+        rna_types = [rna_type for rna_type in config['rna_types'] if rna_type not in ('rRNA', 'spikein')]
+        return {
+            'counts': expand('{output_dir}/counts/transcript/{sample_id}',
+                output_dir=wildcards.output_dir, sample_id=sample_ids),
+            'transcript_table': expand(genome_dir + '/transcript_table/{rna_type}.txt', rna_type=rna_types),
+            'transcript_sizes': expand(genome_dir + '/chrom_sizes/{rna_type}', rna_type=rna_types)
+        }
+    elif wildcards.count_method == 'spikein':
+        rna_types = ['spikein_small']
+        return {
+            'counts': expand('{output_dir}/counts/spikein/{sample_id}',
+                output_dir=wildcards.output_dir, sample_id=sample_ids),
+            'transcript_table': [genome_dir + '/transcript_table/spikein_small.txt'],
+            'transcript_sizes': [genome_dir + '/chrom_sizes/spikein_small'],
+        }
+    else:
+        raise ValueError('unknown count method: {}'.format(wildcards.count_method))
+
 rule count_matrix_full_length:
     '''Count matrix of full length transcripts (all types of RNAs)
     '''
     input:
-        counts=lambda wildcards: expand('{output_dir}/counts/transcript/{sample_id}',
-            output_dir=wildcards.output_dir, sample_id=sample_ids),
-        transcript_table=expand(genome_dir + '/transcript_table/{rna_type}.txt', rna_type=rna_types),
-        transcript_sizes=genome_dir + '/chrom_sizes/transcriptome'
+        unpack(get_count_matrix_full_length_inputs)
     output:
-        '{output_dir}/count_matrix/transcript.txt'
-    params:
-        feature_type='transcript_id'
+        '{output_dir}/count_matrix/{count_method}.txt'
+    wildcard_constraints:
+        count_method='(transcript)|(spikein).*'
     run:
         import pandas as pd
         import os
@@ -151,14 +172,18 @@ rule count_matrix_full_length:
         for filename in input.transcript_table:
             transcript_table.append(pd.read_table(filename, sep='\t', dtype='str'))
         transcript_table = pd.concat(transcript_table, axis=0)
-        transcript_table = transcript_table.drop_duplicates(params.feature_type, keep='first')
-        transcript_table.set_index(params.feature_type, inplace=True, drop=False)
+        transcript_table = transcript_table.drop_duplicates('transcript_id', keep='first')
+        transcript_table.set_index('transcript_id', inplace=True, drop=False)
 
-        transcript_sizes = pd.read_table(input.transcript_sizes, 
-            sep='\t', header=None, names=['transcript_id', 'length'], dtype='str')
+        transcript_sizes = []
+        for filename in input.transcript_sizes:
+            transcript_sizes.append(pd.read_table(filename, 
+                sep='\t', header=None, names=['transcript_id', 'length'], dtype='str'))   
+        transcript_sizes = pd.concat(transcript_sizes, axis=0)  
         transcript_sizes = transcript_sizes.drop_duplicates('transcript_id', keep='first')
         transcript_sizes.set_index('transcript_id', inplace=True)
         transcript_sizes = transcript_sizes.loc[:, 'length']
+
         feature_names = transcript_table.loc[gene_ids, 'gene_id'].values \
             + '|' + transcript_table.loc[gene_ids, 'gene_type'].values \
             + '|' + transcript_table.loc[gene_ids, 'gene_name'].values \
@@ -239,3 +264,12 @@ rule merge_transcript_by_biotype:
         '''cat {input} > {output}
         '''
 
+rule merge_spikein:
+    input:
+        lambda wildcards: expand('{output_dir}/counts_by_biotype/transcript/{sample_id}/spikein',
+            output_dir=wildcards.output_dir, sample_id=wildcards.sample_id)
+    output:
+        '{output_dir}/counts/spikein/{sample_id}'
+    shell:
+        '''cat {input} > {output}
+        '''
