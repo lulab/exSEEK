@@ -268,6 +268,28 @@ awk 'BEGIN{OFS="\t";FS="\t";d["miRNA"]="transcript";d["miRNA_primary_transcript"
 gff3ToGenePred -useName genome/hg38/source/miRBase.fixed.gff3 genome/hg38/genePred/miRBase.genePred
 ```
 
+### Spike-in
+```bash
+cut -f1,2 genome/hg38/fasta/spikein_small.fa.fai > genome/hg38/chrom_sizes/spikein_small
+{
+    echo -e 'chrom\tstart\tend\tname\tscore\tstrand\tgene_id\ttranscript_id\tgene_name\ttranscript_name\tgene_type\ttranscript_type\tsource'
+    awk 'BEGIN{OFS="\t";FS="\t"}{print $1,0,$2,$1,0,"+",$1,$1,$1,$1,"spikein","spikein","spikein"}' genome/hg38/fasta/spikein_small.fa.fai
+} > genome/hg38/transcript_table/spikein_small.txt
+bowtie2-build genome/hg38/fasta/spikein_small.fa genome/hg38/index/bowtie2/spikein_small
+```
+
+### UniVec
+```bash
+wget -O genome/hg38/fasta/univec.fa 'ftp://ftp.ncbi.nlm.nih.gov/pub/UniVec/UniVec'
+samtools faidx genome/hg38/fasta/univec.fa
+cut -f1,2 genome/hg38/fasta/univec.fa.fai > genome/hg38/chrom_sizes/univec
+{
+    echo -e 'chrom\tstart\tend\tname\tscore\tstrand\tgene_id\ttranscript_id\tgene_name\ttranscript_name\tgene_type\ttranscript_type\tsource'
+    awk 'BEGIN{OFS="\t";FS="\t"}{print $1,0,$2,$1,0,"+",$1,$1,$1,$1,"univec","univec","univec"}' genome/hg38/fasta/univec.fa.fai
+} > genome/hg38/transcript_table/univec.txt
+bowtie2-build genome/hg38/fasta/univec.fa genome/hg38/index/bowtie2/univec
+```
+
 ### Intron
 ```bash
 bin/preprocess.py extract_gene -i genome/hg38/gtf/long_RNA.gtf | bedtools sort > genome/hg38/bed/long_RNA.gene.bed
