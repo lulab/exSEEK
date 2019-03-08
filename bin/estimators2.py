@@ -92,15 +92,15 @@ def classification_scores(y_true, y_pred_labels, y_pred_probs):
 def get_classifier(name, **params):
     if name == 'logistic_regression':
         return LogisticRegression(**search_dict(params, 
-            ('penalty', 'dual', 'C', 'tol', 'fit_intercept', 
+            ('penalty', 'dual', 'C', 'tol', 'fit_intercept', 'solver',
                 'class_weight', 'max_iter', 'n_jobs', 'random_state', 'verbose')))
     elif name == 'logistic_regression_l1':
         return LogisticRegression(penalty='l1', **search_dict(params, 
-            ('dual', 'C', 'tol', 'fit_intercept', 
+            ('dual', 'C', 'tol', 'fit_intercept', 'solver',
             'class_weight', 'max_iter', 'n_jobs', 'random_state', 'verbose')))
     elif name == 'logistic_regression_l2':
         return LogisticRegression(penalty='l2', **search_dict(params, 
-            ('dual', 'C', 'tol', 'fit_intercept', 
+            ('dual', 'C', 'tol', 'fit_intercept', 'solver',
             'class_weight', 'max_iter', 'n_jobs', 'random_state', 'verbose')))
     elif name == 'random_forest':
         return RandomForestClassifier(**search_dict(params,
