@@ -1,7 +1,7 @@
 include: 'common.snakemake'
 
-rna_types_tbigwig = list(filter(lambda x: x not in ('rRNA', 'spikein'), rna_types))
-rna_types_transcriptome = list(filter(lambda x: x not in ('rRNA', 'spikein', 'piRNA', 'miRNA'), rna_types))
+rna_types_tbigwig = list(filter(lambda x: x not in ('rRNA', 'spikein', 'univec'), rna_types))
+rna_types_transcriptome = list(filter(lambda x: x not in ('rRNA', 'spikein', 'univec', 'piRNA', 'miRNA'), rna_types))
 
 rule all:
     input:
@@ -10,9 +10,9 @@ rule all:
         tbigwig_normalized=expand('{output_dir}/tbigwig_normalized/{sample_id}.{rna_type}.bigWig',
             output_dir=output_dir, sample_id=sample_ids, rna_type=['transcriptome']),
         gbigwig=expand('{output_dir}/bigwig/{sample_id}.{rna_type}.{strand}.bigWig',
-            output_dir=output_dir, sample_id=sample_ids, rna_type=['other', 'genome', 'transcriptome'], strand=['+', '-']),
+            output_dir=output_dir, sample_id=sample_ids, rna_type=['other', 'transcriptome'], strand=['+', '-']),
         gbigwig_normalized=expand('{output_dir}/bigwig_normalized/{sample_id}.{rna_type}.{strand}.bigWig',
-            output_dir=output_dir, sample_id=sample_ids, rna_type=['other', 'genome', 'transcriptome'], strand=['+', '-'])
+            output_dir=output_dir, sample_id=sample_ids, rna_type=['other', 'transcriptome'], strand=['+', '-'])
         
 rule sort_gbam:
     '''Sort genomic BAM file by coordinate
@@ -129,6 +129,7 @@ rule tbedgraph_to_bigwig:
 
 rule normalize_gbigwig:
     input:
+        summary='{output_dir}/summary/read_counts.txt',
         bam='{output_dir}/gbam/{sample_id}/{rna_type}.bam',
         bigwig='{output_dir}/bigwig/{sample_id}.{rna_type}.{strand}.bigWig',
         chrom_sizes=genome_dir + '/chrom_sizes/genome'
@@ -137,24 +138,23 @@ rule normalize_gbigwig:
         bedgraph=temp('{output_dir}/bigwig_normalized/{sample_id}.{rna_type}.{strand}.bedGraph')
     wildcard_constraints:
         strand='[+-]'
-    shell:
-        r'''read_depth=`bamtools count -in {input.bam}`
-        bigWigToBedGraph {input.bigwig} stdout \
-            | awk -v d="$read_depth" 'BEGIN{{OFS="\t";FS="\t"}}{{print $1,$2,$3,1000000.0*$4/d}}' > {output.bedgraph}
-        bedGraphToBigWig {output.bedgraph} {input.chrom_sizes} {output.bigwig}
-        '''
+    run:
+        library_size = get_library_size_small(input.summary, wildcards.sample_id)
+        shell(r'''bigWigToBedGraph {input.bigwig} stdout \
+            | awk -v d="{library_size}" 'BEGIN{{OFS="\t";FS="\t"}}{{print $1,$2,$3,1000000.0*$4/d}}' > {output.bedgraph}''')
+        shell(r'''bedGraphToBigWig {output.bedgraph} {input.chrom_sizes} {output.bigwig}''')
 
 rule normalize_tbigwig:
     input:
+        summary='{output_dir}/summary/read_counts.txt',
         bam='{output_dir}/tbam/{sample_id}/{rna_type}.bam',
         bigwig='{output_dir}/tbigwig/{sample_id}.{rna_type}.bigWig',
         chrom_sizes=genome_dir + '/chrom_sizes/{rna_type}'
     output:
         bigwig='{output_dir}/tbigwig_normalized/{sample_id}.{rna_type}.bigWig',
         bedgraph=temp('{output_dir}/tbigwig_normalized/{sample_id}.{rna_type}.bedGraph')
-    shell:
-        r'''read_depth=`bamtools count -in {input.bam}`
-        bigWigToBedGraph {input.bigwig} stdout \
-            | awk -v d="$read_depth" 'BEGIN{{OFS="\t";FS="\t"}}{{print $1,$2,$3,1000000.0*$4/d}}' > {output.bedgraph}
-        bedGraphToBigWig {output.bedgraph} {input.chrom_sizes} {output.bigwig}
-        '''
+    run:
+        library_size = get_library_size_small(input.summary, wildcards.sample_id)
+        shell(r'''bigWigToBedGraph {input.bigwig} stdout \
+            | awk -v d="{library_size}" 'BEGIN{{OFS="\t";FS="\t"}}{{print $1,$2,$3,1000000.0*$4/d}}' > {output.bedgraph}''')
+        shell(r'''bedGraphToBigWig {output.bedgraph} {input.chrom_sizes} {output.bigwig}''')
