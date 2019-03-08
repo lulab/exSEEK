@@ -62,13 +62,13 @@ options("repos" = c(CRAN="https://mirrors.tuna.tsinghua.edu.cn/CRAN/"))
 options(BioC_mirror="https://mirrors.tuna.tsinghua.edu.cn/bioconductor")
 # From CRAN
 install.packages(c('devtools', 'sva', 'VGAM', 'argparse', 'magrittr', 'readr', 'mvoutlier', 
-    'ggpubr', 'fastqr'))
+    'ggpubr', 'fastqr', 'ggfortify'))
 # From Bioconductor
 source('https://bioconductor.org/biocLite.R')
 biocLite(c('SingleCellExperiment', 'scater', 'scran', 'SCnorm',
     'EDASeq', 'RUVSeq', 'DESeq2', 'edgeR', 'sva', 'apeglm', 'gglasso'))
 # From R-forge
-install.packages('countreg', repos = c('http://R-Forge.R-project.org', 'https://mirrors.tuna.tsinghua.edu.cn/CRAN/'), dep = TRUE)
+install.packages('countreg', repos = c('http://download.r-forge.r-project.org', 'https://mirrors.tuna.tsinghua.edu.cn/CRAN/'), dep = TRUE)
 # From GitHub
 library(devtools)
 install_github('ChenMengjie/VIPER')
