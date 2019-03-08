@@ -1,7 +1,6 @@
-shell.prefix('set -x;')
 include: 'common.snakemake'
 
-rna_types_long = list(filter(lambda x: x not in ('miRNA', 'piRNA', 'rRNA'), rna_types))
+rna_types_long = list(filter(lambda x: x not in ('miRNA', 'piRNA', 'rRNA', 'spikein', 'univec'), rna_types))
 
 piranha_path = '../piranha-exrna-1.2.1/bin'
 
@@ -88,27 +87,6 @@ rule call_domains:
         '''{bin_dir}/call_domains.R -p 0.{wildcards.pvalue} -i {input} -b {params.background} -o {output}
         '''
 
-"""
-rule call_domains_two_round:
-    input:
-        '{output_dir}/tbincov/{bin_size}/{sample_id}.bed'
-    output:
-        round1='{output_dir}/domains_by_sample/{bin_size}/{pvalue}/{sample_id}.round1.bed',
-        round2='{output_dir}/domains_by_sample/{bin_size}/{pvalue}/{sample_id}.round2.bed',
-        merged='{output_dir}/domains_by_sample/{bin_size}/{pvalue}/{sample_id}.bed'
-    shell:
-        '''{piranha_path}/Piranha -s -b {wildcards.bin_size} -d {wildcards.method} -p 0.{wildcards.pvalue} \
-            -T bin_cov {input} -o {output.round1}
-        bedtools intersect -v -a {input} -b {output.round1} \
-            | {piranha_path}/Piranha -s -b {wildcards.bin_size} \
-            -d {wildcards.method} -p 0.{wildcards.pvalue} -T bin_cov /dev/stdin -o {output.round2}
-        cat {output.round1} {output.round2} \
-            | bedtools sort \
-            | bedtools merge -c 4,5,6,7 -o distinct,mean,distinct,mean \
-            | awk 'BEGIN{{OFS="\t";FS="\t"}}{{print $1,$2,$3,"peak_"NR,$5,$6}}' > {output.merged}
-        '''
-"""
-
 rule domain_recurrence:
     input:
         bed=lambda wildcards: expand('{output_dir}/domains_by_sample/{bin_size}/{pvalue}/{sample_id}.bed',
@@ -156,12 +134,14 @@ rule filter_domain_by_recurrence:
             }}' > {output}
         '''
 
+"""
 rule domain_read_counts:
     input:
         bed='{output_dir}/tbed_long_RNA/{sample_id}.bed.gz',
         domains='{output_dir}/domains/{bin_size}/{pvalue}.bed'
     output:
-        '{output_dir}/domain_counts/{bin_size}/{pvalue}/{sample_id}.bed'
+        bed='{output_dir}/domain_counts/{bin_size}/{pvalue}/{sample_id}.bed',
+        counts=temp('{output_dir}/domain_counts/{bin_size}/{pvalue}/{sample_id}.txt')
     threads: config['threads']
     shell:
         '''pigz -d -c -p {threads} {input.bed} \
@@ -170,15 +150,26 @@ rule domain_read_counts:
             | awk 'BEGIN{{OFS="\t";FS="\t"}}{{print $1,$2,$3,$4,$7,$6}}' \
                 > {output}
         '''
+"""
 
-rule summarize_domains:
+rule domain_read_counts:
     input:
-        '{output_dir}/gdomain_counts/{bin_size}/{pvalue}.bed'
+        bed='{output_dir}/tbed_long_RNA/{sample_id}.bed.gz',
+        domains='{output_dir}/domains/{bin_size}/{pvalue}.bed'
     output:
-        directory('{output_dir}/summary/call_domains')
+        bed='{output_dir}/domain_counts/{bin_size}/{pvalue}/{sample_id}.bed',
+        counts=temp('{output_dir}/domain_counts/{bin_size}/{pvalue}/{sample_id}.txt')
+    threads: config['threads']
     shell:
-        '''{bin_dir}/report.py summarize_domains -i {input}
+        r'''pigz -d -c -p {threads} {input.bed} \
+                | bedtools map -s -c 4 -o collapse \
+                    -a - -b {input.domains} \
+                | awk 'BEGIN{{OFS="\t";FS="\t"}} {{if($NF==".") next; split($NF,a,",");i=int(rand()*length(a)) + 1;count[a[i]]+=1}}
+                    END{{for(name in count) print name,count[name]}}' > {output.counts}
+            awk 'BEGIN{{OFS="\t";FS="\t"}}FNR==NR{{count[$1]=$2;next}}{{$5=count[$4];if($5 == "")$5=0; print $1,$2,$3,$4,$5,$6}}'\
+                {output.counts} {input.domains} > {output.bed}
         '''
+
 
 rule domain_count_matrix:
     input:
