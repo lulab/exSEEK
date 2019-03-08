@@ -41,3 +41,34 @@ def uca_score(X, y, prediction_algorithm='knn'):
     labels_int = convert_label_to_int(labels)
     score = unsupervised_clustering_accuracy(labels_int, labels_pred)[0]
     return score
+
+def knn_score(X, y, K=10, n_shuffle=None):
+    from sklearn.neighbors import NearestNeighbors
+
+    N = X.shape[0]
+    assert K < N
+    def knn_fractions(X, y):
+        nn = NearestNeighbors(K)
+        nn.fit(X)
+        distances, indices = nn.kneighbors(X, K + 1)
+        neighbor_classes = np.take(y, indices[:, 1:])
+        return np.sum(neighbor_classes == y[:, np.newaxis], axis=1)
+    
+    def expected_fractions(X, y):
+        stats = np.zeros((n_shuffle, N))
+        for i in range(n_shuffle):
+            y = np.random.permutation(y)
+            stats[i] = knn_fractions(X, y)
+        return stats.mean(axis=0)
+    
+    classes, class_sizes = np.unique(y, return_counts=True)
+    classes = np.argmax(y.reshape((-1, 1)) == classes.reshape((1, -1)), axis=1)
+    class_sizes = np.take(class_sizes, classes)
+    # expected fraction
+    mean_r = K/(N - 1)*class_sizes
+    observed_r = knn_fractions(X, y)
+    #mean_r = expected_fractions(X, y)
+    max_r = np.minimum(K, class_sizes)
+    #print(observed_r, mean_r, max_r)
+    scores = (observed_r - mean_r)/(max_r - mean_r)
+    return scores.mean()

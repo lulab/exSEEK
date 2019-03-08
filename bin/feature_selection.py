@@ -364,30 +364,45 @@ def evaluate(args):
 def calculate_clustering_score(args):
     import numpy as np
     import pandas as pd
-    from evaluation import uca_score
+    from evaluation import uca_score, knn_score
     from ioutils import open_file_or_stdout
 
     logger.info('read feature matrix: ' + args.matrix)
     X = pd.read_table(args.matrix, index_col=0, sep='\t')
-    logger.info('read sample classes: ' + args.sample_classes)
-    sample_classes = pd.read_table(args.sample_classes, index_col=0, sep='\t').iloc[:, 0]
+    
     if args.transpose:
         logger.info('transpose feature matrix')
         X = X.T
     if args.use_log:
         logger.info('apply log2 to feature matrix')
-        X = np.log2(X + 0.001)
-    y = sample_classes[X.index.values].values
+        X = np.log2(X + 0.25)
+    
     logger.info('calculate clustering score')
-    score = uca_score(X, y)
+    if args.method == 'uca_score':
+        if args.sample_classes is None:
+            raise ValueError('argument --sample-classes is required for knn_score')
+        logger.info('read sample classes: ' + args.sample_classes)
+        sample_classes = pd.read_table(args.sample_classes, index_col=0, sep='\t').iloc[:, 0]
+        y = sample_classes[X.index.values].values
+        score = uca_score(X, y)
+    elif args.method == 'knn_score':
+        if args.batch is None:
+            raise ValueError('argument --batch is required for knn_score')
+        if args.batch_index is None:
+            raise ValueError('argument --batch-index is required for knn_score')
+        logger.info('read batch information: ' + args.batch)
+        batch = pd.read_table(args.batch, index_col=0, sep='\t').iloc[:, args.batch_index - 1]
+        batch = batch[X.index.values].values
+        score = knn_score(X, batch)
+    else:
+        raise ValueError('unknown clustering score method: ' + args.method)
     with open_file_or_stdout(args.output_file) as fout:
-        fout.write('{}'.format(uca_score(X, y)))
+        fout.write('{}'.format(score))
 
 @command_handler
 def evaluate_single_features(args):
     import numpy as np
     import pandas as pd
-    from evaluation import uca_score
     from ioutils import open_file_or_stdout
     from tqdm import tqdm
     from sklearn.metrics import roc_auc_score
@@ -487,12 +502,18 @@ if __name__ == '__main__':
         help='evaluate a normalized matrix by clustering score')
     parser.add_argument('--matrix', '-i', type=str, required=True,
         help='input feature matrix (rows are samples and columns are features')
-    parser.add_argument('--sample-classes', type=str, required=True,
+    parser.add_argument('--sample-classes', type=str, required=False,
         help='input file containing sample classes with 2 columns: sample_id, sample_class')
+    parser.add_argument('--batch', type=str, required=False,
+        help='batch information')
+    parser.add_argument('--batch-index', type=int,
+        help='column index (1-based) to use in the batch information table')
     parser.add_argument('--output-file', '-o', type=str, default='-',
         help='output file for the score')
     parser.add_argument('--transpose', action='store_true', default=False,
         help='transpose the feature matrix')
+    parser.add_argument('--method', type=str, required=True, choices=('uca_score', 'knn_score'),
+        help='score method')
     parser.add_argument('--use-log', action='store_true',
         help='apply log2 to feature matrix')
 
