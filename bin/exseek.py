@@ -20,9 +20,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='exSeek main program')
 
     parser.add_argument('step', type=str, 
-        choices=('quality_control', 'quality_control_clean',
+        choices=('quality_control', 'quality_control_clean', 'cutadapt',
         'fastq_to_fasta', 'prepare_genome', 'bigwig',
-        'mapping', 'count_matrix', 'call_domains', 'combine_domains',
+        'mapping', 'count_matrix', 'call_domains', 'merge_domains', 'combine_domains',
         'normalization', 'feature_selection', 
         'differential_expression', 'evaluate_features', 'igv',
         'update_sequential_mapping', 'update_singularity_wrappers')
@@ -113,6 +113,11 @@ if __name__ == '__main__':
             snakefile = os.path.join(root_dir, 'snakemake', 'quality_control_pe.snakemake')
         else:
             snakefile = os.path.join(root_dir, 'snakemake', 'quality_control_se.snakemake')
+    elif args.step == 'cutadapt':
+        if config['paired_end']:
+            snakefile = os.path.join(root_dir, 'snakemake', 'cutadapt_pe.snakemake')
+        else:
+            snakefile = os.path.join(root_dir, 'snakemake', 'cutadapt_se.snakemake')
     elif args.step == 'quality_control_clean':
         if config['paired_end']:
             snakefile = os.path.join(root_dir, 'snakemake', 'quality_control_clean_pe.snakemake')
@@ -120,8 +125,9 @@ if __name__ == '__main__':
             snakefile = os.path.join(root_dir, 'snakemake', 'quality_control_clean_se.snakemake')
     elif args.step == 'mapping':
         if config['small_rna']:
-            if not os.path.exists(os.path.join(root_dir, 'snakemake', 'sequential_mapping.snakemake')):
-                update_sequential_mapping()
+            update_sequential_mapping()
+            #if not os.path.exists(os.path.join(root_dir, 'snakemake', 'sequential_mapping.snakemake')):
+            #    update_sequential_mapping()
             snakefile = os.path.join(root_dir, 'snakemake', 'mapping_small.snakemake')
         else:
             if config['paired_end']:
