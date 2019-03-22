@@ -1,14 +1,21 @@
-shell.prefix('set -x; set -e;')
 include: 'common.snakemake'
 
 import yaml
 with open(data_dir + '/compare_groups.yaml', 'r') as f:
     compare_groups = yaml.load(f)
 
+def get_all_inputs(wildcards):
+    inputs = []
+    inputs += expand('{output_dir}/differential_expression/{count_method}/{compare_group}/{diffexp_method}.txt',
+            output_dir=output_dir, count_method=config['count_method'], compare_group=compare_groups, diffexp_method=config['diffexp_method'])
+    if has_batch_info:
+        inputs += expand('{output_dir}/differential_expression_with_batch/{batch_index}/{count_method}/{compare_group}/{diffexp_method}.txt',
+                output_dir=output_dir, batch_index=config['batch_index'], count_method=config['count_method'], compare_group=compare_groups, diffexp_method=config['diffexp_method'])
+    return inputs
+
 rule all:
     input:
-        expand('{output_dir}/differential_expression/{count_method}/{compare_group}/{diffexp_method}.txt',
-            output_dir=output_dir, count_method=config['count_method'], compare_group=compare_groups, diffexp_method=config['diffexp_method'])
+        get_all_inputs
 
 rule differential_expression:
     input:
@@ -25,5 +32,26 @@ rule differential_expression:
             --method {wildcards.diffexp_method} \
             --positive-class "{params.positive_class}" \
             --negative-class "{params.negative_class}" \
+            -o {output}
+        '''
+
+rule differential_expression_with_batch:
+    input:
+        matrix='{output_dir}/matrix_processing/filter.{count_method}.txt',
+        classes=data_dir + '/sample_classes.txt',
+        batch_info=data_dir + '/batch_info.txt'
+    output:
+        '{output_dir}/differential_expression_with_batch/{batch_index}/{count_method}/{compare_group}/{diffexp_method}.txt'
+    params:
+        positive_class=lambda wildcards: compare_groups[wildcards.compare_group][1],
+        negative_class=lambda wildcards: compare_groups[wildcards.compare_group][0],
+        batch_index=config['batch_index']
+    shell:
+        '''{bin_dir}/differential_expression.R \
+            -i {input.matrix} --classes {input.classes} \
+            --method {wildcards.diffexp_method} \
+            --positive-class "{params.positive_class}" \
+            --negative-class "{params.negative_class}" \
+            --batch {input.batch_info} --batch-index {wildcards.batch_index} \
             -o {output}
         '''
