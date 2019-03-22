@@ -1,7 +1,8 @@
-shell.prefix('set -x;')
+shell.prefix('set -x; set -e;')
 import os
 import yaml
 import re
+from glob import glob
 
 with open('snakemake/default_config.yaml', 'r') as f:
     default_config = yaml.load(f)
@@ -36,10 +37,24 @@ for sample_id in sample_ids:
     if '.' in sample_id:
         raise ValueError('"." is not allowed in sample ID: {}'.format(sample_id))
 
+# read adapter sequences
+for key in ('adaptor', 'adaptor_5p'):
+    if isinstance(config[key], str):
+        if config[key].startswith('file:'):
+            filename = config[key][5:].strip()
+            adapters = {}
+            with open(filename, 'r') as f:
+                for lineno, line in enumerate(f):
+                    c = line.strip().split('\t')
+                    if len(c) != 2:
+                        raise ValueError('expect 2 columns in adapter file: {}, {} found'.format(filename, len(c)))
+                    adapters[c[0]] = c[1]
+            config[key] = adapters
+    
 def get_preprocess_methods():
     preprocess_methods = []
     for batch_removal_method in config['batch_removal_methods']:
-        if batch_removal_method == 'Combat':
+        if batch_removal_method in ('ComBat', 'limma'):
             template = 'filter.{imputation_method}.Norm_{normalization_method}.Batch_{batch_removal_method}_{batch_index}'
             preprocess_methods += expand(template,
                 output_dir=output_dir,
@@ -47,7 +62,7 @@ def get_preprocess_methods():
                 normalization_method=config['normalization_methods'],
                 batch_removal_method=batch_removal_method,
                 batch_index=config['batch_indices'])
-        else:
+        elif batch_removal_method in ('RUV', 'null'):
             template = 'filter.{imputation_method}.Norm_{normalization_method}.Batch_{batch_removal_method}'
             preprocess_methods += expand(template,
                 output_dir=output_dir,
@@ -95,11 +110,18 @@ def get_input_matrix(wildcards):
     else:
         return '{output_dir}/rpkm/{preprocess_method}.{count_method}.txt'.format(**wildcards)
     
-def get_known_biomarkers(compare_group):
-    if os.path.isdir(os.path.join(data_dir, 'known_biomarkers', compare_group)):
-        for feature_file in os.listdir(os.path.join(data_dir, 'known_biomarkers', compare_group)):
-            feature_set = os.path.splitext(feature_file)[0]
-            yield feature_set
+def get_known_biomarkers():
+    biomarkers = []
+    for filename in glob(os.path.join(data_dir, 'known_biomarkers', '*/*.txt')):
+        c = filename.split('/')
+        compare_group = c[-2]
+        feature_set = os.path.splitext(c[-1])[0]
+        biomarkers.append((compare_group, feature_set))
+    return biomarkers
+    #if os.path.isdir(os.path.join(data_dir, 'known_biomarkers', compare_group)):
+    #    for feature_file in os.listdir(os.path.join(data_dir, 'known_biomarkers', compare_group)):
+    #        feature_set = os.path.splitext(feature_file)[0]
+    #        yield feature_set
 
 def to_list(obj):
     if isinstance(obj, list):
@@ -107,6 +129,54 @@ def to_list(obj):
     if isinstance(obj, str) or isinstance(obj, bytes):
         return [obj]
     return list(obj)
+
+def get_cutadapt_adapter_args(wildcards, adapter, option):
+    '''Get adapter sequence for a sample
+
+    ===========
+    Parameters:
+        adapter: adapter config value
+        option: option for cutadapt
+
+    ========
+    Returns:
+        arguments: command arguments for cutadapt
+
+    '''
+    if isinstance(adapter, str):
+        if len(adapter) == 0:
+            return ''
+        else:
+            return option + ' ' +  adapter
+    elif isinstance(adapter, list):
+        return ' '.join(expand(option + ' {a}', adapter))
+    elif isinstance(adapter, dict):
+        adapter_seq = adapter.get(wildcards.sample_id)
+        if adapter_seq is None:
+            raise ValueError('adapter sequence is not found for sample {}'.format(wildcards.sample_id))
+        return option + ' ' + adapter_seq
+    else:
+        return ''
+        
+def get_library_size_small(summary_file, sample_id):
+    '''Get library size for a sample from summary file
+    '''
+    columns = {}
+    data = {}
+    with open(summary_file, 'r') as f:
+        for lineno, line in enumerate(f):
+            c = line.strip().split('\t')
+            if lineno == 0:
+                columns = {c[i]:i for i in range(1, len(c))}
+                column = columns[sample_id]
+            else:
+                data[c[0]] = int(c[column])
+    library_size = data['clean.unmapped'] - data['other.unmapped']
+    # remove these types from library size calculation
+    for key in ['spikein.mapped', 'univec.mapped', 'rRNA.mapped']:
+        if key in data:
+            library_size -= data[key]
+    return library_size
 
 # template for nbconvert
 nbconvert_command = '''cp {input.jupyter} {output.jupyter}
@@ -128,15 +198,15 @@ rule make_temp:
     shell:
         'mkdir -p {output}'
 
-count_method_regex = '(featurecounts)|(htseq)|(domains_combined)|(domains_long)|(transcript)|(transcript_long)|(transcript_long_bg)|(mirna_and_domains)|(mirna_and_long_bg)|(transcript_mirna)|(featurecounts_mrna)|(featurecounts_lncrna)'
+count_method_regex = '(featurecounts)|(htseq)|(domains_combined)|(domains_long)|(transcript)|(transcript_long)|(mirna_and_long)|(mirna_and_domains)|(mirna_and_long_bg)|(transcript_mirna)|(featurecounts_mrna)|(featurecounts_lncrna)'
 imputation_method_regex = '(scimpute_count)|(viper_count)|(null)'
-normalization_method_regex = '(SCnorm)|(TMM)|(RLE)|(CPM)|(CPM_top)|(CPM_rm)|(CPM_refer)|(null)'
-batch_removal_method_with_batchinfo_regex = '(Combat)'
-batch_removal_method_without_batchinfo_regex = '(RUV)|(null)'
+normalization_method_regex = '(SCnorm)|(TMM)|(RLE)|(CPM)|(CPM_top)|(CPM_rm)|(CPM_refer)|(UQ)|(null)'
+batch_removal_method_with_batchinfo_regex = '(ComBat)|(limma)'
+batch_removal_method_without_batchinfo_regex = '(RUV)|(RUVn)|(null)'
 
 # batch information is provided
 has_batch_info = os.path.isfile(os.path.join(data_dir, 'batch_info.txt'))
 # clustering scores for normalization, feature_selection and evaluate_features
 clustering_scores = ['uca_score']
 if has_batch_info:
-    clustering_scores += ['kbet_score', 'combined_score']
+    clustering_scores += ['kbet_score', 'combined_score', 'knn_score']
