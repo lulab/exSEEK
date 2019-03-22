@@ -461,9 +461,20 @@ norm_cpm_refer <- function(mat, ref_genes, cv_threshold=0.5) {
 
 
 remove_batch <- function( mat, method, class_info=NULL, batch_info=NULL, ruv_k=1){
-    if (method == 'RUV')       mat <- ruvs(mat, class_info=class_info, batch_info=batch_info, k=ruv_k)
-    else if (method == 'ComBat')    mat <- combat(mat, class_info=class_info, batch_info=batch_info)
-    else if (method == 'limma')     mat <- limma(mat, class_info=class_info, batch_info=batch_info)
+    # only remove batch for samples with batch information
+    if(!is.null(batch_info)){
+        samples_with_batch <- names(batch_info)[!is.na(batch_info)]
+    }else{
+        samples_with_batch <- colnames(mat)
+    }
+    if (method == 'RUV')       mat <- ruvs(mat, class_info=class_info, k=ruv_k)
+    else if(method == 'RUVn')       {
+        class_info <- rep(1, ncol(mat))
+        names(class_info) <- colnames(mat)
+        mat <- ruvs(mat, class_info=class_info, k=ruv_k)
+    }
+    else if (method == 'ComBat')    mat[, samples_with_batch] <- combat(mat[, samples_with_batch], class_info=class_info, batch_info=batch_info)
+    else if (method == 'limma')     mat[, samples_with_batch] <- limma(mat[, samples_with_batch], class_info=class_info, batch_info=batch_info)
     else if (method == 'null')      mat <- mat
     else stop("unknown batch effect removal method: ", method)
     mat
