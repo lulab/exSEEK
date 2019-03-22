@@ -3,7 +3,7 @@ include: 'common.snakemake'
 
 def get_all_inputs(wildcards):
     if config['small_rna']:
-        map_steps = ['transcriptome', 'genome']
+        map_steps = ['transcriptome']
     else:
         if config['remove_duplicates_long']:
             map_steps = ['genome_rmdup', 'rRNA_rmdup', 'circRNA_rmdup']
