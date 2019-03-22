@@ -1,15 +1,15 @@
 include: 'common.snakemake'
 
 # remove rRNA and spikein
-rna_types = list(filter(lambda x: x not in ('rRNA', 'spikein'), rna_types))
+rna_types = list(filter(lambda x: x not in ('rRNA', 'spikein', 'univec'), rna_types))
 
 def get_all_inputs(wildcards):
     available_inputs = dict(
         count_matrix=expand('{output_dir}/count_matrix/transcript.txt', output_dir=output_dir),
-        count_matrix_small=expand('{output_dir}/count_matrix/transcript_small.txt', output_dir=output_dir),
         count_matrix_long=expand('{output_dir}/count_matrix/transcript_long.txt', output_dir=output_dir),
         count_matrix_long_bg=expand('{output_dir}/count_matrix/transcript_long_bg.txt', output_dir=output_dir),
-        count_matrix_mirna=expand('{output_dir}/count_matrix/transcript_mirna.txt', output_dir=output_dir)
+        count_matrix_mirna=expand('{output_dir}/count_matrix/transcript_mirna.txt', output_dir=output_dir),
+        count_matrix_mirna_and_long=expand('{output_dir}/count_matrix/mirna_and_long.txt', output_dir=output_dir)
     )
     if 'spikein' in config['rna_types']:
         available_inputs['count_matrix_spikein'] = expand('{output_dir}/count_matrix/spikein.txt', output_dir=output_dir)
@@ -62,6 +62,17 @@ rule count_matrix_mirna:
         '{output_dir}/count_matrix/transcript_mirna.txt'
     shell:
         '''awk 'NR==1{{print}}NR>1{{split($0,a,"|");if(a[2] == "miRNA") print}}' {input} > {output}
+        '''
+
+rule count_matrix_mirna_and_long:
+    '''Count matrix of miRNA only
+    '''
+    input:
+        '{output_dir}/count_matrix/transcript.txt'
+    output:
+        '{output_dir}/count_matrix/mirna_and_long.txt'
+    shell:
+        '''awk 'NR==1{{print}}NR>1{{split($0,a,"|");if(a[2] != "piRNA") print}}' {input} > {output}
         '''
 
 rule count_matrix_small:
@@ -133,12 +144,11 @@ def get_count_matrix_full_length_inputs(wildcards):
             'transcript_sizes': expand(genome_dir + '/chrom_sizes/{rna_type}', rna_type=rna_types)
         }
     elif wildcards.count_method == 'spikein':
-        rna_types = ['spikein_small']
         return {
             'counts': expand('{output_dir}/counts/spikein/{sample_id}',
                 output_dir=wildcards.output_dir, sample_id=sample_ids),
-            'transcript_table': [genome_dir + '/transcript_table/spikein_small.txt'],
-            'transcript_sizes': [genome_dir + '/chrom_sizes/spikein_small'],
+            'transcript_table': [config['spikein_dir'] + '/transcript_table/spikein.txt'],
+            'transcript_sizes': [config['spikein_dir'] + '/chrom_sizes/spikein'],
         }
     else:
         raise ValueError('unknown count method: {}'.format(wildcards.count_method))
