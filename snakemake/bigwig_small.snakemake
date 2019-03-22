@@ -12,6 +12,8 @@ rule all:
         gbigwig=expand('{output_dir}/bigwig/{sample_id}.{rna_type}.{strand}.bigWig',
             output_dir=output_dir, sample_id=sample_ids, rna_type=['other', 'transcriptome'], strand=['+', '-']),
         gbigwig_normalized=expand('{output_dir}/bigwig_normalized/{sample_id}.{rna_type}.{strand}.bigWig',
+            output_dir=output_dir, sample_id=sample_ids, rna_type=['other', 'transcriptome'], strand=['+', '-']),
+        gbigwig_normalized_log2=expand('{output_dir}/bigwig_normalized_log2/{sample_id}.{rna_type}.{strand}.bigWig',
             output_dir=output_dir, sample_id=sample_ids, rna_type=['other', 'transcriptome'], strand=['+', '-'])
         
 rule sort_gbam:
@@ -144,6 +146,21 @@ rule normalize_gbigwig:
             | awk -v d="{library_size}" 'BEGIN{{OFS="\t";FS="\t"}}{{print $1,$2,$3,1000000.0*$4/d}}' > {output.bedgraph}''')
         shell(r'''bedGraphToBigWig {output.bedgraph} {input.chrom_sizes} {output.bigwig}''')
 
+rule normalize_log2_gbigwig:
+    input:
+        bigwig='{output_dir}/bigwig_normalized/{sample_id}.{rna_type}.{strand}.bigWig',
+        chrom_sizes=genome_dir + '/chrom_sizes/genome'
+    output:
+        bigwig='{output_dir}/bigwig_normalized_log2/{sample_id}.{rna_type}.{strand}.bigWig',
+        bedgraph=temp('{output_dir}/bigwig_normalized_log2/{sample_id}.{rna_type}.{strand}.bedGraph')
+    wildcard_constraints:
+        strand='[+-]'
+    shell:
+        r'''bigWigToBedGraph {input.bigwig} stdout \
+            | awk 'BEGIN{{OFS="\t";FS="\t"}}{{print $1,$2,$3,log($4+0.25)/log(2)}}' > {output.bedgraph}
+        bedGraphToBigWig {output.bedgraph} {input.chrom_sizes} {output.bigwig} 
+        '''
+
 rule normalize_tbigwig:
     input:
         summary='{output_dir}/summary/read_counts.txt',
@@ -158,3 +175,5 @@ rule normalize_tbigwig:
         shell(r'''bigWigToBedGraph {input.bigwig} stdout \
             | awk -v d="{library_size}" 'BEGIN{{OFS="\t";FS="\t"}}{{print $1,$2,$3,1000000.0*$4/d}}' > {output.bedgraph}''')
         shell(r'''bedGraphToBigWig {output.bedgraph} {input.chrom_sizes} {output.bigwig}''')
+
+
