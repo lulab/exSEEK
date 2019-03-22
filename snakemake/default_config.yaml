@@ -1,5 +1,5 @@
 # RNA types for sequential mapping in small-RNA pipeline
-rna_types: [spikein, rRNA, lncRNA, miRNA, mRNA, piRNA, snoRNA, 
+rna_types: [univec, rRNA, lncRNA, miRNA, mRNA, piRNA, snoRNA, 
   snRNA, srpRNA, tRNA, tucpRNA, Y_RNA]
 # Adjusted p-value threshold for defining domains
 call_domain_pvalue: "05"
@@ -8,13 +8,13 @@ distribution: ZeroTruncatedNegativeBinomial
 # Size of each bin to compute read coverage
 bin_size: 20
 # Define recurrent domain as domains called in fraction of samples above this value
-cov_threshold: 0.2
+cov_threshold: 0.05
 # Method to scale features
 scale_method: robust
 # Classifier for feature selection
 classifiers: random_forest
 # Number of features to select
-n_selects: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30, 40, 50]
+n_selects: [10]
 resample_method: bootstrap
 # Feature selection methods
 select_methods: [robust]
@@ -38,7 +38,7 @@ fold_change_filter: true
 # Parameters for fold change filter
 fold_change_filter_params:
   direction: any
-fold_change_filter_direction: [any, up, down]
+fold_change_filter_direction: [any]
 # Feature scaling method
 scaler: robust
 # Parameters for feature scaling
@@ -53,7 +53,8 @@ diffexp_filter_params:
   score_type: pi_value
   fold_change_direction: any
 # Wrapper feature selection method
-selector: robust
+#selector: robust
+selector: [max_features, robust]
 # Parameters for wrapper feature selection method
 selector_params:
   robust:
@@ -63,14 +64,23 @@ selector_params:
       test_size: 0.2
   rfe:
     step: 0.2
+  max_features: {}
+    
 # Maximum number of features to select
 n_features_to_select: [10]
 # Classifier for prediction
-classifier: [logistic_regression, linear_svm, random_forest]
+classifier: [logistic_regression, random_forest]
 # Parameters for classifiers
 classifier_params:
   logistic_regression:
     penalty: l2
+    solver: liblinear
+  logistic_regression_l1:
+    penalty: l1
+    solver: liblinear
+  logistic_regression_l2:
+    penalty: l2
+    solver: liblinear
   random_forest:
     n_estimators: 50
     max_features: sqrt
@@ -144,24 +154,22 @@ cross_validation_splits: 50
 #   featurecounts: gene-level features counted using featureCounts
 count_method: domains_combined
 # Define low expression value as read counts below this value
-filtercount: 10
+filtercount: 5
 # Threshold for filtering low expression features
-filterexpv: 10
+filterexpv: 0
 # Quantification method for low expression filter
-filtermethod: filterrpkm
+filtermethod: filtercount
 # Keep features with high expression in fraction of samples above this value
 filtersample: 0.2
 # Imputation methods to try (set to "null" to skip imputation)
 #imputation_methods: ["viper_count", "null"]
-imputation_methods: ["null"]
+imputation_method: ["null"]
 # Read depth normalization methods to try
-normalization_methods: ["TMM", "RLE", "CPM", "CPM_top"]
+normalization_method: ["TMM"]
 # Batch effect removal methods to try (set "null" to skip batch effect removal)
-batch_removal_methods: ["null", "Combat", "RUV"]
+batch_removal_method: ["ComBat"]
 # Column index of batch effect in batch_info.txt to considier for Combat
-batch_indices: []
-# Batch index for kBET score calculation
-kbet_batch_index: 1
+batch_index: 1
     
 # Root directory
 root_dir: "."
@@ -173,6 +181,8 @@ temp_dir: "tmp"
 tools_dir: "tools"
 # Directory for exSeek scripts
 bin_dir: "bin"
+# Directory for spike-in sequences and index
+spikein_dir: "genome/hg38/spikein"
 
 # Input files are clean reads
 input_clean_reads: false
@@ -199,6 +209,8 @@ adaptor2_5p: ""
 trim_5p: 0
 # Exact number of bases to trim from 3'-end
 trim_3p: 0
+# Trim exact number of bases after adapter trimming
+trim_after_adapter: false
 # Discard reads of length below this value
 min_read_length: 16
 # Maximum read length
@@ -235,7 +247,7 @@ umi_length: 0
 evaluate_features_preprocess_methods: []
 # Differential expression method
 # Available methods: deseq2, edger_glmlrt, edger_glmqlf, edger_exact, wilcox
-diffexp_method: [deseq2, edger_glmlrt, edger_glmqlf, edger_exact, wilcox]
+diffexp_method: [deseq2, edger_glmlrt, edger_glmqlf, edger_exact, wilcox, limma]
 # Count multi-mapping reads
 count_multimap_reads: true
 # Count overlapping features
