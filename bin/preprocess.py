@@ -318,10 +318,11 @@ def chrom_sizes(args):
             fout.write('{}\t{}\n'.format(record.id, len(record.seq)))
 
 @command_handler
-def extract_feature_sequence(args):
+def extract_domain_sequence(args):
     from pyfaidx import Fasta
     from Bio.Seq import Seq
     from ioutils import open_file_or_stdout
+    import pandas as pd
 
     fout = open_file_or_stdout(args.output_file)
     fastas = {}
@@ -333,6 +334,50 @@ def extract_feature_sequence(args):
             end = int(end)
             if gene_type == 'genomic':
                 gene_type = 'genome'
+            if gene_type not in fastas:
+                fastas[gene_type] = Fasta(os.path.join(args.genome_dir, 'fasta', gene_type + '.fa'))
+            if gene_type == 'genome':
+                chrom, gstart, gend, strand = gene_id.split('_')
+                gstart = int(gstart)
+                gend = int(gend)
+                seq = fastas[gene_type][chrom][gstart:gend].seq
+                if strand == '-':
+                    seq = str(Seq(seq).reverse_complement())
+            else:
+                seq = fastas[gene_type][transcript_id][start:end].seq
+            seq = seq.upper()
+            fout.write('>{}\n'.format(feature))
+            fout.write(seq)
+            fout.write('\n')
+    fout.close()
+    
+@command_handler
+def extract_feature_sequence(args):
+    from pyfaidx import Fasta
+    from Bio.Seq import Seq
+    from ioutils import open_file_or_stdout
+
+    def pad_range(start, end, chrom_size, max_length):
+        if (end - start) >= max_length:
+            continue
+        padding_left = (max_length - (end - start))//2
+        new_start = max(0, start - padding_left)
+        new_end = min(new_start + max_length, chrom_size)
+        return new_start, new_end
+
+    fout = open_file_or_stdout(args.output_file)
+    fastas = {}
+    with open(args.input_file, 'r') as fin:
+        for lineno, line in enumerate(fin):
+            if lineno == 0:
+                continue
+            feature = line.split('\t')[0]
+            gene_id, gene_type, gene_name, domain_id, transcript_id, start, end = feature.split('|')
+            start = int(start)
+            end = int(end)
+            if gene_type == 'genomic':
+                gene_type = 'genome'
+            # load FASTA file
             if gene_type not in fastas:
                 fastas[gene_type] = Fasta(os.path.join(args.genome_dir, 'fasta', gene_type + '.fa'))
             if gene_type == 'genome':
@@ -825,6 +870,18 @@ if __name__ == '__main__':
         help='feature file with feature names in the first column')
     parser.add_argument('--genome-dir', '-g', type=str, required=True,
         help='genome directory where fasta/${rna_type}.fa contains sequences')
+    parser.add_argument('--output-file', '-o', type=str, default='-',
+        help='output file in FASTA format')
+    parser.add_argument('--padding', type=int, default=200,
+        help='extend on both ends to maximum in length')
+
+    parser = subparsers.add_parser('extract_domain_sequence',
+        help='extract sequences using feature names')
+    parser.add_argument('--input-file', '-i', type=str, required=True,
+        help='feature file with feature names in the first column')
+    parser.add_argument('--genome-dir', '-g', type=str, required=True,
+        help='genome directory where fasta/${rna_type}.fa contains sequences')
+    parser.add_argument('--flanking', type=int, default=100)
     parser.add_argument('--output-file', '-o', type=str, default='-',
         help='output file in FASTA format')
     
