@@ -1,0 +1,45 @@
+include: 'common.snakemake'
+
+rule all:
+    inputs:
+        expand('{output_dir}/cutadapt/{sample_id}_{mate_index}.fastq.gz',
+            output_dir=output_dir, sample_id=sample_ids, mate_index=[1, 2])
+
+rule cutadapt_pe:
+    input:
+        fastq1=auto_gzip_input(data_dir + '/fastq/{sample_id}_1.fastq'),
+        fastq2=auto_gzip_input(data_dir + '/fastq/{sample_id}_2.fastq')
+    output:
+        fastq1='{output_dir}/cutadapt/{sample_id}_1.fastq.gz',
+        fastq2='{output_dir}/cutadapt/{sample_id}_2.fastq.gz'
+    threads:
+        config['threads']
+    params:
+        quality_5p=config['min_base_quality_5p'],
+        quality_3p=config['min_base_quality_3p'],
+        adaptor1=lambda wildcards: '-a ' + config['adaptor1'] if len(config['adaptor1']) > 0 else '',
+        adaptor2=lambda wildcards: '-A ' + config['adaptor2'] if len(config['adaptor2']) > 0 else '',
+        adaptor1_5p=lambda wildcards: '-g' + config['adaptor1_5p'] if len(config['adaptor1_5p']) > 0 else '',
+        adaptor2_5p=lambda wildcards: '-G' + config['adaptor2_5p'] if len(config['adaptor2_5p']) > 0 else '',
+        miniL=config['min_read_length'],
+        quality_base=config['quality_base']
+    log:
+        '{output_dir}/log/cutadapt/{sample_id}'
+    threads: 3
+    shell:
+        '''cutadapt --pair-filter any -j {threads} -q {params.quality_5p},{params.quality_3p} \
+            {params.adaptor1} {params.adaptor2} {params.adaptor1_5p} {params.adaptor2_5p} \
+            --trim-n -m {params.miniL} -o >(gzip -c > {output.fastq1}) -p >(gzip -c > {output.fastq2}) \
+            {input.fastq1} {input.fastq2} > {log} 2>&1
+        '''
+
+rule link_fastq:
+    input:
+        fastq1='{output_dir}/cutadapt/{sample_id}_1.fastq.gz',
+        fastq2='{output_dir}/cutadapt/{sample_id}_2.fastq.gz'
+    output:
+        fastq2='{output_dir}/unmapped/{sample_id}/clean_1.fastq.gz',
+        fastq1='{output_dir}/unmapped/{sample_id}/clean_2.fastq.gz'
+    shell:
+        '''ln -s ../../cutadapt/{wildcards.sample_id}_1.fastq.gz {output.fastq1}
+        '''

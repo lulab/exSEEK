@@ -1,0 +1,116 @@
+shell.prefix('set -x;')
+include: 'common.snakemake'
+
+import os
+
+def get_all_inputs(wildcards):
+    available_inputs = dict(
+        cutadapt=expand('{output_dir}/cutadapt/{sample_id}.fastq.gz',
+            output_dir=output_dir, sample_id=sample_ids),
+        clean=expand('{output_dir}/unmapped/{sample_id}/clean.fa.gz',
+            output_dir=output_dir, sample_id=sample_ids),
+        summarize_cutadapt=expand('{output_dir}/summary/cutadapt.html',
+            output_dir=output_dir)
+    )
+    enabled_inputs = list(available_inputs.keys())
+    inputs = []
+    for key, l in available_inputs.items():
+        if key in enabled_inputs:
+            inputs += l
+    return inputs
+
+rule all:
+    input:
+        get_all_inputs
+
+
+rule cutadapt_se:
+    input:
+        auto_gzip_input(data_dir + '/fastq/{sample_id}.fastq')
+    output:
+        trimmed='{output_dir}/cutadapt/{sample_id}.fastq.gz'
+    params:
+        min_read_length=config['min_read_length'],
+        min_base_quality=config['min_base_quality'],
+        trim_5p=lambda wildcards: '-u {}'.format(config['trim_5p']) if config['trim_5p'] > 0 else '',
+        trim_3p=lambda wildcards: '-u -{}'.format(config['trim_3p']) if config['trim_3p'] > 0 else '',
+        adaptor=lambda wildcards: get_cutadapt_adapter_args(wildcards, config['adaptor'], '-a'),
+        adaptor_5p=lambda wildcards: get_cutadapt_adapter_args(wildcards, config['adaptor_5p'], '-g'),
+        umi_length=config['umi_length']
+    log:
+        '{output_dir}/log/cutadapt/{sample_id}'
+    threads: 2
+    run:
+        if config['trim_after_adapter']:
+            shell('''cutadapt {params.adaptor} {params.adaptor_5p} \
+                -m {params.min_read_length} --trim-n -q {params.min_base_quality} {input}  2>&1 \
+                | cutadapt {params.trim_5p} {params.trim_3p} \
+                -o >(pigz -c -p {threads} > {output.trimmed})  > {log}
+                ''')
+        else:
+            shell('''cutadapt {params.adaptor} {params.adaptor_5p} {params.trim_5p} {params.trim_3p} \
+                -m {params.min_read_length} --trim-n -q {params.min_base_quality} \
+                -o >(pigz -c -p {threads} > {output.trimmed}) {input} > {log} 2>&1
+                ''')
+
+
+rule summarize_cutadapt_se:
+    input:
+        lambda wildcards: expand('{output_dir}/log/cutadapt/{sample_id}',
+            output_dir=wildcards.output_dir, sample_id=sample_ids)
+    output:
+        '{output_dir}/summary/cutadapt.txt'
+    run:
+        import pandas as pd
+        
+        def parse_number(s):
+            return int(''.join(s.split(',')))
+
+        columns = ['sample_id', 'total_reads', 'reads_with_adapters', 'reads_too_short', 'reads_kept',
+            'total_bp', 'bp_quality_trimmed', 'bp_kept']
+        summary = []
+        for filename in input:
+            sample_id = os.path.basename(filename)
+            record = {'sample_id': sample_id}
+            with open(filename, 'r') as fin:
+                for line in fin:
+                    line = line.strip()
+                    if line.startswith('Total reads processed:'):
+                        record['total_reads'] = parse_number(line.split()[-1])
+                    elif line.startswith('Reads with adapters:'):
+                        record['reads_with_adapters'] = parse_number(line.split()[-2])
+                    elif line.startswith('Reads that were too short:'):
+                        record['reads_too_short'] = parse_number(line.split()[-2])
+                    elif line.startswith('Reads written (passing filters):'):
+                        record['reads_kept'] = parse_number(line.split()[-2])
+                    elif line.startswith('Total basepairs processed:'):
+                        record['total_bp'] = parse_number(line.split()[-2])
+                    elif line.startswith('Quality-trimmed:'):
+                        record['bp_quality_trimmed'] = parse_number(line.split()[-3])
+                    elif line.startswith('Total written (filtered):'):
+                        record['bp_kept'] = parse_number(line.split()[-3])
+            summary.append(record)
+        summary = pd.DataFrame.from_records(summary)
+        summary = summary.reindex(columns=columns)
+        summary.to_csv(output[0], sep='\t', na_rep='NA', index=False, header=True)
+
+rule summarize_cutadapt_jupyter_se:
+    input:
+        summary='{output_dir}/summary/cutadapt.txt',
+        jupyter=root_dir + '/templates/summarize_cutadapt_se.ipynb'
+    output:
+        jupyter='{output_dir}/summary/cutadapt.ipynb',
+        html='{output_dir}/summary/cutadapt.html'
+    run:
+        shell(nbconvert_command)
+
+rule fastq_to_fasta_se:
+    input:
+        '{output_dir}/cutadapt/{sample_id}.fastq.gz'
+    output:
+        '{output_dir}/unmapped/{sample_id}/clean.fa.gz'
+    threads:
+        config['threads_compress']
+    shell:
+        '''pigz -d -c -p {threads} {input} | fastq_to_fasta -r | pigz -p {threads} -c > {output}
+        '''
