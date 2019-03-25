@@ -1,8 +1,10 @@
 include: 'common.snakemake'
 
 rule all:
-    inputs:
-        expand('{output_dir}/cutadapt/{sample_id}_{mate_index}.fastq.gz',
+    input:
+        cutadapt=expand('{output_dir}/cutadapt/{sample_id}_{mate_index}.fastq.gz',
+            output_dir=output_dir, sample_id=sample_ids, mate_index=[1, 2]),
+        clean=expand('{output_dir}/unmapped/{sample_id}/clean_{mate_index}.fastq.gz',
             output_dir=output_dir, sample_id=sample_ids, mate_index=[1, 2])
 
 rule cutadapt_pe:
@@ -33,13 +35,17 @@ rule cutadapt_pe:
             {input.fastq1} {input.fastq2} > {log} 2>&1
         '''
 
-rule link_fastq:
+rule rename_fastq:
     input:
-        fastq1='{output_dir}/cutadapt/{sample_id}_1.fastq.gz',
-        fastq2='{output_dir}/cutadapt/{sample_id}_2.fastq.gz'
+        '{output_dir}/cutadapt/{sample_id}_{mate_index}.fastq.gz'
     output:
-        fastq2='{output_dir}/unmapped/{sample_id}/clean_1.fastq.gz',
-        fastq1='{output_dir}/unmapped/{sample_id}/clean_2.fastq.gz'
+        '{output_dir}/unmapped/{sample_id}/clean_{mate_index}.fastq.gz'
+    threads: 
+        1
+    wildcard_constraints:
+        mate_index='[12]'
     shell:
-        '''ln -s ../../cutadapt/{wildcards.sample_id}_1.fastq.gz {output.fastq1}
+        r'''pigz -d -c -p {threads} {input} \
+            | awk 'NR%4==1{{printf "@%012d\n", int(NR/4);next}} NR%4==3{{printf "+%012d\n", int(NR/4);next}} {{print}}' \
+            | pigz -c -p {threads} > {output}
         '''
