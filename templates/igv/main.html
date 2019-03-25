@@ -128,6 +128,50 @@
         return trackNavCheckBoxes;
     };
 
+    createTrackGroupSelector = function(){
+        var tr, td, checkbox, label, color;
+        var groupTable = document.getElementById("track-groups-table");
+        onShowTrackGroupChecked = function(event){
+            groups[event.target.name].show = event.target.checked;
+            showTrackGroup(event.target);
+        }
+        onTrackColorGroupChanged = function(event){
+            groups[event.target.name].show = event.target.value;
+            setTrackColorGroup(event.target);
+        }
+        for(let i = 0; i < groups.length; i ++){
+            var group = groups[i];
+            tr = document.createElement("tr");
+
+            checkbox = document.createElement("input");
+            checkbox.setAttribute("type", "checkbox");
+            checkbox.setAttribute("name", "show-group-" + i);
+            if(group.show)
+                checkbox.setAttribute("checked", "");
+            checkbox.addEventListener("change", showTrackGroup);
+            
+            label = document.createElement("label");
+            label.setAttribute("for", "show-group-" + i);
+            label.innerHTML = group.name;
+
+            td = document.createElement("td");
+            td.appendChild(checkbox);
+            td.appendChild(label);
+            tr.appendChild(td);
+
+            color = document.createElement("input");
+            color.setAttribute("type", "color");
+            color.setAttribute("name", "track-color-group-" + i);
+            color.setAttribute("value", group.color);
+            color.addEventListener("change", setTrackColorGroup);
+            td = document.createElement("td");
+            td.appendChild(color);
+            tr.appendChild(td);
+
+            groupTable.appendChild(tr);
+        }
+    };
+
     updateTrackViews = function(items){
         for(name in tracks){
             if(!(tracks[name].type in dataTrackTypes))
