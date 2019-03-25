@@ -32,7 +32,7 @@ rule all:
 
 rule count_clean_reads_paired:
     input:
-        '{output_dir}/unmapped/{sample_id}/clean_1.fa.gz'
+        '{output_dir}/unmapped/{sample_id}/clean_1.fastq.gz'
     output:
         '{output_dir}/stats/read_counts_clean/{sample_id}'
     shell:
@@ -56,13 +56,13 @@ map_command_pe = '''STAR --genomeDir {params.index} \
 
 rule map_rRNA_pe:
     input:
-        reads1='{output_dir}/unmapped/{sample_id}/clean_1.fa.gz',
-        reads2='{output_dir}/unmapped/{sample_id}/clean_2.fa.gz',
+        reads1='{output_dir}/unmapped/{sample_id}/clean_1.fastq.gz',
+        reads2='{output_dir}/unmapped/{sample_id}/clean_2.fastq.gz',
         index=genome_dir + '/index/star/rRNA/SA'
     output:
         bam='{output_dir}/bam/{sample_id}/rRNA.bam',
-        unmapped1='{output_dir}/unmapped/{sample_id}/rRNA_1.fa.gz',
-        unmapped2='{output_dir}/unmapped/{sample_id}/rRNA_2.fa.gz',
+        unmapped1='{output_dir}/unmapped/{sample_id}/rRNA_1.fastq.gz',
+        unmapped2='{output_dir}/unmapped/{sample_id}/rRNA_2.fastq.gz',
         log='{output_dir}/mapping_star/{sample_id}/rRNA/Log.final.out'
     params:
         output_prefix='{output_dir}/mapping_star/{sample_id}/rRNA/',
@@ -75,13 +75,13 @@ rule map_rRNA_pe:
 
 rule map_genome_pe:
     input:
-        reads1='{output_dir}/unmapped/{sample_id}/rRNA_1.fa.gz',
-        reads2='{output_dir}/unmapped/{sample_id}/rRNA_2.fa.gz',
+        reads1='{output_dir}/unmapped/{sample_id}/rRNA_1.fastq.gz',
+        reads2='{output_dir}/unmapped/{sample_id}/rRNA_2.fastq.gz',
         index=genome_dir + '/long_index/star/SA'
     output:
         bam='{output_dir}/bam/{sample_id}/genome.bam',
-        unmapped1='{output_dir}/unmapped/{sample_id}/genome_1.fa.gz',
-        unmapped2='{output_dir}/unmapped/{sample_id}/genome_2.fa.gz',
+        unmapped1='{output_dir}/unmapped/{sample_id}/genome_1.fastq.gz',
+        unmapped2='{output_dir}/unmapped/{sample_id}/genome_2.fastq.gz',
         log='{output_dir}/mapping_star/{sample_id}/genome/Log.final.out'
     params:
         output_prefix='{output_dir}/mapping_star/{sample_id}/genome/',
@@ -94,13 +94,13 @@ rule map_genome_pe:
     
 rule map_circRNA_pe:
     input:
-        reads1='{output_dir}/unmapped/{sample_id}/genome_1.fa.gz',
-        reads2='{output_dir}/unmapped/{sample_id}/genome_2.fa.gz',
+        reads1='{output_dir}/unmapped/{sample_id}/genome_1.fastq.gz',
+        reads2='{output_dir}/unmapped/{sample_id}/genome_2.fastq.gz',
         index=genome_dir + '/index/star/circRNA/SA'
     output:
         bam='{output_dir}/bam/{sample_id}/circRNA.bam',
-        unmapped1='{output_dir}/unmapped/{sample_id}/circRNA_1.fa.gz',
-        unmapped2='{output_dir}/unmapped/{sample_id}/circRNA_2.fa.gz',
+        unmapped1='{output_dir}/unmapped/{sample_id}/circRNA_1.fastq.gz',
+        unmapped2='{output_dir}/unmapped/{sample_id}/circRNA_2.fastq.gz',
         log='{output_dir}/mapping_star/{sample_id}/circRNA/Log.final.out'
     params:
         output_prefix='{output_dir}/mapping_star/{sample_id}/circRNA/',
