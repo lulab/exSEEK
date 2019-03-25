@@ -1,4 +1,3 @@
-shell.prefix('set -x;')
 include: 'common.snakemake'
 
 from collections import OrderedDict
@@ -20,7 +19,11 @@ def get_all_inputs(wildcards):
         mapped_read_length=expand('{output_dir}/stats/mapped_read_length_by_sample/{sample_id}',
             output_dir=output_dir, sample_id=sample_ids),
         summarize_read_counts_jupyter=expand('{output_dir}/summary/read_counts.html',
-            output_dir=output_dir)
+            output_dir=output_dir),
+        unmapped_other=expand('{output_dir}/unmapped/{sample_id}/other.fa.gz',
+            output_dir=output_dir, sample_id=sample_ids),
+        map_genome=expand('{output_dir}/gbam/{sample_id}/genome.bam',
+            output_dir=output_dir, sample_id=sample_ids)
     )
     enabled_inputs = list(available_inputs.keys())
     inputs = []
