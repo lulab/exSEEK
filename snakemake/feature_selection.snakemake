@@ -1,4 +1,3 @@
-shell.prefix('set -x; set -e;')
 include: 'common.snakemake'
 
 import yaml
@@ -8,6 +7,7 @@ with open(data_dir + '/compare_groups.yaml', 'r') as f:
 
 # Read best preprocess from output file of select_preprocess_method 
 # key: count_method, value: preprocess_method
+'''
 preprocess_methods = {}
 for count_method in to_list(config['count_method']):
     for filename in expand('{output_dir}/select_preprocess_method/{score}/{count_method}/selected_methods.txt',
@@ -46,6 +46,27 @@ inputs['metrics_train'] = expand('{output_dir}/summary/{cross_validation}/metric
     output_dir=output_dir, cross_validation=['cross_validation', 'cross_validation_diffexp'])
 inputs['feature_stability'] = expand('{output_dir}/summary/{cross_validation}/feature_stability.txt',
     output_dir=output_dir, cross_validation=['cross_validation', 'cross_validation_diffexp'])
+'''
+inputs = {
+    'cross_validation': expand('{output_dir}/cross_validation/filter.{imputation_method}.Norm_{normalization_method}.Batch_{batch_removal_method}_{batch_index}.{count_method}/{compare_group}/{classifier}.{n_select}.{select_method}.{fold_change_filter_direction}',
+        output_dir=output_dir, 
+        imputation_method=config['imputation_method'],
+        normalization_method=config['normalization_method'],
+        batch_removal_method=config['batch_removal_method'],
+        batch_index=config['batch_index'],
+        count_method=config['count_method'],
+        classifier=config['classifier'], 
+        select_method=config['selector'], 
+        compare_group=list(compare_groups.keys()), 
+        n_select=config['n_selects'], 
+        fold_change_filter_direction=config['fold_change_filter_direction']),
+    'metrics_test': expand('{output_dir}/summary/{cross_validation}/metrics.test.txt', 
+        output_dir=output_dir, cross_validation=['cross_validation']),
+    'metrics_train': expand('{output_dir}/summary/{cross_validation}/metrics.train.txt', 
+        output_dir=output_dir, cross_validation=['cross_validation']),
+    'feature_stability': expand('{output_dir}/summary/{cross_validation}/feature_stability.txt',
+        output_dir=output_dir, cross_validation=['cross_validation'])
+}
 
 def get_all_inputs(wildcards):
     return inputs
@@ -204,9 +225,7 @@ rule evaluate_single_features:
 
 rule summarize_cross_validation:
     input:
-        input_dir=lambda wildcards: inputs[wildcards.cross_validation],
-        selected_methods=lambda wildcards: expand('{output_dir}/select_preprocess_method/{score}/{count_method}/selected_methods.txt',
-            output_dir=wildcards.output_dir, score=clustering_scores, count_method=config['count_method'])
+        input_dir=lambda wildcards: inputs[wildcards.cross_validation]
     output:
         metrics_test='{output_dir}/summary/{cross_validation}/metrics.test.txt',
         metrics_train='{output_dir}/summary/{cross_validation}/metrics.train.txt',
