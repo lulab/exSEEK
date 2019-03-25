@@ -30,10 +30,10 @@ elif snakemake.wildcards.cross_validation == 'evaluate_features':
         c = dirname.split('/')
         data = {}
         data['classifier'] = c[-1]
-        data['compare_group'] = c[-2]
-        data['filter_method'], data['imputation'], data['normalization'], data['batch_removal'], data['count_method'] = c[-3].split('.')
+        data['filter_method'], data['imputation'], data['normalization'], data['batch_removal'], data['count_method'] = c[-2].split('.')
         data['preprocess_method'] = '.'.join((data['filter_method'], data['imputation'], data['normalization'], data['batch_removal']))
-        data['feature_set'] = c[-4]
+        data['feature_set'] = c[-3]
+        data['compare_group'] = c[-4]
         return data
 else:
     raise ValueError('unknown cross_validation directory: {}'.format(snakemake.wildcards.cross_validation))
@@ -70,6 +70,7 @@ def feature_stability(X):
 
 # read selected methods for each clustering score
 # clustering_score[count_method][preprocess_method] = score_name
+'''
 clustering_score_names = defaultdict(dict)
 for filename in snakemake.input.selected_methods:
     c = filename.split('/')
@@ -80,36 +81,38 @@ for filename in snakemake.input.selected_methods:
     if preprocess_method not in clustering_score_names[count_method]:
         clustering_score_names[count_method][preprocess_method] = []
     clustering_score_names[count_method][preprocess_method].append(score_name)
+'''
 
 columns = defaultdict(list)
 summary = defaultdict(list)
 for input_dir in tqdm(snakemake.input.input_dir, unit='directory'):
     metadata = parse_dirname(input_dir)
     # add clustering score that select the preprocess_method
-    if 'preprocess_method' in metadata:
-        names = clustering_score_names[metadata['count_method']][metadata['preprocess_method']]
-    else:
-        names = ['null']
-    for clustering_score_name in names:
-        metadata = deepcopy(metadata)
-        metadata['clustering_score_name'] = clustering_score_name
-        # feature_stability
-        if has_feature_stability:
-            with h5py.File(os.path.join(input_dir, 'cross_validation.h5'), 'r') as f:
-                feature_selection_matrix = f['feature_selection'][:]
-            record = deepcopy(metadata)
-            record['feature_stability'] = feature_stability(feature_selection_matrix)
-            summary['feature_stability'].append(record)
-            if not columns['feature_stability']:
-                columns['feature_stability'] = list(record.keys())
-        # metrics
-        for subset in ('train', 'test'):
-            df_metrics = pd.read_table(os.path.join(input_dir, 'metrics.%s.txt'%subset), sep='\t')
-            df_metadata = pd.DataFrame(index=np.arange(df_metrics.shape[0]))
-            for key, val in metadata.items():
-                df_metadata[key] = val
-            columns['metrics.%s'%subset] = list(metadata.keys()) + df_metrics.columns.tolist()
-            summary['metrics.%s'%subset].append(pd.concat([df_metadata, df_metrics], axis=1))
+    #if 'preprocess_method' in metadata:
+        #names = clustering_score_names[metadata['count_method']][metadata['preprocess_method']]
+    #else:
+    #    names = ['null']
+    #for clustering_score_name in names:
+    #metadata = deepcopy(metadata)
+    #metadata['clustering_score_name'] = clustering_score_name
+    # feature_stability
+    if has_feature_stability:
+        with h5py.File(os.path.join(input_dir, 'cross_validation.h5'), 'r') as f:
+            feature_selection_matrix = f['feature_selection'][:]
+        record = deepcopy(metadata)
+        record['feature_stability'] = feature_stability(feature_selection_matrix)
+        summary['feature_stability'].append(record)
+        if not columns['feature_stability']:
+            columns['feature_stability'] = list(record.keys())
+    # metrics
+    for subset in ('train', 'test'):
+        df_metrics = pd.read_table(os.path.join(input_dir, 'metrics.%s.txt'%subset), sep='\t')
+        df_metadata = pd.DataFrame(index=np.arange(df_metrics.shape[0]))
+        for key, val in metadata.items():
+            df_metadata[key] = val
+        columns['metrics.%s'%subset] = list(metadata.keys()) + df_metrics.columns.tolist()
+        summary['metrics.%s'%subset].append(pd.concat([df_metadata, df_metrics], axis=1))
+        
 summary['metrics.train'] = pd.concat(summary['metrics.train'], axis=0)
 summary['metrics.test'] = pd.concat(summary['metrics.test'], axis=0)
 summary['metrics.train'] = summary['metrics.train'].reindex(columns=columns['metrics.train'])
