@@ -46,6 +46,6 @@ rule rename_fastq:
         mate_index='[12]'
     shell:
         r'''pigz -d -c -p {threads} {input} \
-            | awk 'NR%4==1{{printf "@%012d\n", int(NR/4);next}} NR%4==3{{printf "+%012d\n", int(NR/4);next}} {{print}}' \
+            | awk 'NR%4==1{{printf "@%012d\n", int(NR/4);next}} NR%4==3{{printf "+\n";next}} {{print}}' \
             | pigz -c -p {threads} > {output}
         '''
