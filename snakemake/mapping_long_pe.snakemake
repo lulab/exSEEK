@@ -39,6 +39,17 @@ rule count_clean_reads_paired:
         '''gzip -d -c {input} | wc -l | awk '{print int($0/2)}' > {output}
         '''
 
+rule count_clean_fragments:
+    input:
+        '{output_dir}/unmapped/{sample_id}/clean_1.fastq.gz'
+    output:
+        '{output_dir}/stats/fragment_counts/{sample_id}/clean'
+    threads:
+        config['threads_compress']
+    shell:
+        '''pigz -p {threads} -d -c {input} | wc -l | awk '{{print int($0/2)}}' > {output}
+        '''
+
 map_command_pe = '''STAR --genomeDir {params.index} \
             --readFilesIn {input.reads1} {input.reads2} \
             --runThreadN {threads} \
@@ -124,7 +135,7 @@ rule sort_bam_by_name:
 
 rule remove_duplicates:
     input:
-        bam='{output_dir}/bam_sorted_by_name/{sample_id}/{map_step}.bam'
+        bam='{output_dir}/bam/{sample_id}/{map_step}.bam'
     output:
         bam='{output_dir}/bam/{sample_id}/{map_step}_rmdup.bam',
         metrics='{output_dir}/log/{map_step}_rmdup/{sample_id}'
@@ -135,7 +146,8 @@ rule remove_duplicates:
             ASSUME_SORT_ORDER=queryname \
             I={input.bam} \
             O={output.bam} \
-            M={output.metrics}
+            M={output.metrics} \
+            READ_NAME_REGEX=null
         '''
 
 rule samtools_stats:
@@ -147,16 +159,6 @@ rule samtools_stats:
         '''samtools stats {input} > {output}
         '''
 
-rule count_clean_fragments:
-    input:
-        '{output_dir}/unmapped/{sample_id}/clean_1.fa.gz'
-    output:
-        '{output_dir}/stats/fragment_counts/{sample_id}/clean'
-    threads:
-        config['threads_compress']
-    shell:
-        '''pigz -p {threads} -d -c {input} | wc -l | awk '{{print int($0/2)}}' > {output}
-        '''
 
 rule parse_samtools_stats_pe:
     input:
