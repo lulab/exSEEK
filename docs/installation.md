@@ -66,7 +66,7 @@ install.packages(c('devtools', 'sva', 'VGAM', 'argparse', 'magrittr', 'readr', '
 # From Bioconductor
 source('https://bioconductor.org/biocLite.R')
 biocLite(c('SingleCellExperiment', 'scater', 'scran', 'SCnorm',
-    'EDASeq', 'RUVSeq', 'DESeq2', 'edgeR', 'sva', 'apeglm', 'gglasso'))
+    'EDASeq', 'RUVSeq', 'DESeq2', 'edgeR', 'sva', 'apeglm', 'gglasso', 'ggbio'))
 # From R-forge
 install.packages('countreg', repos = c('http://download.r-forge.r-project.org', 'https://mirrors.tuna.tsinghua.edu.cn/CRAN/'), dep = TRUE)
 # From GitHub
