@@ -270,6 +270,14 @@ def serve_bigwig_file(dataset, filename):
     else:
         return send_file(os.path.join(root_dir, 'output', dataset, 'bigwig', filename), conditional=True)
 
+@app.route('/bigwig_normalized/<dataset>/<filename>')
+def serve_bigwig_normalized_file(dataset, filename):
+    return send_file(os.path.join(root_dir, 'output', dataset, 'bigwig_normalized', filename), conditional=True)
+
+@app.route('/bigwig_normalized_log2/<dataset>/<filename>')
+def serve_bigwig_normalized_log2_file(dataset, filename):
+    return send_file(os.path.join(root_dir, 'output', dataset, 'bigwig_normalized_log2', filename), conditional=True)
+
 @app.route('/bam/<dataset>/<sample_id>/<filename>')
 def serve_bam_file(dataset, sample_id, filename):
     if filename.startswith('circRNA'):
@@ -279,6 +287,14 @@ def serve_bam_file(dataset, sample_id, filename):
             bam_dir = os.path.join(root_dir, 'output', dataset, bam_search_dir)
             if os.path.isdir(bam_dir):
                 return send_file(os.path.join(bam_dir, sample_id, filename), conditional=True)
+
+@app.route('/domains/<dataset>.bed')
+def serve_domains(dataset):
+    return send_file(os.path.join(root_dir, 'output', dataset, 'domains_genome', '20', '05.bed'), conditional=True)
+
+@app.route('/refined_domains/<dataset>.bed')
+def serve_refined_domains(dataset):
+    return send_file(os.path.join(root_dir, 'output', dataset, 'refined_domains_genome', '20', '05.bed'), conditional=True)
 
 @app.route('/genome/hg38/<path:filename>')
 def serve_genome_dir(filename):
