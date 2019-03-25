@@ -1,4 +1,3 @@
-shell.prefix('set -x;')
 include: 'common.snakemake'
 
 import os
