@@ -6,25 +6,21 @@ import yaml
 with open(data_dir + '/compare_groups.yaml', 'r') as f:
     compare_groups = yaml.load(f)
 
-# read selected matrix preprocessing methods
-feature_sets = config['evaluate_feature_sets']
-
-preprocess_methods = {}
-for count_method in to_list(config['count_method']):
-    for filename in expand('{output_dir}/select_preprocess_method/{score}/{count_method}/selected_methods.txt',
-        output_dir=output_dir, score=clustering_scores, count_method=count_method):
-        with open(filename, 'r') as f:
-            preprocess_methods[count_method] = f.readline().strip()
-
 inputs = {'evaluate_features': []}
-for count_method, preprocess_method in preprocess_methods.items():
-    for compare_group in compare_groups:
-        feature_set = get_known_biomarkers(compare_group)
-        inputs['evaluate_features'] += expand('{output_dir}/evaluate_features/{feature_set}/{preprocess_method}.{count_method}/{compare_group}/{classifier}',
-                output_dir=output_dir, count_method=count_method, preprocess_method=preprocess_method,
-                classifier=config['classifier'], compare_group=compare_group, feature_set=feature_set)
+for compare_group, feature_set in get_known_biomarkers():
+    inputs['evaluate_features'] += expand('{output_dir}/evaluate_features/{compare_group}/{feature_set}/filter.{imputation_method}.Norm_{normalization_method}.Batch_{batch_removal_method}_{batch_index}.{count_method}/{classifier}',
+        output_dir=output_dir, 
+        imputation_method=config['imputation_method'],
+        normalization_method=config['normalization_method'],
+        batch_removal_method=config['batch_removal_method'],
+        batch_index=config['batch_index'],
+        count_method=config['count_method'],
+        classifier=config['classifier'], 
+        compare_group=compare_group,
+        feature_set=feature_set)
 inputs['summarize_evaluate_features'] = expand('{output_dir}/summary/evaluate_features/{summary_name}.txt',
     output_dir=output_dir, summary_name=['metrics.train', 'metrics.test'])
+
 
 rule all:
     input:
@@ -69,11 +65,11 @@ rule evaluate_features:
 
 rule evaluate_features:
     input:
-        matrix='{output_dir}/matrix_processing/{preprocess_method}.{count_method}.txt',
+        matrix='{output_dir}/matrix_processing/filter.{imputation_method}.Norm_{normalization_method}.Batch_{batch_removal_method}_{batch_index}.{count_method}.txt',
         sample_classes=data_dir+ '/sample_classes.txt',
         features=data_dir + '/known_biomarkers/{compare_group}/{feature_set}.txt'
     output:
-        directory('{output_dir}/evaluate_features/{feature_set}/{preprocess_method}.{count_method}/{compare_group}/{classifier}')
+        directory('{output_dir}/evaluate_features/{compare_group}/{feature_set}/filter.{imputation_method}.Norm_{normalization_method}.Batch_{batch_removal_method}_{batch_index}.{count_method}/{classifier}')
     params:
         count_method=count_method_regex
     run:
@@ -111,9 +107,7 @@ rule evaluate_features:
 
 rule summarize_evaluate_features:
     input:
-        input_dir=inputs['evaluate_features'],
-        selected_methods=lambda wildcards: expand('{output_dir}/select_preprocess_method/{score}/{count_method}/selected_methods.txt',
-            output_dir=wildcards.output_dir, score=clustering_scores, count_method=config['count_method'])
+        input_dir=inputs['evaluate_features']
     output:
         metrics_test='{output_dir}/summary/{cross_validation}/metrics.test.txt',
         metrics_train='{output_dir}/summary/{cross_validation}/metrics.train.txt'
