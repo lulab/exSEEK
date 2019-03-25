@@ -11,9 +11,9 @@ parser$add_argument("-c", "--class", required=FALSE, help="input class info file
 parser$add_argument("-b", "--batch", required=FALSE, help="input batch info file")
 parser$add_argument("-m", "--method", required=FALSE, help="name of the method")
 
-#parser$add_argument("--filtercount", type="integer", default=10, help="count threshold for filtering")
-#parser$add_argument("--filtercpm", type="double", default=10, help="CPM threshold for filtering")
-#parser$add_argument("--filterrpkm", type="double", help="RPKM threshold for filtering")
+parser$add_argument("--filtercount", type="integer", default=10, help="count threshold for filtering")
+parser$add_argument("--filtercpm", type="double", default=10, help="CPM threshold for filtering")
+parser$add_argument("--filterrpkm", type="double", help="RPKM threshold for filtering")
 
 parser$add_argument( "--filtermethod", type="character", default="filtercount",
                     metavar="STRING",
@@ -227,7 +227,6 @@ library(magrittr)
 #'     )
 #' }
 normalize <- function(
-<<<<<<< HEAD
     mat,
     method,
     top_n = 20, 
@@ -245,42 +244,6 @@ normalize <- function(
             stop('argument rm_gene_types is required for normalization method: CPM_top')
         }
         mat <- norm_cpm_rm(mat, rm_gene_types)
-=======
-mat,
-norm_methods = c( 'SCnorm', 'TMM', 'RLE', 'CPM', 'CPM_top', 'CPM_rm', 'CPM_refer', 'UQ','null'),
-top_n = 20, rm_gene_type = 'miRNA,tRNA',
-sample_class_path = NULL, PCA_label_by = NULL, PAC_color_by = NULL,
-refer_gene_id_path='data/matrix_processing/refer_gene_id.txt',
-tmp_path='.',impute_path="./imputation/", K = 5, N = 3,
-output_dir = '.',output_file = 'norm',cv_threshold=1,imputemethod = 'scimpute_count'
-) {
-    rm_gene_type <- unlist(strsplit(rm_gene_type,',', fixed = TRUE))
-    normalize_check_arg(norm_methods, top_n, rm_gene_type, read.table(refer_gene_id_path,header=TRUE,  check.names=FALSE, row.names=1, stringsAsFactors=FALSE)[,1])
-    if ('SCnorm' %in% norm_methods)    Norm_SCnorm <- norm_SCnorm(mat)
-    if ('TMM' %in% norm_methods)       Norm_TMM <- norm_tmm(mat)
-    if ('RLE' %in% norm_methods)       Norm_RLE <- norm_rle(mat)
-    if ('CPM' %in% norm_methods)       Norm_CPM <- norm_cpm_total(mat)
-    if ('CPM_top' %in% norm_methods)   Norm_CPM_top <- norm_cpm_top(mat, top_n)
-    if ('CPM_rm' %in% norm_methods)    Norm_CPM_rm <- norm_cpm_rm(mat, rm_gene_type)
-    if ('CPM_refer' %in% norm_methods) Norm_CPM_refer <- norm_cpm_refer(mat, refer_gene_id_path)
-    if ('UQ' %in% norm_methods)        Norm_UQ <- norm_UQ(mat)
-    if ('null' %in% norm_methods)      Norm_null <- mat
-
-    
-    tmp_names <- ls(pattern = '^Norm_')
-#    for (i in 1:length(tmp_names)) {
-#        if (tmp_names[i] == 'Norm_CPM_top') {
-#            tmp_names[i]=paste0(tmp_names[i],'_',top_n)
-#        }
-#    }
-    imputename <-paste(imputemethod,'.',sep='')
-    for(tmp_name in tmp_names) {
-        tmp_name_esp = tmp_name
-        if(tmp_name == 'Norm_CPM_top') {
-            tmp_name_esp = paste0(tmp_name,'_',top_n)
-        }
-        write.table(get(tmp_name), paste(output_dir,'filter.',imputename, tmp_name_esp,'.',splitname,sep=''),sep='\t')
->>>>>>> d3cdb73ee44d8b3da30d270512dbf7791fe0e558
     }
     else if (method == 'CPM_refer') mat <- norm_cpm_refer(mat, refer_gene_id_path)
     else if (method == 'null')      mat <- mat
@@ -360,18 +323,9 @@ norm_uq <- function(mat) {
 
 norm_tmm <- function(mat) {
     print('start normalization using TMM')
-<<<<<<< HEAD
-    #mat %>% as_SingleCellExperiment() %>%
-    #{suppressWarnings(scater::normaliseExprs(., "TMM"))} %>%
-    #scater::normalise() %>% SingleCellExperiment::normcounts()
-    dl <- edgeR::DGEList(counts=mat)
-    dl <- edgeR::calcNormFactors(dl, method='TMM')
-    edgeR::cpm(dl)
-=======
     dl <- edgeR::DGEList(counts=mat)
     dl <- edgeR::calcNormFactors(dl, method='TMM')
     return(edgeR::cpm(dl))
->>>>>>> d3cdb73ee44d8b3da30d270512dbf7791fe0e558
 }
 
 
@@ -399,14 +353,7 @@ norm_rle <- function(mat) {
     print('start normalization using RLE')
     dl <- edgeR::DGEList(counts=mat)
     dl <- edgeR::calcNormFactors(dl, method='RLE')
-<<<<<<< HEAD
     edgeR::cpm(dl)
-    #mat %>% as_SingleCellExperiment() %>%
-    #{suppressWarnings(scater::normaliseExprs(., "RLE"))} %>%
-    #scater::normalise() %>% SingleCellExperiment::normcounts()
-=======
-    return(edgeR::cpm(dl))
->>>>>>> d3cdb73ee44d8b3da30d270512dbf7791fe0e558
 }
 
 # norm_cpm ------------------
@@ -535,57 +482,12 @@ norm_cpm_refer <- function(mat, ref_genes, cv_threshold=0.5) {
 ################################################################################
 
 
-<<<<<<< HEAD
 remove_batch <- function( mat, method, class_info=NULL, batch_info=NULL, ruv_k=1){
     # only remove batch for samples with batch information
     if(!is.null(batch_info)){
         samples_with_batch <- names(batch_info)[!is.na(batch_info)]
     }else{
         samples_with_batch <- colnames(mat)
-=======
-batch <- function(
-classinfo_path,
-batchinfo_path,
-input_path,
-norm_methods = 'SCnorm',
-imputemethod = 'scimpute_count',
-batch_methods = c('ruv','combat'),
-output_path = './',batchindex,top_n=20
-){
-    suppressMessages(library(EDASeq))
-    suppressMessages(library(RUVSeq))
-    suppressMessages(library(sva))
-    suppressMessages(library(scRNA.seq.funcs))
-    
-    if ('SCnorm' %in% norm_methods)    normname <- 'Norm_SCnorm'
-    if ('TMM' %in% norm_methods)       normname <- 'Norm_TMM'
-    if ('RLE' %in% norm_methods)       normname <- 'Norm_RLE'
-    if ('CPM' %in% norm_methods)       normname <- 'Norm_CPM'
-    if ('CPM_top' %in% norm_methods)   normname <- 'Norm_CPM_top'
-    if ('CPM_rm' %in% norm_methods)    normname <- 'Norm_CPM_rm'
-    if ('CPM_refer' %in% norm_methods) normname <- 'Norm_CPM_refer'
-    if ('null' %in% norm_methods) normname <- 'Norm_null'
-    #mat <- get(paste('mat_',tolower(norm_methods),sep=''))
-    
-    
-    imputename <-paste(imputemethod,'.',sep='')
-
-    if(normname =='Norm_CPM_top'){
-    normname = paste0('Norm_CPM_top_',top_n)
-    }
-    normname <-paste(normname,'.',sep='')
-    mat <- read.table(paste(input_path,'filter.',imputename, normname,splitname,sep=''),sep='\t',header=TRUE,  check.names=FALSE, row.names=1, stringsAsFactors=FALSE)
-    print (dim(mat))
-    if ('RUV' %in% batch_methods)       Batch_RUV <- ruv(mat,classinfo_path,output_path,2,10)
-    if ('Combat' %in% batch_methods)    Batch_Combat <- combat(mat,batchinfo_path,output_path,batchindex)
-    tmp_names <- ls(pattern = '^Batch_')
-    for(tmp_name in tmp_names) {
-        if (tmp_name=='Batch_Combat'){
-        write.table(get(tmp_name), paste(output_path,'filter.',imputename, normname, tmp_name,'_',toString(batchindex),'.',splitname,sep=''),sep='\t',quote=FALSE, row.names=TRUE, col.names=TRUE)
-        } else {
-        write.table(get(tmp_name), paste(output_path,'filter.',imputename, normname, tmp_name,'.',splitname,sep=''),sep='\t',quote=FALSE, row.names=TRUE, col.names=TRUE)
-        }
->>>>>>> d3cdb73ee44d8b3da30d270512dbf7791fe0e558
     }
     if (method == 'RUV')       mat <- ruvs(mat, class_info=class_info, k=ruv_k)
     else if(method == 'RUVn')       {
@@ -664,13 +566,8 @@ combat <- function(mat,class_info=NULL, batch_info=NULL){
     #batch_info <- as.factor(batch_info)
     mod <- model.matrix(~ 1, data = as.factor(batch_info))
     combat <- ComBat(
-<<<<<<< HEAD
         dat = log(as.matrix(mat) + 0.25),
         batch = as.factor(batch_info),
-=======
-        dat = as.matrix(log(mat+0.001)),
-        batch = factor(batch_info[,batch_column]),
->>>>>>> d3cdb73ee44d8b3da30d270512dbf7791fe0e558
         mod = mod,
         par.prior = TRUE,
         prior.plots = FALSE
@@ -690,7 +587,7 @@ limma <- function(
     print('start batch removal using limma')
     suppressMessages(library(limma))
 
-    mat <- removeBatchEffect(log(mat + 0.25), as.factor(batch_info))
+    mat <- removeBatchEffect(log(as.matrix(mat) + 0.25), as.factor(batch_info))
     mat <- exp(mat)
     mat
 }
@@ -931,7 +828,6 @@ if((args$step != 'filter') && (is.null(args$method))){
 }
 # filter
 if (args$step =='filter'){
-<<<<<<< HEAD
     if(!is.null(args$filtercount)){
         #message(sprintf('Filter features with count <= %d in %f %% samples', args$filtercount, args$filtersample*100))
         mat <- filter_low(mat, args$filtercount, args$filtersample)
@@ -944,30 +840,6 @@ if (args$step =='filter'){
         #message(sprintf('Filter features with RPKM <= %d in %f %% samples', args$filterrpkm, args$filtersample*100))
         mat <- filter_low_rpkm(mat, args$filterrpkm, args$filtersample)
     }
-=======
-mat_raw <- read.table(args$input,sep='\t',header=TRUE,  check.names=FALSE, row.names=1, stringsAsFactors=FALSE)
-if (args$filtermethod=='filtercount'){
-mat_filter <-filter_low(mat_raw,args$filterexpv, args$filtersample)
-} else if(args$filtermethod=='filtercpm'){
-mat_filter <-filter_low_cpm(mat_raw,args$filterexpv, args$filtersample)
-} else if(args$filtermethod=='filterrpkm'){
-mat_filter <-filter_low_rpkm(mat_raw,args$filterexpv, args$filtersample)
-}
-#    mat_filter <- mat_raw
-#    if(!is.null(args$filtercount)){
-#        #message(sprintf('Filter features with count <= %d in %f %% samples', args$filtercount, args$filtersample*100))
-#        mat_filter <- filter_low(mat_filter, args$filtercount, args$filtersample)
-#    }
-#    if(!is.null(args$filtercpm)){
-#        #message(sprintf('Filter features with CPM <= %d in %f %% samples', args$filtercpm, args$filtersample*100))
-#        mat_filter <- filter_low_cpm(mat_filter, args$filtercpm, args$filtersample)
-#    }
-#    if(!is.null(args$filterrpkm)){
-#        #message(sprintf('Filter features with RPKM <= %d in %f %% samples', args$filterrpkm, args$filtersample*100))
-#        mat_filter <- filter_low_rpkm(mat_filter, args$filterrpkm, args$filtersample)
-#    }
-write.table(mat_filter, paste(args$filterout, 'filter','.',splitname,sep=''),sep='\t')
->>>>>>> d3cdb73ee44d8b3da30d270512dbf7791fe0e558
 } else if(args$step =='imputation'){
     # imputation
     library(readr)
@@ -991,7 +863,6 @@ write.table(mat_filter, paste(args$filterout, 'filter','.',splitname,sep=''),sep
     mat <- normalize(mat, method=args$method,top_n = args$normtopk, 
         rm_gene_types = args$remove_gene_types, ref_genes=ref_genes)
 }  else if(args$step =='batch_removal'){
-<<<<<<< HEAD
     class_info <- NULL
     batch <- NULL
     if(args$method == 'RUV'){
@@ -1007,6 +878,7 @@ write.table(mat_filter, paste(args$filterout, 'filter','.',splitname,sep=''),sep
             message('read batch information: ', args$batch)
             batch <- read.table(args$batch, sep='\t', header=TRUE, check.names=FALSE, row.names=1, stringsAsFactors=FALSE)
             batch <- batch[sample_ids, args$batch_index]
+            names(batch) <- sample_ids
         }else{
             stop('argument --batch is required for: ', args$method)
         }
@@ -1014,19 +886,10 @@ write.table(mat_filter, paste(args$filterout, 'filter','.',splitname,sep=''),sep
     # batch removal
     mat <- remove_batch(mat, method=args$method, class_info=class_info, batch_info=batch, ruv_k=args$ruv_k)
     
-=======
-# batch removal
-batch(classinfo_path = args$class, batchinfo_path = args$batch,
-output_path=args$batchremoveout,input_path = args$normalizeout,imputemethod=args$imputemethod,
-norm_methods = args$normmethod,batch_methods = args$batchmethod,args$batchindex,args$normtopk)
->>>>>>> d3cdb73ee44d8b3da30d270512dbf7791fe0e558
 }  else{
     stop('unknown step: ', args$step)
 }   
 
-<<<<<<< HEAD
 # write output matrix
 message('write expression matrix: ', args$output)
 write_matrix(mat, args$output)
-=======
->>>>>>> d3cdb73ee44d8b3da30d270512dbf7791fe0e558
