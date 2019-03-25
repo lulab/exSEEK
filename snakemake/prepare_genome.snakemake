@@ -1,4 +1,3 @@
-shell.prefix('set -x;')
 include: 'common.snakemake'
 
 genome_dir = config['genome_dir']
@@ -203,27 +202,6 @@ rule rsem_index_star:
         aligner='star'
     shell:
         '''rsem-prepare-reference --gtf {input.gtf} --star {input.fasta} {params.output_prefix}
-        '''
-
-rule crossmap_mitranscriptome:
-    input:
-        gtf='{genome_dir}/source/mitranscriptome.v2.gtf',
-        chain='{genome_dir}/source/hg19ToHg38.over.chain.gz'
-    output:
-        '{genome_dir}/gtf/mitranscriptome.gtf'
-    shell:
-        '''CrossMap.py gff {input.chain} {input.gtf} > {output}
-        '''
-
-rule extract_mitranscriptome:
-    input:
-        '{genome_dir}/gtf/mitranscriptome.gtf'
-    output:
-        lncRNA='{genome_dir}/gtf/mitranscriptome_lncRNA.gtf',
-        tucpRNA='{genome_dir}/gtf/mitranscriptome_tucp.gtf'
-    shell:
-        '''grep 'tcat "lncrna"' {input} > {output.lncRNA}
-        grep 'tcat "tucp"' {input} > {output.tucpRNA}
         '''
 
 
