@@ -1,0 +1,155 @@
+shell.prefix('set -x;')
+include: 'common.snakemake'
+
+rna_types_long = list(filter(lambda x: x not in ('miRNA', 'piRNA', 'rRNA', 'spikein', 'univec'), rna_types))
+
+rule all:
+    input:
+        domain_count_matrix=expand('{output_dir}/count_matrix/domains_long.txt',
+            output_dir=output_dir)
+
+rule domain_recurrence:
+    input:
+        bed=lambda wildcards: expand('{output_dir}/domains_by_sample/{bin_size}/{pvalue}/{sample_id}.bed',
+            output_dir=wildcards.output_dir,
+            bin_size=wildcards.bin_size,
+            pvalue=wildcards.pvalue,
+            sample_id=sample_ids),
+        chrom_sizes=genome_dir + '/chrom_sizes/transcriptome_genome'
+    output:
+        '{output_dir}/domain_recurrence_by_strand/{bin_size}/{pvalue}.{strand}.bed'
+    shell:
+        '''cat {input.bed} \
+            | bedtools sort \
+            | bedtools genomecov -i - -strand {wildcards.strand} -g {input.chrom_sizes} -bg \
+            | awk -v s={wildcards.strand} 'BEGIN{{OFS="\t";FS="\t"}}{{print $1,$2,$3,"X",$4,s}}' \
+            > {output}
+        '''
+
+rule merge_domain_recurrence_by_strand:
+    input:
+        pos='{output_dir}/domain_recurrence_by_strand/{bin_size}/{pvalue}.+.bed',
+        neg='{output_dir}/domain_recurrence_by_strand/{bin_size}/{pvalue}.-.bed'
+    output:
+        '{output_dir}/domains_recurrence/{bin_size}/{pvalue}.bed'
+    shell:
+        '''cat {input.pos} {input.neg} \
+            | bedtools sort > {output}
+        '''
+
+rule filter_domain_by_recurrence:
+    input:
+        '{output_dir}/domains_recurrence/{bin_size}/{pvalue}.bed'
+    output:
+        '{output_dir}/domains/{bin_size}/{pvalue}.bed'
+    params:
+        cov_threshold=len(sample_ids)*config['cov_threshold']
+    shell:
+        '''awk -v c={params.cov_threshold} '$5 > c' {input} \
+            | bedtools merge -s -c 2,3,5,6 -o collapse,collapse,collapse,collapse \
+            | awk 'BEGIN{{OFS="\t";FS="\t"}} 
+            {{split($4,a,/,/); split($5,b,/,/); split($6,c,/,/); split($7,d,/,/);
+            cov=0.0;for(i=1;i<=length(a);i++){{cov+=c[i]*(b[i]-a[i]);}} 
+            cov /= $3-$2;
+            print $1,$2,$3,"peak_" NR,cov,d[1]
+            }}' > {output}
+        '''
+
+rule domain_read_counts:
+    input:
+        bed='{output_dir}/tbed_long_RNA/{sample_id}.bed.gz',
+        domains='{output_dir}/domains/{bin_size}/{pvalue}.bed'
+    output:
+        '{output_dir}/domain_counts/{bin_size}/{pvalue}/{sample_id}.bed'
+    threads: config['threads']
+    shell:
+        '''pigz -d -c -p {threads} {input.bed} \
+            | bedtools coverage -s -sorted -counts \
+                -a {input.domains} -b - \
+            | awk 'BEGIN{{OFS="\t";FS="\t"}}{{print $1,$2,$3,$4,$7,$6}}' \
+                > {output}
+        '''
+
+rule summarize_domains:
+    input:
+        '{output_dir}/gdomain_counts/{bin_size}/{pvalue}.bed'
+    output:
+        directory('{output_dir}/summary/call_domains')
+    shell:
+        '''{bin_dir}/report.py summarize_domains -i {input}
+        '''
+
+rule domain_count_matrix:
+    input:
+        peaks=lambda wildcards: expand('{output_dir}/domain_counts/{bin_size}/{pvalue}/{sample_id}.bed',
+            output_dir=wildcards.output_dir,
+            bin_size=config['bin_size'], 
+            pvalue=config['call_domain_pvalue'], 
+            sample_id=sample_ids),
+        transcript_table=genome_dir + '/transcript_table/all.txt',
+        domains='{{output_dir}}/domains/{bin_size}/{pvalue}.bed'.format(bin_size=config['bin_size'], pvalue=config['call_domain_pvalue']),
+        chrom_sizes=genome_dir + '/chrom_sizes/genome'
+    output:
+        '{output_dir}/count_matrix/domains_long.txt'
+    run:
+        import pandas as pd
+        import re
+        import numpy as np
+
+        transcript_table = pd.read_table(input.transcript_table, sep='\t', dtype='str')
+        transcript_table.drop_duplicates(['transcript_id'], inplace=True)
+        transcript_table.set_index('transcript_id', drop=False, inplace=True)
+        transcript_table = transcript_table.loc[:, ['gene_id', 'gene_name', 'gene_type', 'transcript_id', 'start', 'end']].copy()
+        # extend transcript_table with genome regions
+        chrom_sizes = pd.read_table(input.chrom_sizes, sep='\t', names=['chrom', 'end'])
+        chrom_sizes.set_index('chrom', drop=False, inplace=True)
+        domains = pd.read_table(input.domains, sep='\t', header=None,
+            names=['chrom', 'start', 'end', 'domain_id', 'score', 'strand'], dtype='str')
+
+        pat_cov = re.compile(r'{output_dir}/domain_counts/(?P<bin_size>[^/]+)/(?P<pvalue>[^/]+)/(?P<sample_id>[^\.]+).bed'.format(output_dir=output_dir))
+        mat = []
+        peak_labels = None
+        for filename in input.peaks:
+            sample_id = pat_cov.match(filename).groupdict()['sample_id']
+            df = pd.read_table(filename, header=None)
+            if peak_labels is None:
+                peak_labels = df.iloc[:, 3].values
+            df.index = df.iloc[:, 3]
+            cov = df.iloc[:, 4].copy()
+            cov.name = sample_id
+            mat.append(cov)
+            if cov.index.duplicated().any():
+                print('duplicated index: {}, {}'.format(sample_id,
+                    cov.index.values[cov.index.duplicated()][:3]))
+        mat = pd.concat(mat, axis=1)
+        # get seq
+        seq_ids = domains['chrom'].values
+        # get transcript peaks
+        is_genome_peaks = np.isin(seq_ids, chrom_sizes['chrom'].values)
+        seq_ids_genome = seq_ids[is_genome_peaks]
+        seq_ids_transcript = seq_ids[~is_genome_peaks]
+        # annotate transcript peaks with gene information
+        # feature name format: gene_id|gene_type|gene_name|domain_id|transcript_id|start|end
+        feature_names = np.empty(mat.shape[0], dtype='object')
+        print(np.sum(~is_genome_peaks), seq_ids_transcript.shape, transcript_table.loc[seq_ids_transcript, 'gene_name'].values.shape)
+        feature_names[~is_genome_peaks] = transcript_table.loc[seq_ids_transcript, 'gene_id'].values \
+            + '|' + transcript_table.loc[seq_ids_transcript, 'gene_type'].values \
+            + '|' + transcript_table.loc[seq_ids_transcript, 'gene_name'].values \
+            + '|' + domains['domain_id'].values[~is_genome_peaks] \
+            + '|' + transcript_table.loc[seq_ids_transcript, 'transcript_id'].values \
+            + '|' + domains['start'].values[~is_genome_peaks] \
+            + '|' + domains['end'].values[~is_genome_peaks]
+        # annotate genome peaks
+        print(seq_ids_genome.shape, np.sum(is_genome_peaks))
+        gene_ids_genome = seq_ids_genome + '_' + domains['start'].values[is_genome_peaks] \
+            + '_' + domains['end'].values[is_genome_peaks] + '_' + domains['strand'].values[is_genome_peaks]
+        feature_names[is_genome_peaks] = gene_ids_genome \
+            + '|' + 'genomic' \
+            + '|' + gene_ids_genome \
+            + '|' + domains['domain_id'].values[is_genome_peaks] \
+            + '|' + domains['chrom'].values[is_genome_peaks] \
+            + '|' + domains['start'].values[is_genome_peaks] \
+            + '|' + domains['end'].values[is_genome_peaks]
+        mat.index = feature_names
+        mat.index.name = 'feature'
+        mat.to_csv(output[0], sep='\t', header=True, index=True)
