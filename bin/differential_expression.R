@@ -1,7 +1,7 @@
 #! /usr/bin/env Rscript
 
 suppressPackageStartupMessages(library(argparse))
-parser <- ArgumentParser(description='Call domains with significant coverage')
+parser <- ArgumentParser(description='Differential expression')
 parser$add_argument('-i', '--matrix', type='character', required=TRUE,
     help='input count matrix. Rows are genes. Columns are samples.')
 parser$add_argument('-c', '--classes', type='character', required=TRUE,
@@ -12,9 +12,16 @@ parser$add_argument('-p', '--positive-class', type='character', required=TRUE,
     help='comma-separated class names to use as positive class')
 parser$add_argument('-n', '--negative-class', type='character', required=TRUE,
     help='comma-separated class names to use as negative class')
+parser$add_argument('-b', '--batch', type='character', required=FALSE,
+    help='batch information to remove')
+parser$add_argument('--batch-index', type='integer', default=1,
+    help='column number of the batch to remove')
 parser$add_argument('-m', '--method', type='character', default="deseq2",
-    choices=c('deseq2', 'edger_exact', 'edger_glmqlf', 'edger_glmlrt', 'wilcox'), 
+    choices=c('deseq2', 'edger_exact', 'edger_glmqlf', 'edger_glmlrt', 'wilcox', 'limma'),
     help='differential expression method to use')
+parser$add_argument('--norm-method', type='character', default='TMM',
+    choices=c('RLE', 'CPM', 'TMM', 'upperquartile'),
+    help='normalization method')
 parser$add_argument('-o', '--output-file', type='character', required=TRUE,
     help='output file')
 args <- parser$parse_args()
@@ -52,28 +59,58 @@ message('Number of negative samples: ', length(negative_samples))
 
 samples <- c(positive_samples, negative_samples)
 
-class_info <- class_info[samples]
-mat <- mat[,samples]
-class_info <- as.matrix(class_info)
-colnames(class_info) <- 'label'
+group <- class_info[samples]
+mat <- as.matrix(mat[,samples])
+#class_info <- as.matrix(class_info)
+#colnames(class_info) <- 'label'
 mat <- as.matrix(mat)
 
+# read batch information
+if(!is.null(args$batch)){
+    message('read batch information from: ', args$batch)
+    batch <- read.table(args$batch, check.names=FALSE, header=TRUE, as.is=TRUE, row.names=1)
+    if((args$batch_index < 1) || (args$batch_index > ncol(batch))){
+        stop('Batch index out of bound')
+    }
+    batch <- batch[samples, args$batch_index]
+}else{
+    batch <- NULL
+}
+
+# set normalization method
+if(args$norm_method == 'CPM'){
+    norm_method <- 'none'
+} else{
+    norm_method <- args$norm_method
+}
+message('perform differential expression using ', args$method)
 # Required columns for a differential expression file: baseMean, log2FoldChange, pvalue, padj
 if(args$method == 'deseq2'){
     suppressPackageStartupMessages(library(DESeq2))
-    dds <- DESeqDataSetFromMatrix(countData = mat,
-                                colData = class_info,
-                                design = ~label)
+    if(!is.null(batch)){
+        # include batch into regression
+        dds <- DESeqDataSetFromMatrix(countData = mat,
+                                    colData = as.matrix(data.frame(group=group, batch=batch)),
+                                    design = ~group + batch)
+    } else {
+        dds <- DESeqDataSetFromMatrix(countData = mat,
+                                    colData = as.matrix(data.frame(group=group)),
+                                    design = ~group)
+    }
     dds <- DESeq(dds)
-    res <- results(dds, contrast=c('label', 'positive', 'negative'))
+    res <- results(dds, contrast=c('group', 'positive', 'negative'))
     #res <- res[order(res$padj)]
     write.table(as.data.frame(res), args$output_file, sep='\t', quote=FALSE, row.names=TRUE)
 } else if(grepl('^edger_', args$method)) {
     suppressPackageStartupMessages(library(edgeR))
-    group <- class_info[,1]
     y <- DGEList(counts=mat, samples=samples, group=group)
-    y <- calcNormFactors(y)
-    design <- model.matrix(~group)
+    y <- calcNormFactors(y, method=norm_method)
+    if(!is.null(batch)){
+        # regress out batch information as an additive term
+        design <- model.matrix(~group + batch)
+    } else {
+        design <- model.matrix(~group)
+    }
     y <- estimateDisp(y, design)
     if(args$method == 'edger_glmqlf'){
         fit <- glmQLFit(y, design)
@@ -84,6 +121,7 @@ if(args$method == 'deseq2'){
         test <- glmLRT(fit, coef=2)
         res <- topTags(test, n=nrow(mat), sort.by='none')
     } else if(args$method == 'edger_exact'){
+        if(!is.null(batch)) message('ignoring batch information for exact text')
         test <- exactTest(y)
         res <- topTags(test, n=nrow(mat), sort.by='none')
     }
@@ -109,8 +147,7 @@ if(args$method == 'deseq2'){
 } else if(args$method == 'wilcox') {
     suppressPackageStartupMessages(library(edgeR))
     # normalize
-    matrix_cpm <- cpm(mat)
-    group <- class_info[,1]
+    matrix_cpm <- cpm(mat, method=norm_method)
     test_func <- function(x){
         wilcox.test(x[group == 'negative'], x[group == 'positive'], alternative='two.sided')$p.value
     }
@@ -123,6 +160,41 @@ if(args$method == 'deseq2'){
         baseMean=apply(matrix_cpm, 1, mean))
     message('Write results to output file: ', args$output_file)
     write.table(res, args$output_file, sep='\t', quote=FALSE, row.names=TRUE)
+} else if(args$method == 'limma'){
+    suppressPackageStartupMessages(library(limma))
+    suppressPackageStartupMessages(library(edgeR))
+    y <- DGEList(counts=mat, samples=samples, group=group)
+    y <- calcNormFactors(y, method=norm_method)
+    if(!is.null(batch)){
+        model <- model.matrix(~group + batch)
+    } else {
+        model <- model.matrix(~group)
+    }
+    y <- voom(y, model, plot=FALSE)
+    fit <- lmFit(y, model)
+    fit <- eBayes(fit, robust=TRUE, trend=TRUE)
+    #fit2 <- contrasts.ft(fit)
+    #fit2 <- eBayes(fit2, robust=TRUE, trend=TRUE)
+    #top_table <- topTable(fit2, sort.by='none', n=Inf)
+    top_table <- topTable(fit, coef=2, sort.by='none', n=Inf)
+    # rename columns
+    mapped_names <- colnames(top_table)
+    for(i in 1:ncol(top_table)){
+        if(colnames(top_table)[i] == 'logFC'){
+            mapped_names[i] <- 'log2FoldChange'
+        }else if(colnames(top_table)[i] == 'P.Value'){
+            mapped_names[i] <- 'pvalue'
+        }else if(colnames(top_table)[i] == 'adj.P.Val') {
+            mapped_names[i] <- 'padj'
+        }else{
+            mapped_names[i] <- colnames(top_table)[i]
+        }
+    }
+    colnames(top_table) <- mapped_names
+
+    # write results to file
+    message('Write results to output file: ', args$output_file)
+    write.table(top_table, args$output_file, sep='\t', quote=FALSE, row.names=TRUE)
 } else {
     stop('unknown differential expression method: ', args$method)
 }
