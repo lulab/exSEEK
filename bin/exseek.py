@@ -16,17 +16,32 @@ def quoted_string_join(strs, sep=' '):
             quoted.append(s)
     return sep.join(quoted)
 
+steps = (
+    'quality_control',
+    'quality_control_clean',
+    'cutadapt', 
+    'rename_fastq',
+    'fastq_to_fasta', 
+    'prepare_genome', 
+    'bigwig',
+    'mapping', 
+    'count_matrix', 
+    'call_domains', 
+    'merge_domains',
+    'combine_domains',
+    'normalization', 
+    'feature_selection', 
+    'differential_expression', 
+    'evaluate_features',
+    'igv',
+    'update_sequential_mapping',
+    'update_singularity_wrappers'
+)
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='exSeek main program')
 
-    parser.add_argument('step', type=str, 
-        choices=('quality_control', 'quality_control_clean', 'cutadapt',
-        'fastq_to_fasta', 'prepare_genome', 'bigwig',
-        'mapping', 'count_matrix', 'call_domains', 'merge_domains', 'combine_domains',
-        'normalization', 'feature_selection', 
-        'differential_expression', 'evaluate_features', 'igv',
-        'update_sequential_mapping', 'update_singularity_wrappers')
-    )
+    parser.add_argument('step', type=str, choices=steps)
     parser.add_argument('--dataset', '-d', type=str, required=True,
         help='dataset name')
     parser.add_argument('--config-dir', '-c', type=str, default='config',
