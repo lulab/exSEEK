@@ -1,7 +1,5 @@
 include: 'common.snakemake'
 
-import os
-
 def get_all_inputs(wildcards):
     available_inputs = dict(
         clean_reads=expand('{output_dir}/unmapped/{sample_id}/clean_{pair_index}.fa.gz',
