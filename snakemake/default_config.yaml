@@ -14,10 +14,10 @@ scale_method: robust
 # Classifier for feature selection
 classifiers: random_forest
 # Number of features to select
-n_selects: [10]
+n_selects: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 resample_method: bootstrap
 # Feature selection methods
-select_methods: [robust]
+#select_methods: [robust]
 # Enable zero fraction filter
 zero_fraction_filter: true
 # Parameters for zero fraction filter
@@ -40,9 +40,11 @@ fold_change_filter_params:
   direction: any
 fold_change_filter_direction: [any]
 # Feature scaling method
-scaler: robust
+scaler: zscore
 # Parameters for feature scaling
 scaler_params:
+  zscore:
+    with_mean: true
   robust:
     with_centering: true
 # Enable differential expression filter
