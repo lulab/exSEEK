@@ -4,11 +4,6 @@ import yaml
 import re
 from glob import glob
 
-with open('snakemake/default_config.yaml', 'r') as f:
-    default_config = yaml.load(f)
-
-default_config.update(config)
-config = default_config
 
 def require_variable(variable, condition=None):
     value = config.get(variable)
@@ -20,8 +15,15 @@ def require_variable(variable, condition=None):
         raise ValueError('cannot find input file {}: {}'.format(variable, value))
     return value
 
-dataset = config['dataset']
+
 root_dir = require_variable('root_dir', 'input_dir')
+with open(os.path.join(config['root_dir'], 'snakemake/default_config.yaml'), 'r') as f:
+    default_config = yaml.load(f)
+
+default_config.update(config)
+config = default_config
+
+dataset = config['dataset']
 data_dir = require_variable('data_dir', 'input_dir')
 genome_dir = require_variable('genome_dir', 'input_dir')
 bin_dir = require_variable('bin_dir', 'input_dir')
