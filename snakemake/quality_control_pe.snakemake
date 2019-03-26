@@ -24,21 +24,6 @@ rule all:
         get_all_inputs
 
 
-rule fastq_to_fasta_pe:
-    input:
-        '{output_dir}/cutadapt/{sample_id}_{pair_index}.fastq.gz'
-    output:
-        '{output_dir}/unmapped/{sample_id}/clean_{pair_index}.fa.gz'
-    threads:
-        config['threads_compress']
-    wildcard_constraints:
-        pair_index='[12]'
-    shell:
-        '''pigz -p {threads} -d -c {input} \
-            | fastq_to_fasta -r -n \
-            | pigz -p {threads} -c > {output}
-        '''
-
 rule cutadapt_pe:
     input:
         fastq1=auto_gzip_input(data_dir + '/fastq/{sample_id}_1.fastq'),
