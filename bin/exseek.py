@@ -61,7 +61,7 @@ if __name__ == '__main__':
     root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
     logger.info('root directory: {}'.format(root_dir))
 
-    if config_dir is None:
+    if args.config_dir is None:
         config_dir = os.path.join(root_dir, 'config')
 
     logger.info('read default config file')
