@@ -44,7 +44,7 @@ if __name__ == '__main__':
     parser.add_argument('step', type=str, choices=steps)
     parser.add_argument('--dataset', '-d', type=str, required=True,
         help='dataset name')
-    parser.add_argument('--config-dir', '-c', type=str, default='config',
+    parser.add_argument('--config-dir', '-c', type=str,
         help='directory for configuration files')
     parser.add_argument('--cluster', action='store_true', help='submit to cluster')
     parser.add_argument('--cluster-config', type=str, 
@@ -61,6 +61,9 @@ if __name__ == '__main__':
     root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
     logger.info('root directory: {}'.format(root_dir))
 
+    if config_dir is None:
+        config_dir = os.path.join(root_dir, 'config')
+
     logger.info('read default config file')
     with open(os.path.join(root_dir, 'snakemake', 'default_config.yaml'), 'r') as f:
         default_config = yaml.load(f)
@@ -76,9 +79,10 @@ if __name__ == '__main__':
     # check configuration file
     if not os.path.isdir(args.config_dir):
         raise ValueError('cannot find configuration directory: {}'.format(args.config_dir))
-    configfile = os.path.join(args.config_dir, '{}.yaml'.format(args.dataset))
+    configfile = os.path.join(config_dir, '{}.yaml'.format(args.dataset))
     if not os.path.isfile(configfile):
         raise ValueError('cannot find configuration file: {} '.format(configfile))
+    logger.info('read user config file: ' + configfile)
     with open(configfile, 'r') as f:
         config = default_config
         user_config = yaml.load(f)
