@@ -35,17 +35,3 @@ rule cutadapt_pe:
             {input.fastq1} {input.fastq2} > {log} 2>&1
         '''
 
-rule rename_fastq:
-    input:
-        '{output_dir}/cutadapt/{sample_id}_{mate_index}.fastq.gz'
-    output:
-        '{output_dir}/unmapped/{sample_id}/clean_{mate_index}.fastq.gz'
-    threads: 
-        1
-    wildcard_constraints:
-        mate_index='[12]'
-    shell:
-        r'''pigz -d -c -p {threads} {input} \
-            | awk 'NR%4==1{{printf "@%012d\n", int(NR/4);next}} NR%4==3{{printf "+\n";next}} {{print}}' \
-            | pigz -c -p {threads} > {output}
-        '''
