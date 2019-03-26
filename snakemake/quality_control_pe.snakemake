@@ -2,14 +2,10 @@ include: 'common.snakemake'
 
 def get_all_inputs(wildcards):
     available_inputs = dict(
-        clean_reads=expand('{output_dir}/unmapped/{sample_id}/clean_{pair_index}.fa.gz',
-            output_dir=output_dir, sample_id=sample_ids, pair_index=[1, 2]),
-        summarize_cutadapt=expand('{output_dir}/summary/cutadapt.html',
-            output_dir=output_dir)
+        fastqc=expand('{output_dir}/fastqc/{sample_id}_{mate_index}_fastqc.html', 
+            output_dir=output_dir, sample_id=sample_ids, mate_index=[1, 2]),
+        multiqc=expand('{output_dir}/summary/fastqc.html', output_dir=output_dir)
     )
-    if not config['input_clean_reads']:
-        available_inputs['fastqc'] = expand('{output_dir}/summary/{fastqc_step}.html',
-            output_dir=output_dir, fastqc_step=['fastqc', 'fastqc_clean'])
     enabled_inputs = list(available_inputs.keys())
     inputs = []
     for key, l in available_inputs.items():
@@ -22,48 +18,18 @@ rule all:
         get_all_inputs
 
 
-rule cutadapt_pe:
-    input:
-        fastq1=auto_gzip_input(data_dir + '/fastq/{sample_id}_1.fastq'),
-        fastq2=auto_gzip_input(data_dir + '/fastq/{sample_id}_2.fastq')
-    output:
-        fastq1='{output_dir}/cutadapt/{sample_id}_1.fastq.gz',
-        fastq2='{output_dir}/cutadapt/{sample_id}_2.fastq.gz'
-    threads:
-        config['threads']
-    params:
-        quality_5p=config['min_base_quality_5p'],
-        quality_3p=config['min_base_quality_3p'],
-        adaptor1=lambda wildcards: '-a ' + config['adaptor1'] if len(config['adaptor1']) > 0 else '',
-        adaptor2=lambda wildcards: '-A ' + config['adaptor2'] if len(config['adaptor2']) > 0 else '',
-        adaptor1_5p=lambda wildcards: '-g' + config['adaptor1_5p'] if len(config['adaptor1_5p']) > 0 else '',
-        adaptor2_5p=lambda wildcards: '-G' + config['adaptor2_5p'] if len(config['adaptor2_5p']) > 0 else '',
-        miniL=config['min_read_length'],
-        quality_base=config['quality_base']
-    log:
-        '{output_dir}/log/cutadapt/{sample_id}'
-    threads: 3
-    shell:
-        '''cutadapt --pair-filter any -j {threads} -q {params.quality_5p},{params.quality_3p} \
-            {params.adaptor1} {params.adaptor2} {params.adaptor1_5p} {params.adaptor2_5p} \
-            --trim-n -m {params.miniL} -o >(gzip -c > {output.fastq1}) -p >(gzip -c > {output.fastq2}) \
-            {input.fastq1} {input.fastq2} > {log} 2>&1
-        '''
 
 rule fastqc_pe:
     input:
-        lambda wildcards: {
-            'fastqc': auto_gzip_input(data_dir + '/fastq/{sample_id}_{mate_index}.fastq')(wildcards),
-            'fastqc_clean': '{output_dir}/cutadapt/{sample_id}_{mate_index}.fastq.gz'.format(**wildcards)
-            }[wildcards.fastqc_step]
+        auto_gzip_input(data_dir + '/fastq/{sample_id}_{mate_index}.fastq')
     output:
-        html='{output_dir}/{fastqc_step}/{sample_id}_{mate_index}_fastqc.html',
-        zip='{output_dir}/{fastqc_step}/{sample_id}_{mate_index}_fastqc.zip'
+        html='{output_dir}/fastqc/{sample_id}_{mate_index}_fastqc.html',
+        zip='{output_dir}/fastqc/{sample_id}_{mate_index}_fastqc.zip'
     params:
-        output_prefix='{output_dir}/{fastqc_step}/',
+        output_prefix='{output_dir}/fastqc/',
         temp_dir=config['temp_dir']
     log:
-        '{output_dir}/log/{fastqc_step}/{sample_id}_{mate_index}'
+        '{output_dir}/log/fastqc/{sample_id}_{mate_index}'
     wildcard_constraints:
         mate_index='[12]',
         fastqc_step='fastqc.*'
@@ -71,12 +37,27 @@ rule fastqc_pe:
         '''fastqc -q -o {params.output_prefix} -d {params.temp_dir} {input} > {log} 2>&1
         '''
 
+rule multiqc_pe:
+    input:
+        fastqc=expand('{output_dir}/fastqc/{sample_id}_{mate_index}_fastqc.zip',
+            output_dir=output_dir, sample_id=sample_ids, mate_index=[1, 2])
+    output:
+        html='{output_dir}/summary/fastqc.html',
+        data=directory('{output_dir}/summary/fastqc_data')
+    params:
+        fastqc_dir='{output_dir}/fastqc'
+    wildcard_constraints:
+        mate_index='[12]'
+    shell:
+        '''multiqc -m fastqc -n {output.html} {params.fastqc_dir}
+        '''
+
 rule summarize_fastqc_pe:
     input:
-        zip=lambda wildcards: expand('{output_dir}/{fastqc_step}/{sample_id}_{mate_index}_fastqc.zip',
-            output_dir=wildcards.output_dir, fastqc_step=wildcards.fastqc_step, sample_id=sample_ids, mate_index=['1', '2'])
+        zip=lambda wildcards: expand('{output_dir}/fastqc/{sample_id}_{mate_index}_fastqc.zip',
+            output_dir=wildcards.output_dir, sample_id=sample_ids, mate_index=['1', '2'])
     output:
-        '{output_dir}/summary/{fastqc_step}.txt'
+        '{output_dir}/summary/fastqc.txt'
     wildcard_constraints:
         fastqc_step='fastqc.*',
         mate_index='[12]'
@@ -103,11 +84,11 @@ rule summarize_fastqc_pe:
 
 rule summarize_fastqc_jupyter_pe:
     input:
-        fastqc='{output_dir}/summary/{fastqc_step}.txt',
+        fastqc='{output_dir}/summary/fastqc.txt',
         jupyter=root_dir + '/templates/fastqc.ipynb'
     output:
-        jupyter='{output_dir}/summary/{fastqc_step}.ipynb',
-        html='{output_dir}/summary/{fastqc_step}.html'
+        jupyter='{output_dir}/summary/fastqc_jupyter.ipynb',
+        html='{output_dir}/summary/fastqc_jupyter.html'
     wildcard_constraints:
         fastqc_step='fastqc.*'
     run:
