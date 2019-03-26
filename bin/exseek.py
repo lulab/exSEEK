@@ -77,8 +77,8 @@ if __name__ == '__main__':
     snakemake_args = ['snakemake', '-k', '--rerun-incomplete']
     extra_config = {}
     # check configuration file
-    if not os.path.isdir(args.config_dir):
-        raise ValueError('cannot find configuration directory: {}'.format(args.config_dir))
+    if not os.path.isdir(config_dir):
+        raise ValueError('cannot find configuration directory: {}'.format(config_dir))
     configfile = os.path.join(config_dir, '{}.yaml'.format(args.dataset))
     if not os.path.isfile(configfile):
         raise ValueError('cannot find configuration file: {} '.format(configfile))
@@ -89,19 +89,19 @@ if __name__ == '__main__':
         config.update(user_config)
     # check cluster configuration
     if args.cluster:
-        cluster_config = os.path.join(args.config_dir, 'cluster.yaml')
+        cluster_config = os.path.join(config_dir, 'cluster.yaml')
         if not os.path.isfile(cluster_config):
             if args.cluster_config is None:
-                raise ValueError('cannot find {}/cluster.yaml and --cluster-config is not specified'.format(args.config_dir))
+                raise ValueError('cannot find {}/cluster.yaml and --cluster-config is not specified'.format(config_dir))
             cluster_config = args.cluster_config
 
-        cluster_command_file = os.path.join(args.config_dir, 'cluster_command.txt')
+        cluster_command_file = os.path.join(config_dir, 'cluster_command.txt')
         if os.path.isfile(cluster_command_file):
             with open(cluster_command_file, 'r') as f:
                 cluster_command = f.read().strip()
         else:
             if args.cluster_command is None:
-                raise ValueError('cannot find {}/cluster_command.txt and --cluster-command is not specified'.format(args.config_dir))
+                raise ValueError('cannot find {}/cluster_command.txt and --cluster-command is not specified'.format(config_dir))
             cluster_command = args.cluster_command
         snakemake_args += ['--cluster', cluster_command, '--cluster-config', cluster_config]
     
