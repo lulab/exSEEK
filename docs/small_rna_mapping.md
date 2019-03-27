@@ -87,6 +87,12 @@ exseek.py quality_control_clean -d ${dataset}
 exseek.py mapping -d ${dataset}
 ```
 
+## Generate BigWig files
+
+```bash
+exseek.py bigwig -d ${dataset}
+```
+
 ## Call domains
 
 ```bash
