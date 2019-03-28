@@ -19,7 +19,7 @@ resample_method: bootstrap
 # Feature selection methods
 #select_methods: [robust]
 # Enable zero fraction filter
-zero_fraction_filter: true
+zero_fraction_filter: false
 # Parameters for zero fraction filter
 zero_fraction_filter_params:
   threshold: 0.8
@@ -28,13 +28,14 @@ log_transform: true
 # Parameters for log transformation
 log_transform_params:
   base: 2
+  pseudo_count: 1
 # Enable RPM filter
 rpm_filter: false
 # Parameters for RPM filter
 rpm_filter_params:
   threshold: 10
 # Fold change filter
-fold_change_filter: true
+fold_change_filter: false
 # Parameters for fold change filter
 fold_change_filter_params:
   direction: any
@@ -63,7 +64,7 @@ selector_params:
     cv:
       splitter: stratified_shuffle_split
       n_splits: 10
-      test_size: 0.2
+      test_size: 0.1
   rfe:
     step: 0.2
   max_features: {}
@@ -92,7 +93,7 @@ classifier_params:
 cv_params:
   splitter: stratified_shuffle_split
   n_splits: 50
-  test_size: 0.2
+  test_size: 0.1
 # Method for computing sample-weight
 sample_weight: auto
 
@@ -117,6 +118,7 @@ grid_search_params:
   cv:
     splitter: stratified_kfold
     n_splits: 5
+  iid: false
   scoring: roc_auc
 # Parameters for evalation of features
 evaluation_features:
@@ -249,7 +251,7 @@ umi_length: 0
 evaluate_features_preprocess_methods: []
 # Differential expression method
 # Available methods: deseq2, edger_glmlrt, edger_glmqlf, edger_exact, wilcox
-diffexp_method: [deseq2, edger_glmlrt, edger_glmqlf, edger_exact, wilcox, limma]
+diffexp_method: [deseq2, edger_glmlrt]
 # Count multi-mapping reads
 count_multimap_reads: true
 # Count overlapping features
