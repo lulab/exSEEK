@@ -87,7 +87,9 @@ def cross_validation(args):
     import numpy as np
     import h5py
     import pickle
+    import yaml
 
+    # read input data matrix
     X, y, sample_ids, feature_names = read_data_matrix(args.matrix, args.sample_classes,
         **search_dict(vars(args), ('features', 'transpose', 'positive_class', 'negative_class')))
     has_missing_features = np.any(np.isnan(X))
@@ -100,15 +102,22 @@ def cross_validation(args):
     if not os.path.isdir(args.output_dir):
         logger.info('create output directory: ' + args.output_dir)
         os.makedirs(args.output_dir)
+    # read other input files
     logger.info('save class labels to: ' + os.path.join(args.output_dir, 'classes.txt'))
     pd.Series(y).to_csv(os.path.join(args.output_dir, 'classes.txt'), header=False, index=False)
     logger.info('save feature names to: ' + os.path.join(args.output_dir, 'feature_names.txt'))
     pd.Series(feature_names).to_csv(os.path.join(args.output_dir, 'feature_names.txt'), header=False, index=False)
     logger.info('save sample ids to: ' + os.path.join(args.output_dir, 'samples.txt'))
     pd.Series(sample_ids).to_csv(os.path.join(args.output_dir, 'samples.txt'), header=False, index=False)
-    
+    # read configuration file
+    config = {}
+    if args.config is not None:
+        logger.info('read configuration file: ' + args.config)
+        with open(args.config, 'r') as f:
+            config = yaml.load(f)
+    # overwride config with command-line pamameters
     argdict = vars(args)
-    params = search_dict(argdict, (
+    config.update(search_dict(argdict, (
         'zero_fraction_filter', 'zero_fraction_filter_params',
         'rpm_filter', 'rpm_filter_params',
         'rpkm_filter', 'rpkm_filter_params',
@@ -119,18 +128,20 @@ def cross_validation(args):
         'selector', 'selector_params', 'n_features_to_select',
         'classifier', 'classifier_params',
         'grid_search', 'grid_search_params'
-    ))
+    )))
+
+    
 
     for key in ('rpkm_filter_params', 'rpm_filter_params', 'fold_change_filter_params',
         'zero_fraction_filter_params', 'log_transform_params', 'diffexp_filter_params',
         'scaler_params', 'classifier_params', 'selector_params', 'grid_search_params'):
-        params[key] = parse_params(argdict[key])
+        config[key] = parse_params(argdict[key])
     # set temp_dir for diffexp_selector
     if args.diffexp_filter:
-        params['diffexp_filter_params']['temp_dir'] = os.path.join(args.output_dir, 'diffexp')
-        logger.info('set temp_dir of diffexp_filter: {}'.format(params['diffexp_filter_params']['temp_dir']))
+        config['diffexp_filter_params']['temp_dir'] = os.path.join(args.output_dir, 'diffexp')
+        logger.info('set temp_dir of diffexp_filter: {}'.format(config['diffexp_filter_params']['temp_dir']))
     logger.info('build combined estimator')
-    estimator = CombinedEstimator(**params)
+    estimator = CombinedEstimator(**config)
 
     logger.info('start cross-validation')
     collect_metrics = CollectMetrics(has_missing_features=has_missing_features)
@@ -203,6 +214,8 @@ if __name__ == '__main__':
         help='transpose the feature matrix')
     g_input.add_argument('--features', type=str, metavar='FILE',
         help='input file containing subset of feature names')
+    g_input.add_argument('--config', '-c', type=str, metavar='FILE',
+        help='configuration file of parameters in YAML format')
 
     g_filter = parser.add_argument_group('filter')
     g_filter.add_argument('--zero-fraction-filter', action='store_true')
