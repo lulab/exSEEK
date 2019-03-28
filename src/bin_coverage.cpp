@@ -22,6 +22,7 @@ class IOError: public std::exception
 public:
     explicit IOError(const std::string message, const std::string filename)
         : message(message), filename(filename) {}
+    virtual ~IOError() throw () {}
     virtual const char* what()
     {
         return (message + " " + filename + " :" + std::string(std::strerror(errno))).c_str();
@@ -82,8 +83,8 @@ struct GenomicInterval
         if(c.size() < min_columns)
             throw std::invalid_argument("not enough columns found in BED file");
         interval.chrom = c[0];
-        interval.start = std::stol(c[1]);
-        interval.end = std::stol(c[2]);
+        interval.start = std::strtol(c[1].c_str(), NULL, 10);
+        interval.end = std::strtol(c[2].c_str(), NULL, 10);
         if(c.size() >= 6)
         {
             interval.name = c[3];
@@ -195,7 +196,7 @@ int main(int argc, char** argv)
     std::string bed_file(argv[1]);
     std::string chrom_sizes_file(argv[2]);
     std::string output_file(argv[3]);
-    GenomicPosition bin_size = std::stol(std::string(argv[4]));
+    GenomicPosition bin_size = std::strtol(argv[4], NULL, 10);
 
     std::ios::sync_with_stdio(false);
     std::cin.tie(NULL);
