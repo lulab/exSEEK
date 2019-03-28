@@ -816,7 +816,8 @@ class CombinedEstimator(BaseEstimator, MetaEstimatorMixin):
         classifier=None,
         classifier_params=None,
         grid_search=False,
-        grid_search_params=None):
+        grid_search_params=None,
+        **kwargs):
         self.zero_fraction_filter = zero_fraction_filter
         self.zero_fraction_filter_params = zero_fraction_filter_params
         
@@ -887,7 +888,7 @@ class CombinedEstimator(BaseEstimator, MetaEstimatorMixin):
             logger.debug('add scaler "{}" with parameters: {}'.format(self.scaler, self.scaler_params))
             self.preprocess_steps_.append(('scaler', 
                 get_scaler(self.scaler, **self.scaler_params)))
-
+        # preprocess features
         X_new = X
         self.features_ = np.arange(X.shape[1])
         for name, step in self.preprocess_steps_:
@@ -897,19 +898,23 @@ class CombinedEstimator(BaseEstimator, MetaEstimatorMixin):
                 self.features_ = self.features_[step.get_support()]
         logger.debug('add classifier "{}" with parameters: {}'.format(self.classifier, self.classifier_params))
         self.classifier_ = get_classifier(self.classifier, **self.classifier_params)
+        # grid search for hyper-parameters
         if self.grid_search:
             logger.debug('add grid_search with parameters: {}'.format(self.grid_search_params))
             grid_search_params = copy.deepcopy(self.grid_search_params)
             if 'cv' in grid_search_params:
                 grid_search_params['cv'] = get_splitter(**grid_search_params['cv'])
             grid_search_params['param_grid'] = grid_search_params['param_grid'][self.classifier]
-            self.grid_search_ = GridSearchCV(estimator=self.classifier_, 
+            self.grid_search_ = GridSearchCV(estimator=self.classifier_,
                 **search_dict(grid_search_params, ('param_grid', 'scoring', 'cv', 
-                'fit_params', 'verbose', 'return_train_score', 'error_score')))
-            self.grid_search_.fit(X_new, y)
+                'fit_params', 'verbose', 'return_train_score', 'error_score', 'iid')))
+            self.grid_search_.fit(X_new, y, sample_weight=sample_weight)
             self.classfier_ = self.grid_search_.best_estimator_
             self.best_classifier_params_ = self.grid_search_.best_params_
             self.classifier_.set_params(**self.grid_search_.best_params_)
+            #logger.info('best params: {}'.format(self.grid_search_.best_params_))
+            #logger.info('mean test score: {}'.format(self.grid_search_.cv_results_['mean_test_score']))
+        # feature selection
         if self.selector:
             logger.debug('add selector "{}" with parameters: {}'.format(self.selector, self.selector_params))
             logger.debug('number of features to select: {}'.format(self.n_features_to_select))
@@ -917,7 +922,9 @@ class CombinedEstimator(BaseEstimator, MetaEstimatorMixin):
                 n_features_to_select=self.n_features_to_select, **self.selector_params)
             X_new = self.selector_.fit_transform(X_new, y)
             self.features_ = self.features_[self.selector_.get_support()]
-        self.classifier_.fit(X_new, y)
+        # refit the classifier with selected features
+        self.classifier_.fit(X_new, y, sample_weight=sample_weight)
+        # set feature importances
         self.feature_importances_ = get_feature_importances(self.classifier_)
         return self
     
@@ -952,7 +959,7 @@ def cross_validation(estimator, X, y, sample_weight='auto', params=None, callbac
         estimator = clone(estimator)
         sample_weight_ = sample_weight
         if sample_weight == 'auto':
-            sample_weight_ = compute_sample_weight(class_weight=None, y=y[train_index])
+            sample_weight_ = compute_sample_weight(class_weight='balanced', y=y[train_index])
         estimator.fit(X[train_index], y[train_index], sample_weight=sample_weight_)
         y_pred_labels = estimator.predict(X)
         y_pred_probs = estimator.predict_proba(X)
