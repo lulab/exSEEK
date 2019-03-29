@@ -92,11 +92,12 @@ def cross_validation(args):
     # read input data matrix
     X, y, sample_ids, feature_names = read_data_matrix(args.matrix, args.sample_classes,
         **search_dict(vars(args), ('features', 'transpose', 'positive_class', 'negative_class')))
-    has_missing_features = np.any(np.isnan(X))
-    if has_missing_features:
+    #has_missing_features = np.any(np.isnan(X))
+    #if has_missing_features:
         # fill missing features with 0
-        X[np.isnan(X)] = 0
-    
+    #    X[np.isnan(X)] = 0
+    # remove missing features
+    X = X[:, np.all(~np.isnan(X), axis=0)]
     if X.shape[0] < 20:
         raise ValueError('too few samples for machine learning')
     if not os.path.isdir(args.output_dir):
@@ -144,7 +145,7 @@ def cross_validation(args):
     estimator = CombinedEstimator(**config)
 
     logger.info('start cross-validation')
-    collect_metrics = CollectMetrics(has_missing_features=has_missing_features)
+    collect_metrics = CollectMetrics()
     collect_predictions = CollectPredictions()
     collect_train_index = CollectTrainIndex()
     cv_callbacks = [collect_metrics, collect_predictions, collect_train_index]
