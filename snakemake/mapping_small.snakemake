@@ -76,9 +76,9 @@ rule summarize_read_counts:
     input:
         mapped=lambda wildcards: expand('{output_dir}/stats/read_counts_mapped/{sample_id}/{rna_type}',
             output_dir=wildcards.output_dir, sample_id=sample_ids, 
-            rna_type=rna_types + ['other', 'promoter', 'enhancer', 'intron', 'circRNA', 'repeats']),
+            rna_type=rna_types + ['other', 'promoter', 'enhancer', 'intron', 'repeats']),
         unmapped=lambda wildcards: expand('{output_dir}/stats/read_counts_unmapped/{sample_id}/{rna_type}',
-            output_dir=wildcards.output_dir, sample_id=sample_ids, rna_type=rna_types + ['clean', 'other', 'circRNA'])
+            output_dir=wildcards.output_dir, sample_id=sample_ids, rna_type=['clean', 'other'])
     output:
         '{output_dir}/summary/read_counts.txt'
     run:
@@ -155,6 +155,40 @@ rule bam_to_bed:
         '''bedtools bamtobed -i {input} | bedtools sort | pigz -c > {output}
         '''
 
+rule count_genomic_reads:
+    '''Count genomic reads with a defined order
+    '''
+    input:
+        reads='{output_dir}/gbed/{sample_id}/other.bed.gz',
+        intron=genome_dir + '/bed/long_RNA.intron.bed',
+        promoter=genome_dir + '/bed/promoter.merged.bed',
+        enhancer=genome_dir + '/bed/enhancer.merged.bed',
+        repeats=genome_dir + '/bed/rmsk.bed'
+    output:
+        intron='{output_dir}/stats/read_counts_mapped/{sample_id}/intron',
+        promoter='{output_dir}/stats/read_counts_mapped/{sample_id}/promoter',
+        enhancer='{output_dir}/stats/read_counts_mapped/{sample_id}/enhancer',
+        repeats='{output_dir}/stats/read_counts_mapped/{sample_id}/repeats'
+    threads:
+        1
+    shell:
+        r'''pigz -c -d -p {threads} {input.reads} \
+            | bedtools annotate -counts -s -i - -files {input.intron} {input.promoter} {input.enhancer} {input.repeats} \
+            | awk 'BEGIN{{OFS="\t";FS="\t";intron=0;promoter=0;enhancer=0;repeats=0}}
+            {{
+                if($7 > 0) intron++
+                else if($8 > 0) promoter++
+                else if($9 > 0) enhancer++
+                else if($10 > 0) repeats++
+            }}END{{
+                print intron > "{output.intron}"
+                print promoter > "{output.promoter}"
+                print enhancer > "{output.enhancer}"
+                print repeats > "{output.repeats}"
+            }}'
+        '''
+
+"""
 rule count_reads_intron:
     input:
         reads='{output_dir}/gbed/{sample_id}/other.bed.gz',
@@ -220,6 +254,7 @@ rule map_circRNA:
             samtools fasta {output.bam_filtered}
         }} | pigz -c > {output.unmapped}
         '''
+"""
 
 rule map_genome:
     input:
