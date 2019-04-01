@@ -72,7 +72,7 @@ Binbin Shi <>
 
 
 ## Copyright and License Information
-Copyright (C) 2019 Tsinghua University of California, Beijing, China 
+Copyright (C) 2019 Tsinghua University, Beijing, China 
 
 Authors: Binbin Shi, Xupeng Chen, ..., and Zhi John Lu 
 
