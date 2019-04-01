@@ -36,7 +36,7 @@ rule count_clean_reads_paired:
     output:
         '{output_dir}/stats/read_counts_clean/{sample_id}'
     shell:
-        '''gzip -d -c {input} | wc -l | awk '{print int($0/2)}' > {output}
+        '''gzip -d -c {input} | wc -l | awk '{print int($0/4)}' > {output}
         '''
 
 rule count_clean_fragments:
@@ -47,7 +47,7 @@ rule count_clean_fragments:
     threads:
         config['threads_compress']
     shell:
-        '''pigz -p {threads} -d -c {input} | wc -l | awk '{{print int($0/2)}}' > {output}
+        '''pigz -p {threads} -d -c {input} | wc -l | awk '{{print int($0/4)}}' > {output}
         '''
 
 map_command_pe = '''STAR --genomeDir {params.index} \
