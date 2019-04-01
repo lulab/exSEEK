@@ -2,7 +2,7 @@
 
 > exRNA Biomarker Discovery for Liquid Biopsy
 >
-> Date: "4.22.2019"
+> Update: April 22nd, 2019
 
 ## Table of Contents
 
@@ -69,7 +69,7 @@ optional arguments:
 
 [GitHub Issues](https://github.com/lulab/exSEEK/issues)
 
-Binbin Shi <>
+Binbin Shi<>
 
 
 ## Copyright and License Information
@@ -77,4 +77,4 @@ Copyright (C) 2019 Tsinghua University, Beijing, China
 
 Authors: Binbin Shi, Xupeng Chen, ..., and Zhi John Lu 
 
-This program is licensed with commercial restriction use license. Please see the attached LICENSE file for details.
+This program is licensed with commercial restriction use license. Please see the [LICENSE](LICENSE) file for details.
