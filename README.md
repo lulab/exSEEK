@@ -10,6 +10,7 @@
 - [Usage](#usage)
 - [Contact](#contact)
 - [Copyright and License Information](#copyright-and-license-information)
+- [Detailed Docs for Advanced Users](http://exSEEK.gitbook.io)
 
 
 ## Installation
