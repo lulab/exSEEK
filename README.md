@@ -77,4 +77,4 @@ Copyright (C) 2019 Tsinghua University, Beijing, China
 
 Authors: Binbin Shi, Xupeng Chen, ..., and Zhi John Lu 
 
-This program is licensed with commercial restriction use license. Please see the [LICENSE](LICENSE) file for details.
+This program is licensed with commercial restriction use license. Please see the [LICENSE](LICENSE.md) file for details.
