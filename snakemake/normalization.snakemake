@@ -109,6 +109,15 @@ rule normalization_step:
         --cvthreshold {params.cvthreshold}
         '''
 
+rule sub_matrix:
+    input:
+        '{output_dir}/matrix_processing/filter.{imputation_method}.Norm_{normalization_method}.Batch_{batch_removal_method}_{batch_index}.mirna_and_domains_rna.txt'
+    output:
+        '{output_dir}/matrix_processing/filter.{imputation_method}.Norm_{normalization_method}.Batch_{batch_removal_method}_{batch_index}.mirna_only.txt'
+    shell:
+        r'''awk 'BEGIN{{OFS="\t";FS="\t"}}(NR==1)||($1 ~/miRNA/){{print}}' {input} > {output}
+        '''
+
 rule batch_removal_step_with_batchinfo:
     input:
         matrix='{output_dir}/matrix_processing/filter.{imputation_method}.Norm_{normalization_method}.{count_method}.txt',
