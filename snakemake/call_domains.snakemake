@@ -11,11 +11,11 @@ rule all:
         domains=expand('{output_dir}/domains/{bin_size}/{pvalue}.bed',
             output_dir=output_dir, bin_size=config['bin_size'], pvalue=config['call_domain_pvalue']),
         domains_genome=expand('{output_dir}/domains_genome/{bin_size}/{pvalue}.bed',
-            output_dir=output_dir, bin_size=config['bin_size'], pvalue=config['call_domain_pvalue']),
-        refined_domains=expand('{output_dir}/refined_domains/{bin_size}/{pvalue}.bed',
-            output_dir=output_dir, bin_size=config['bin_size'], pvalue=config['call_domain_pvalue']),
-        refined_domains_genome=expand('{output_dir}/refined_domains_genome/{bin_size}/{pvalue}.bed',
             output_dir=output_dir, bin_size=config['bin_size'], pvalue=config['call_domain_pvalue'])
+        #refined_domains=expand('{output_dir}/refined_domains/{bin_size}/{pvalue}.bed',
+        #    output_dir=output_dir, bin_size=config['bin_size'], pvalue=config['call_domain_pvalue']),
+        #refined_domains_genome=expand('{output_dir}/refined_domains_genome/{bin_size}/{pvalue}.bed',
+        #    output_dir=output_dir, bin_size=config['bin_size'], pvalue=config['call_domain_pvalue'])
 
 rule tbam_to_bed:
     input:
