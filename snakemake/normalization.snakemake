@@ -21,8 +21,8 @@ def get_all_inputs(wildcards):
             batch_removal_method=batch_removal_method,
             batch_index=config['batch_index'],
             count_method=config['count_method'])
-    available_inputs += expand('{output_dir}/select_preprocess_method/{score}/{count_method}/selected_methods.txt',
-        output_dir=output_dir, score=clustering_scores, count_method=config['count_method'])
+    #available_inputs += expand('{output_dir}/select_preprocess_method/{score}/{count_method}/selected_methods.txt',
+    #    output_dir=output_dir, score=clustering_scores, count_method=config['count_method'])
     
     return available_inputs
 
