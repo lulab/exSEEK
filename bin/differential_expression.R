@@ -17,11 +17,13 @@ parser$add_argument('-b', '--batch', type='character', required=FALSE,
 parser$add_argument('--batch-index', type='integer', default=1,
     help='column number of the batch to remove')
 parser$add_argument('-m', '--method', type='character', default="deseq2",
-    choices=c('deseq2', 'edger_exact', 'edger_glmqlf', 'edger_glmlrt', 'wilcox', 'limma'),
+    choices=c('deseq2', 'edger_exact', 'edger_glmqlf', 'edger_glmlrt', 'wilcox', 'limma', 'ttest'),
     help='differential expression method to use')
 parser$add_argument('--norm-method', type='character', default='TMM',
     choices=c('RLE', 'CPM', 'TMM', 'upperquartile'),
-    help='normalization method')
+    help='normalization method for count-based methods')
+parser$add_argument('--pseudo-count', type='double', default=1.0,
+    help='pseudo-count added to log2 transform in ttest')
 parser$add_argument('-o', '--output-file', type='character', required=TRUE,
     help='output file')
 args <- parser$parse_args()
@@ -195,6 +197,13 @@ if(args$method == 'deseq2'){
     # write results to file
     message('Write results to output file: ', args$output_file)
     write.table(top_table, args$output_file, sep='\t', quote=FALSE, row.names=TRUE)
+} else if(args$method == "ttest") {
+    suppressPackageStartupMessages(library(genefilter))
+    mat <- log2(mat + args$pseudo_count)
+    res <- rowttests(mat, as.factor(group))
+    res$padj <- p.adjust(res$p.value, method='BH')
+    res$log2FoldChange <- rowMeans(mat[, group == 'positive']) - rowMeans(mat[, group == 'negative'])
+    write.table(res, args$output_file, sep='\t', quote=FALSE, row.names=TRUE)
 } else {
     stop('unknown differential expression method: ', args$method)
 }
