@@ -2,7 +2,7 @@
 
 > exRNA Biomarker Discovery for Liquid Biopsy
 >
-> Update: April 22nd, 2019
+> Update: April 30th, 2019
 
 ## Table of Contents
 
@@ -15,13 +15,10 @@
 
 ## Installation
 
-Install required software packages according to [requirements](docs/requirements.md)
+For easy intallation, you can use the docker image we provide: [exSEEK Docker Image]()
 
-Download the scripts:
+If you would like to manually set up the environment, please follow the [requirements](https://exseek.gitbook.io/docs/installation)
 
-```bash
-git clone https://github.com/lulab/exSeek-dev.git
-```
 
 
 ## Usage
