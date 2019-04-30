@@ -36,7 +36,7 @@ usage: exseek.py [-h] --dataset DATASET [--config-dir CONFIG_DIR] [--cluster]
 exSeek main program
 
 positional arguments:
-  {quality_control,prepare_genome,mapping,count_matrix,call_domains,normalization,feature_selection,update_sequential_mapping,update_singularity_wrappers}
+  {quality_control,quality_control_clean,cutadapt,rename_fastq,fastq_to_fasta,prepare_genome,bigwig,mapping,count_matrix,call_domains,merge_domains,combine_domains,normalization,feature_selection,differential_expression,evaluate_features,igv,update_sequential_mapping,update_singularity_wrappers}
 
 optional arguments:
   -h, --help            show this help message and exit
