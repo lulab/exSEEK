@@ -2,7 +2,7 @@
 
 > exRNA Biomarker Discovery for Liquid Biopsy
 >
-> Update: April 22nd, 2019
+> Update: April 30th, 2019
 
 ## Table of Contents
 
@@ -15,13 +15,10 @@
 
 ## Installation
 
-Install required software packages according to [requirements](docs/requirements.md)
+For easy intallation, you can use the docker image we provide: [exSEEK Docker Image]()
 
-Download the scripts:
+If you would like to manually set up the environment, please follow the [requirements](https://exseek.gitbook.io/docs/installation)
 
-```bash
-git clone https://github.com/lulab/exSeek-dev.git
-```
 
 
 ## Usage
@@ -39,7 +36,7 @@ usage: exseek.py [-h] --dataset DATASET [--config-dir CONFIG_DIR] [--cluster]
 exSeek main program
 
 positional arguments:
-  {quality_control,prepare_genome,mapping,count_matrix,call_domains,normalization,feature_selection,update_sequential_mapping,update_singularity_wrappers}
+  {quality_control,quality_control_clean,cutadapt,rename_fastq,fastq_to_fasta,prepare_genome,bigwig,mapping,count_matrix,call_domains,merge_domains,combine_domains,normalization,feature_selection,differential_expression,evaluate_features,igv,update_sequential_mapping,update_singularity_wrappers}
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -61,7 +58,7 @@ optional arguments:
 ```
 
 > **Note**
-> The [main program of exSEEK](https://github.com/lulab/exSEEK/tree/master/exSEEK) starts from a data matrix of gene expression (read counts of each gene in each sample). Meanwhile, we provide some pipelines and QC steps for the [pre-process](https://github.com/lulab/exSEEK/tree/master/pre-process) of exRNA-seq (including long and short  cfRNA-seq/exoRNA-seq) raw data. We also recommend other alternatives for the pre-process, such as [exceRpt](https://github.com/gersteinlab/exceRpt) and ?, that are specifically developed for the process of exRNA-seq raw reads.
+> The [main program of exSEEK](https://github.com/lulab/exSEEK_docs/tree/master/exseek) starts from a data matrix of gene expression (read counts of each gene in each sample). Meanwhile, we provide some pipelines and QC steps for the [pre-process](https://github.com/lulab/exSEEK_docs/tree/master/pre-process) of exRNA-seq (including long and short  cfRNA-seq/exoRNA-seq) raw data. We also recommend other alternatives for the pre-process, such as [exceRpt](https://github.com/gersteinlab/exceRpt) and ?, that are specifically developed for the process of exRNA-seq raw reads.
 > * Other arguments are passed to *snakemake*
 > * Specify number of processes to run in parallel with *-j*
 
