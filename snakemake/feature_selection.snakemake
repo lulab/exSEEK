@@ -47,16 +47,22 @@ inputs['metrics_train'] = expand('{output_dir}/summary/{cross_validation}/metric
 inputs['feature_stability'] = expand('{output_dir}/summary/{cross_validation}/feature_stability.txt',
     output_dir=output_dir, cross_validation=['cross_validation', 'cross_validation_diffexp'])
 '''
+# read selector-classifier
+with open(os.path.join(config_dir, 'machine_learning.yaml'), 'r') as f:
+    cv_config = yaml.load(f)
+
+selectors = list(cv_config['selectors'].keys())
+classifiers = list(cv_config['classifiers'].keys())
 inputs = {
-    'cross_validation': expand('{output_dir}/cross_validation/filter.{imputation_method}.Norm_{normalization_method}.Batch_{batch_removal_method}_{batch_index}.{count_method}/{compare_group}/{classifier}.{n_select}.{select_method}.{fold_change_filter_direction}',
+    'cross_validation': expand('{output_dir}/cross_validation/filter.{imputation_method}.Norm_{normalization_method}.Batch_{batch_removal_method}_{batch_index}.{count_method}/{compare_group}/{classifier}.{n_select}.{selector}.{fold_change_filter_direction}',
         output_dir=output_dir, 
         imputation_method=config['imputation_method'],
         normalization_method=config['normalization_method'],
         batch_removal_method=config['batch_removal_method'],
         batch_index=config['batch_index'],
         count_method=config['count_method'],
-        classifier=config['classifier'], 
-        select_method=config['selector'], 
+        classifier=classifiers, 
+        selector=selectors,
         compare_group=list(compare_groups.keys()), 
         n_select=config['n_selects'], 
         fold_change_filter_direction=config['fold_change_filter_direction']),
@@ -118,7 +124,8 @@ def get_input_matrix(wildcards):
     else:
         return '{output_dir}/rpkm/{preprocess_method}.{count_method}.txt'.format(**wildcards)
 
-rule cross_validation:
+"""
+rule cross_validation1:
     input:
         matrix='{output_dir}/matrix_processing/{preprocess_method}.{count_method}.txt',
         sample_classes=data_dir+ '/sample_classes.txt'
@@ -164,6 +171,68 @@ rule cross_validation:
         command = list(map(str, command))
         print(' '.join(map(quote, command)))
         subprocess.check_call(command)
+"""
+
+rule cross_validation:
+    input:
+        matrix='{output_dir}/matrix_processing/{preprocess_method}.{count_method}.txt',
+        sample_classes=data_dir+ '/sample_classes.txt'
+    output:
+        dir=directory('{output_dir}/cross_validation/{preprocess_method}.{count_method}/{compare_group}/{classifier}.{n_select}.{selector}.{fold_change_filter_direction}')
+        #config='{output_dir}/cross_validation/{preprocess_method}.{count_method}/{compare_group}/{classifier}.{n_select}.{selector}.{fold_change_filter_direction}/config.yaml'
+    run:
+        from copy import deepcopy
+
+        output_config = {}
+        # number of features
+        output_config['n_features_to_select'] = int(wildcards.n_select)
+        # copy global config parameters
+        for key in ('transpose', 'features', 'cv_params', 'sample_weight', 'preprocess_steps'):
+            if key in cv_config:
+                output_config[key] = cv_config[key]
+        # copy selector config
+        selector_config = deepcopy(cv_config['selectors'][wildcards.selector])
+        selector_config['enabled'] = True
+        selector_config['params'] = selector_config.get('params', {})
+        # script path for differential expression
+        if selector_config['name'] == 'DiffExpFilter':
+            selector_config['params']['script'] = os.path.join(bin_dir, 'differential_expression.R')
+        # copy selector grid search params
+        if selector_config['params'].get('grid_search', False):
+            grid_search_params = deepcopy(cv_config['selector_grid_search_params'])
+            grid_search_params.update(selector_config['params']['grid_search_params'])
+            selector_config['params']['grid_search_params'] = grid_search_params
+        # append to preprocess_steps
+        output_config['preprocess_steps'].append({'feature_selection': selector_config})
+        # copy classifier config
+        classifier_config = deepcopy(cv_config['classifiers'][wildcards.classifier])
+        classifier_config['params'] = classifier_config.get('params', {})
+        output_config['classifier'] = classifier_config['classifier']
+        output_config['classifier_params'] = classifier_config.get('classifier_params', {})
+        # copy classifier grid search params
+        if classifier_config.get('grid_search', False):
+            grid_search_params = deepcopy(cv_config['classifier_grid_search_params'])
+            grid_search_params.update(classifier_config['grid_search_params'])
+            # add classifier grid search config
+            output_config['grid_search'] = True
+            output_config['grid_search_params'] = grid_search_params
+        # write output config
+        if not os.path.isdir(output.dir):
+            os.makedirs(output.dir)
+        output_config_file = os.path.join(output.dir, 'config.yaml')
+        with open(output_config_file, 'w') as f:
+            yaml.dump(output_config, f, default_flow_style=False)
+        command = [
+            os.path.join(config['bin_dir'], 'machine_learning.py'), 'run_pipeline',
+            '--matrix', input.matrix,
+            '--sample-classes', input.sample_classes,
+            '--output-dir', output.dir,
+            '--positive-class', '"' + compare_groups[wildcards.compare_group][1] + '"',
+            '--negative-class', '"' + compare_groups[wildcards.compare_group][0] + '"',
+            '--config', output_config_file
+        ]
+        shell(' '.join(command))
+
 
 rule cross_validation_diffexp:
     '''Feature selection using differential expression with cross-validation
