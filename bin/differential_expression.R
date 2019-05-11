@@ -70,7 +70,7 @@ mat <- as.matrix(mat)
 # read batch information
 if(!is.null(args$batch)){
     message('read batch information from: ', args$batch)
-    batch <- read.table(args$batch, check.names=FALSE, header=TRUE, as.is=TRUE, row.names=1)
+    batch <- read.table(args$batch, check.names=FALSE, header=TRUE, as.is=TRUE, row.names=1, sep='\t')
     if((args$batch_index < 1) || (args$batch_index > ncol(batch))){
         stop('Batch index out of bound')
     }
@@ -199,7 +199,7 @@ if(args$method == 'deseq2'){
     write.table(top_table, args$output_file, sep='\t', quote=FALSE, row.names=TRUE)
 } else if(args$method == "ttest") {
     suppressPackageStartupMessages(library(genefilter))
-    mat <- log2(mat + args$pseudo_count)
+    #mat <- log2(mat + args$pseudo_count)
     res <- rowttests(mat, as.factor(group))
     res$padj <- p.adjust(res$p.value, method='BH')
     res$log2FoldChange <- rowMeans(mat[, group == 'positive']) - rowMeans(mat[, group == 'negative'])
