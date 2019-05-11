@@ -217,6 +217,109 @@ def refine_peaks(args):
         #    windows['chrom'][i], windows['start'][i], windows['end'][i],
         #    windows['chrom'][i], start, end))
 
+def _call_peaks_localmax(x, min_peak_length=10, bin_width=10, min_cov=5, decay=0.5):
+    '''Call peaks by extending from local maxima
+
+    Parameters:
+    ----------
+
+    x: array-like, (length,)
+        Input signal values
+    
+    min_peak_length: int
+        Minimum length required for each peak
+    
+    bin_width: int
+        Bin width for searching bins with mean coverage higher than min_cov
+    
+    min_cov: float
+        Minimum coverage to define a peak
+    
+    decay: float
+        Stops extending a peak after signal values fall below decay*peak_summit
+
+    Returns:
+    -----------
+
+    peaks: list of list
+        Peaks found
+        Each element of the list is a list: [start, end, local_max]
+    '''
+    # average signal over bins with 50% overlap
+    half_bin_width = bin_width//2
+    length = x.shape[0]
+    n_bins = max(1, length//half_bin_width)
+    bin_cov = np.zeros(n_bins)
+    for i in range(n_bins):
+        bin_cov[i] = np.mean(x[(i*half_bin_width):min((i + 2)*half_bin_width, length)])
+    cand_bins = np.nonzero(bin_cov > min_cov)[0]
+    n_cand_bins = cand_bins.shape[0]
+    cand_bin_index = 0
+    left_bound = 0
+    peaks = []
+    while cand_bin_index < n_cand_bins:
+        i = cand_bins[cand_bin_index]*half_bin_width
+        start = i
+        end = i
+        # find local max
+        while (start > left_bound) and (x[start - 1] >= x[start]) and (x[start - 1] >= min_cov):
+            start -= 1
+        while (end < (length - 1)) and (x[end + 1] >= x[end]) and (x[end + 1] >= min_cov):
+            end += 1
+        max_index = 0
+        if x[start] >= x[end]:
+            local_max = x[start]
+            max_index = start
+        else:
+            local_max = x[end]
+            max_index = end
+        if local_max > min_cov:
+            # find bounds when input signal drops below 0.5*local_max
+            start = max_index
+            while (start > left_bound) and (x[start - 1] >= decay*local_max):
+                start -= 1
+                local_max = max(local_max, x[start])
+            end = max_index
+            while (end < (len(x) - 1)) and (x[end + 1] >= decay*local_max):
+                end += 1
+                local_max = max(local_max, x[end])
+            # add current peak to results
+            if (end - start) >= min_peak_length:
+                #print((start, end, local_max))
+                peaks.append([start, end, local_max])
+            # find next candidate bin
+            left_bound = end
+            next_cand_bin = end//half_bin_width
+            while (cand_bin_index < n_cand_bins) and (cand_bins[cand_bin_index] < next_cand_bin):
+                cand_bin_index += 1
+        cand_bin_index += 1
+    return peaks
+
+@command_handler
+def call_peaks_localmax(args):
+    import pyBigWig
+    import numpy as np
+
+    logger.info('read input file: ' + args.input_file)
+    bigwig = pyBigWig.open(args.input_file)
+    logger.info('write output file: ' + args.output_file)
+    bed = open(args.output_file, 'w')
+    chroms = bigwig.chroms()
+    n_peaks = 0
+    for chrom, size in chroms.items():
+        if chrom.startswith('chr'):
+            continue
+        x = np.nan_to_num(bigwig.values(chrom, 0, size))
+        peaks_chrom = _call_peaks_localmax(x, 
+            min_peak_length=args.min_peak_length, bin_width=args.bin_width,
+            min_cov=args.min_cov, decay=args.decay)
+        for peak in peaks_chrom:
+            n_peaks += 1
+            #peaks.append([chrom, peak[0], peak[1], 'peak_%d'%n_peaks, peak[2], '+'])
+            bed.write('%s\t%d\t%d\tpeak_%d\t%d\t+\n'%(chrom, peak[0], peak[1], n_peaks, peak[2]))
+    bigwig.close()
+    bed.close()
+
 
 if __name__ == '__main__':
     main_parser = argparse.ArgumentParser(description='Call peaks from exRNA signals')
@@ -235,6 +338,21 @@ if __name__ == '__main__':
         help='weight for local background (0.0-1.0)')
     parser.add_argument('--output-file', '-o', type=str, required=True,
         help='output plot file BED format')
+
+    parser = subparsers.add_parser('call_peaks_localmax')
+    parser.add_argument('--input-file', '-i', type=str, required=True,
+        help='input BigWig file of raw reads coverage')
+    parser.add_argument('--min-peak-length', type=int, default=10,
+        help='minimum length required for a peak')
+    parser.add_argument('--decay', type=float, default=0.5,
+        help='decay factor of peak summit to define peak boundary')
+    parser.add_argument('--min-cov', type=float, default=5,
+        help='minimum coverage required to define a peak')
+    parser.add_argument('--bin-width', type=int, default=10,
+        help='bin width to search enriched bins')
+    parser.add_argument('--output-file', '-o', type=str, required=True,
+        help='output peaks in BED format')
+
     
     parser = subparsers.add_parser('refine_peaks')
     parser.add_argument('--peaks', type=str, required=True,
