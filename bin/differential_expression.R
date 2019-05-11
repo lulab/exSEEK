@@ -154,8 +154,9 @@ if(args$method == 'deseq2'){
         wilcox.test(x[group == 'negative'], x[group == 'positive'], alternative='two.sided')$p.value
     }
     pvalues <- apply(matrix_cpm, 1, test_func)
-    logFC <- apply(log2(matrix_cpm[,which(group == 'positive')]), 1, mean) -
-        apply(log2(matrix_cpm[,which(group == 'negative')]), 1, mean)
+    matrix_logcpm = log2(matrix + args$pseudo_count)
+    logFC <- apply(matrix_logcpm[,which(group == 'positive')], 1, mean) -
+        apply(matrix_logcpm[,which(group == 'negative')], 1, mean)
     res <- data.frame(log2FoldChange=logFC,
         pvalue=pvalues, 
         padj=p.adjust(pvalues, method='BH'),
