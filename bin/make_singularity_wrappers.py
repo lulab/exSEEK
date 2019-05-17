@@ -17,10 +17,29 @@ if __name__ == '__main__':
         help='output directory')
     parser.add_argument('--singularity-path', type=str, default='singularity')
     parser.add_argument('--conda-path', type=str, default='/opt/conda')
+    parser.add_argument('--runner', type=str, default='singularity',
+        help='executable to run the container')
+    parser.add_argument('--runner-path', type=str,
+        help='path of the runner executable')
     args = parser.parse_args()
 
-    if 'SINGULARITY_CONTAINER' not in os.environ:
-        os.execv(args.singularity_path, [args.singularity_path, 'exec', args.image] + sys.argv)
+    is_inside_container = False
+    for v in  ('SINGULARITY_CONTAINER', 'container_root'):
+        if v in os.environ:
+            is_inside_container = True
+            break
+    runner_path = args.runner
+    if args.runner_path is not None:
+        runner_path = args.runner_path
+    # execute inside container
+    if not is_inside_container:
+        if args.runner == 'singularity':
+            subprocess.check_call([args.runner, 'exec', args.image] + sys.argv, shell=False)
+        elif args.runner == 'udocker':
+            subprocess.check_call([args.runner, 'run', args.image] + sys.argv, shell=False)
+        else:
+            raise ValueError('unsupported runner')
+        sys.exit(0)
 
     def make_wrapper(filename):
         #print('Make wrapper: {}'.format(filename))
@@ -30,7 +49,7 @@ if __name__ == '__main__':
         with open(os.path.join(args.output_dir, basename), 'w') as f:
             f.write('''#! /bin/bash
 exec "{0}" exec "{1}" "{2}" "$@"
-'''.format(args.singularity_path, os.path.abspath(args.image), filename))
+'''.format(args.runner_path, os.path.abspath(args.image), filename))
         os.chmod(os.path.join(args.output_dir, basename), 0o755)
 
     with open(args.list_file, 'r') as fin:
@@ -39,6 +58,7 @@ exec "{0}" exec "{1}" "{2}" "$@"
             if len(c) != 2:
                 continue
             pkg, source = c
+            # find executable files in a apt package (Ubuntu or Debian OS)
             if source == 'apt':
                 for filename in StringIO(unicode(subprocess.check_output(['dpkg', '-L', pkg], shell=False), encoding='utf-8')):
                     filename = filename.strip()
@@ -47,6 +67,7 @@ exec "{0}" exec "{1}" "{2}" "$@"
                         st = os.stat(filename)
                         if (st.st_mode & stat.S_IXUSR) and stat.S_ISREG(st.st_mode):
                             make_wrapper(filename)
+            # find executable files in a conda package
             elif source == 'conda':
                 metadata_file = glob(os.path.join(args.conda_path, 'conda-meta', pkg + '-*.json'))
                 if not metadata_file:

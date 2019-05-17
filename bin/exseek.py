@@ -119,7 +119,7 @@ if __name__ == '__main__':
         if singularity_path is None:
             raise ValueError('cannot find singularity')
         logger.info('generate singularity wrappers')
-        subprocess.check_call([os.path.join(root_dir, 'bin/make_singularity_wrappers.py'), 
+        subprocess.check_call(['python', os.path.join(root_dir, 'bin/make_singularity_wrappers.py'), 
             '--image', default_config['singularity']['image'],
             '--list-file', os.path.join(root_dir, 'singularity/exports.txt'),
             '--singularity-path', singularity_path,
@@ -189,6 +189,7 @@ if __name__ == '__main__':
     extra_config['bin_dir'] = os.path.join(root_dir, 'bin')
     extra_config['root_dir'] = root_dir
     extra_config['dataset'] = args.dataset
+    extra_config['config_dir'] = config_dir
     # extra args
     snakemake_args = [str(s) for s in snakemake_args]
     snakemake_args += extra_args
