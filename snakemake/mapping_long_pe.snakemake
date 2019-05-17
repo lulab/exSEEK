@@ -30,6 +30,21 @@ rule all:
     input:
         get_all_inputs
 
+rule rename_fastq_pe:
+    input:
+        auto_gzip_input('{output_dir}/cutadapt/{sample_id}_{mate_index}.fastq')
+    output:
+        '{output_dir}/unmapped/{sample_id}/clean_{mate_index}.fastq.gz'
+    threads: 
+        1
+    wildcard_constraints:
+        mate_index='[12]'
+    shell:
+        r'''{bin_dir}/auto_uncompress {input} \
+            | awk 'NR%4==1{{printf "@%012d\n", int(NR/4);next}} NR%4==3{{printf "+\n";next}} {{print}}' \
+            | pigz -c -p {threads} > {output}
+        '''
+        
 rule count_clean_reads_paired:
     input:
         '{output_dir}/unmapped/{sample_id}/clean_1.fastq.gz'
