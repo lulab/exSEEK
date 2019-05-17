@@ -36,6 +36,19 @@ rule all:
     input:
         get_all_inputs
 
+rule fastq_to_fasta_se:
+    input:
+        auto_gzip_input('{output_dir}/cutadapt/{sample_id}.fastq')
+    output:
+        '{output_dir}/unmapped/{sample_id}/clean.fa.gz'
+    threads:
+        config['threads_compress']
+    shell:
+        '''{bin_dir}/auto_uncompress {input} \
+            | fastq_to_fasta -r -n \
+            | pigz -p {threads} -c > {output}
+        '''
+        
 # mapping statistics
 rule read_counts_raw:
     input:
