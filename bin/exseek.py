@@ -65,7 +65,7 @@ if __name__ == '__main__':
         config_dir = os.path.join(root_dir, 'config')
 
     logger.info('read default config file')
-    with open(os.path.join(root_dir, 'snakemake', 'default_config.yaml'), 'r') as f:
+    with open(os.path.join(config_dir, 'default_config.yaml'), 'r') as f:
         default_config = yaml.load(f)
 
     # find snakemake executable
