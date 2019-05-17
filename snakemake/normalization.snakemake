@@ -21,6 +21,10 @@ def get_all_inputs(wildcards):
             batch_removal_method=batch_removal_method,
             batch_index=config['batch_index'],
             count_method=config['count_method'])
+        template = '{output_dir}/matrix_processing/filter.{count_method}.txt'
+        available_inputs += expand(template,
+            output_dir=output_dir,
+            count_method=config['count_method'])
     #available_inputs += expand('{output_dir}/select_preprocess_method/{score}/{count_method}/selected_methods.txt',
     #    output_dir=output_dir, score=clustering_scores, count_method=config['count_method'])
     
@@ -107,6 +111,15 @@ rule normalization_step:
         --normtopk {params.normtopk} \
         --remove-gene-types {params.remove_gene_types} \
         --cvthreshold {params.cvthreshold}
+        '''
+
+rule sub_matrix_filter:
+    input:
+        '{output_dir}/matrix_processing/filter.mirna_and_domains_rna.txt'
+    output:
+        '{output_dir}/matrix_processing/filter.mirna_only.txt'
+    shell:
+        r'''awk 'BEGIN{{OFS="\t";FS="\t"}}(NR==1)||($1 ~/miRNA/){{print}}' {input} > {output}
         '''
 
 rule sub_matrix:
