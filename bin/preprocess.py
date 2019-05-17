@@ -184,11 +184,13 @@ def gtf_to_transcript_table(args):
     with open_file_or_stdin(args.input_file) as fin:
         transcripts = OrderedDict()
         for line in fin:
+            # get GTF columns
             c = line.strip().split('\t')
             if c[0].startswith('#'):
                 continue
             if c[2] != feature:
                 continue
+            # GTF attributes
             attrs = {}
             for a in c[8].split(';')[:-1]:
                 a = a.strip()
@@ -204,15 +206,19 @@ def gtf_to_transcript_table(args):
                 elif attrs['tcat'] == 'tucp':
                     attrs['gene_type'] = 'tucpRNA'
                     attrs['transcript_type'] = 'tucpRNA'
+            # use transcript_id as transcript_name
             if 'transcript_name' not in attrs:
                 attrs['transcript_name'] = attrs['transcript_id']
+            # use gene_id as gene_name
             if 'gene_name' not in attrs:
                 attrs['gene_name'] = attrs['gene_id']
+            # set transcript_type if given
             if default_transcript_type is not None:
                 attrs['transcript_type'] = default_transcript_type
             else:
                 if 'transcript_type' not in attrs:
                     attrs['transcript_type'] = 'unknown'
+            # set gene_type if given
             if default_gene_type is not None:
                 attrs['gene_type'] = default_gene_type
             else:
