@@ -296,6 +296,14 @@ def serve_domains(dataset):
 def serve_refined_domains(dataset):
     return send_file(os.path.join(root_dir, 'output', dataset, 'refined_domains_genome', '20', '05.bed'), conditional=True)
 
+@app.route('/domains_localmax/<dataset>.bed')
+def serve_domains_localmax(dataset):
+    return send_file(os.path.join(root_dir, 'output', dataset, 'domains_localmax_genome', 'domains.bed'), conditional=True)
+
+@app.route('/domains_localmax_by_sample/<dataset>/<sample_id>.bed')
+def serve_domains_localmax_by_sample(dataset, sample_id):
+    return send_file(os.path.join(root_dir, 'output', dataset, 'domains_localmax_by_sample_genome', sample_id + '.bed'), conditional=True)
+    
 @app.route('/genome/hg38/<path:filename>')
 def serve_genome_dir(filename):
     return send_from_directory(os.path.join(root_dir, 'genome', 'hg38'), filename, conditional=True)
