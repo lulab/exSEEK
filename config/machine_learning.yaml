@@ -111,6 +111,50 @@ selectors:
     type: selector
     params:
       n_jobs: 1
+  RandomSubset_RandomForest:
+    name: RandomSubsetSelector
+    type: selector
+    params:
+      subset_size: 50
+      n_subsets: 20
+      classifier: RandomForestClassifier
+      grid_search: true
+      grid_search_params:
+        param_grid:
+          n_estimators: [25, 50, 75]
+          max_depth: [3, 4, 5]
+  RandomSubset_LogRegL2:
+    name: RandomSubsetSelector
+    type: selector
+    params:
+      subset_size: 50
+      n_subsets: 20
+      classifier: LogisticRegression
+      # parameters for the classifier used for feature selection
+      classifier_params:
+        penalty: l2
+        solver: liblinear
+      # grid search for hyper-parameters for the classifier
+      grid_search: true
+      grid_search_params:
+        param_grid:
+          C: [0.00001, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000, 10000, 100000]
+  RandomSubset_LogRegL1:
+    name: RandomSubsetSelector
+    type: selector
+    params:
+      subset_size: 50
+      n_subsets: 20
+      classifier: LogisticRegression
+      # parameters for the classifier used for feature selection
+      classifier_params:
+        penalty: l1
+        solver: liblinear
+      # grid search for hyper-parameters for the classifier
+      grid_search: true
+      grid_search_params:
+        param_grid:
+          C: [0.00001, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000, 10000, 100000]
 
 # template for grid_search_params in classifiers
 classifier_grid_search_params:

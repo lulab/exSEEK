@@ -1,0 +1,95 @@
+features: null
+transpose: true
+
+selector_grid_search: true
+selector_grid_search_params:
+  cv:
+    splitter: StratifiedShuffleSplit
+    n_splits: 5
+    test_size: 0.1
+  iid: false
+  scoring: roc_auc
+
+preprocess_steps:
+  # apply log transformation
+  - log_transform:
+      name: LogTransform
+      type: transformer
+      enabled: true
+      params:
+        base: 2
+        pseudo_count: 1
+  # method to scale features across samples
+  - scale_features:
+      name: StandardScaler
+      type: scaler
+      enabled: true
+      params:
+        with_mean: true
+
+# template for grid_search_params in classifiers
+classifier_grid_search_params:
+  cv:
+    splitter: StratifiedShuffleSplit
+    n_splits: 5
+    test_size: 0.1
+  iid: false
+  scoring: roc_auc
+
+classifiers:
+  LogRegL2:
+    classifier: LogisticRegression
+    # parameters for the classifier used for feature selection
+    classifier_params:
+      penalty: l2
+      solver: liblinear
+    # grid search for hyper-parameters for the classifier
+    grid_search: true
+    grid_search_params:
+      param_grid:
+        C: [0.00001, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000, 10000, 100000]
+  RandomForest:
+    classifier: RandomForestClassifier
+    grid_search: true
+    grid_search_params:
+      param_grid:
+        n_estimators: [25, 50, 75]
+        max_depth: [3, 4, 5]
+  RBFSVM:
+    classifier: SVC
+    classifier_params:
+      kernel: rbf
+      gamma: scale
+    grid_search: true
+    grid_search_params:
+      param_grid:
+        C: [0.00001, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000, 10000, 100000]
+  DecisionTree:
+    classifier: DecisionTreeClassifier
+    grid_search: true
+    grid_search_params:
+      param_grid:
+        max_depth: [2, 3, 4, 5, 6, 7, 8]
+  MLP:
+    classifier: MLPClassifier
+    classifier_params:
+      activation: relu
+      solver: adam
+      max_iter: 40
+    grid_search: true
+    grid_search_params:
+      param_grid:
+        hidden_layer_sizes: [[50], [100], [150], [200], [250], [300]]
+
+# cross-validation parameters for performance evaluation
+cv_params:
+  splitter: StratifiedShuffleSplit
+  # number of train-test splits for cross-validation
+  n_splits: 50
+  # number or proportion of samples to use as test set
+  test_size: 0.1
+  # scoring metric for performance evaluation
+  scoring: roc_auc
+# method for computing sample weight
+#  balanced: compute sample weight from data such that classes are balanced
+sample_weight: balanced
