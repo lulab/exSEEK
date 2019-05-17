@@ -582,6 +582,53 @@ write.table(model$ix, '{temp_dir}/ix.txt', col.names=FALSE, row.names=FALSE, quo
         check_is_fitted(self, 'support_')
         return self.support_
 
+class RandomSubsetSelector(BaseEstimator, SelectorMixin):
+    '''Large scale feature selection based on max feature weights on feature subsets
+
+    Parameters:
+    ----------
+
+    estimator: BaseEstimator object
+        Internal estimator to use for feature selection
+    
+    n_subsets: int
+        Number of random feature subsets
+    
+    subset_size: int
+        Number of features in each subset
+    
+    n_features_to_select: int
+        Maximum number of features to select
+    
+    random_state: RandomState
+        Random number generator
+    '''
+    def __init__(self, estimator, n_subsets=40, subset_size=50, n_features_to_select=10, random_state=None):
+        self.estimator = estimator
+        self.n_subsets = n_subsets
+        self.subset_size = subset_size
+        self.n_features_to_select = n_features_to_select
+        self.random_state = random_state
+        
+    def fit(self, X, y, sample_weight=None):
+        n_features = X.shape[1]
+        feature_weights = np.zeros((self.n_subsets, n_features))
+        rng = np.random.RandomState(self.random_state)
+        for subset_index in range(self.n_subsets):
+            subset = rng.choice(n_features, size=self.subset_size, replace=False)
+            estimator = clone(self.estimator)
+            estimator.fit(X[:, subset], y, sample_weight=sample_weight)
+            feature_weights[subset_index, subset] = get_feature_importances(estimator)
+        # get local maximum
+        feature_weights = np.max(feature_weights, axis=0)
+        self.features_ = np.argsort(-feature_weights)[:self.n_features_to_select]
+        self.support_ = np.zeros(n_features, dtype='bool')
+        self.support_[self.features_] = True
+    
+    def _get_support_mask(self):
+        check_is_fitted(self, 'support_')
+        return self.support_
+
 class NullSelector(BaseEstimator, SelectorMixin):
     '''A null selector that select all features
 
@@ -605,6 +652,9 @@ def get_selector(name, estimator=None, n_features_to_select=None, **params):
          ('cv', 'verbose')))
     elif name == 'MaxFeatures':
         return SelectFromModel(estimator, threshold=-np.inf, max_features=n_features_to_select)
+    elif name == 'RandomSubsetSelector':
+        return RandomSubsetSelector(estimator, n_features_to_select=n_features_to_select, **search_dict(params,
+        ('n_subsets', 'subset_size', 'random_state')))
     elif name == 'FeatureImportanceThreshold':
         return SelectFromModel(estimator, **search_dict(params, 'threshold'))
     elif name == 'RFE':

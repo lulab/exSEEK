@@ -162,6 +162,23 @@ def get_transformer(name, **params):
     else:
         raise ValueError('unknown transformer: {}'.format(name))
 
+class FileSplitter(object):
+    '''Splitter that read train and test index from given file
+    Input file is a tab-separated file. Each row is a train-test split.
+    The number of columns equals to the number of samples. 
+    1's indicate training samples and 0's indicate test samples
+    
+    '''
+    def __init__(self, filename):
+        self.filename = filename
+        self.cv_matrix = np.loadtxt(filename, dtype='int', delimiter='\t')
+
+    def split(self, X, y=None):
+        for i in range(self.cv_matrix.shape[0]):
+            train_index = np.nonzero(self.cv_matrix[i])[0]
+            test_index = np.nonzero(~self.cv_matrix[i])[0]
+            yield train_index, test_index
+
 def get_splitter(random_state=None, **params):
     '''Get cross-validation index generator
 
@@ -203,6 +220,8 @@ def get_splitter(random_state=None, **params):
     elif splitter == 'LeaveOneOut':
         from sklearn.model_selection import LeaveOneOut
         return LeaveOneOut()
+    elif splitter == 'FileSplitter':
+        return UserFileSplitter(**search_dict(params, 'filename'))
     else:
         raise ValueError('unknown splitter: {}'.format(splitter))
         

@@ -26,9 +26,11 @@ def read_data_matrix(matrix, sample_classes, features=None, transpose=False, pos
         features = pd.read_table(features, header=None).iloc[:, 0].values
         logger.info('select {} features'.format(len(features)))
         X = X.reindex(columns=features)
-        na_features = X.columns.values[X.isna().any(axis=0)]
+        is_na_features = X.isna().any(axis=0)
+        na_features = X.columns.values[is_na_features]
         if na_features.shape[0] > 0:
             logger.warn('missing features found in matrix file: {}'.format(na_features[:10].tolist()))
+            #X = X.loc[:, ~is_na_features]
             #raise ValueError('some given features are not found in matrix file: {}'.format(na_features[:10].tolist()))
     logger.info('number of features: {}'.format(X.shape[1]))
     # read sample classes
@@ -211,6 +213,7 @@ def run_pipeline(args):
     logger.info('read configuration file: ' + args.config)
     with open(args.config, 'r') as f:
         config = yaml.load(f)
+    # overwride config variables with command line arguments
     if args.matrix is not None:
         config['matrix'] = args.matrix
     if args.sample_classes is not None:
@@ -219,13 +222,17 @@ def run_pipeline(args):
         config['positive_class'] = args.positive_class.split(',')
     if args.negative_class is not None:
         config['negative_class'] = args.negative_class.split(',')
+    if args.features is not None:
+        config['features'] = args.features
 
     # read input data matrix
     X, y, sample_ids, feature_names = read_data_matrix(
         config['matrix'], config['sample_classes'],
         **search_dict(config, ('features', 'transpose', 'positive_class', 'negative_class')))
 
-    X = X[:, np.all(~np.isnan(X), axis=0)]
+    # fill missing features
+    X = np.nan_to_num(X)
+    #X = X[:, np.all(~np.isnan(X), axis=0)]
     if X.shape[0] < 20:
         raise ValueError('too few samples for machine learning')
     if not os.path.isdir(args.output_dir):
@@ -437,6 +444,15 @@ if __name__ == '__main__':
     parser.add_argument('--transpose', action='store_true', default=False,
         help='transpose the input matrix')
     parser.add_argument('--output-file', '-o', type=str, metavar='DIR', required=True,
+        help='output file')
+    
+    parser = subparsers.add_parser('generate_cv_splits')
+    parser.add_argument('--samples', '-i', type=str, required=True,
+        help='input file to determine number of samples by n_lines - 1')
+    parser.add_argument('--splitter', type=str, default='KFold')
+    parser.add_argument('--spliter-params', type=str,
+        help='parameters of the splitter')
+    parser.add_argument('--output-file', '-o', type=str, required=True,
         help='output file')
 
     args = main_parser.parse_args()
