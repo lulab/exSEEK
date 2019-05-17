@@ -7,46 +7,7 @@ with open(data_dir + '/compare_groups.yaml', 'r') as f:
 
 # Read best preprocess from output file of select_preprocess_method 
 # key: count_method, value: preprocess_method
-'''
-preprocess_methods = {}
-for count_method in to_list(config['count_method']):
-    for filename in expand('{output_dir}/select_preprocess_method/{score}/{count_method}/selected_methods.txt',
-        output_dir=output_dir, score=clustering_scores, count_method=count_method):
-        with open(filename, 'r') as f:
-            preprocess_methods[count_method] = f.readline().strip()
 
-inputs = {
-    'cross_validation': [],
-    'cross_validation_diffexp': []
-}
-
-for count_method, preprocess_method in preprocess_methods.items():
-    # cross_validation
-    inputs['cross_validation'] += expand('{output_dir}/cross_validation/{preprocess_method}.{count_method}/{compare_group}/{classifier}.{n_select}.{select_method}.{fold_change_filter_direction}',
-        output_dir=output_dir, count_method=count_method, 
-        preprocess_method=preprocess_methods[count_method],
-        classifier=config['classifier'], 
-        select_method=config['selector'], 
-        compare_group=list(compare_groups.keys()), 
-        n_select=config['n_selects'], 
-        fold_change_filter_direction=config['fold_change_filter_direction'])
-    # cross_validation using differential expression for feature selection
-    inputs['cross_validation_diffexp'] += expand('{output_dir}/cross_validation_diffexp/{count_method}/{compare_group}/{classifier}.{n_select}.{diffexp_method}.{fold_change_filter_direction}',
-        output_dir=output_dir, count_method=count_method, 
-        preprocess_method=preprocess_methods[count_method],
-        classifier=config['classifier'], 
-        diffexp_method=config['diffexp_filter_params']['method'], 
-        compare_group=list(compare_groups.keys()), 
-        n_select=config['n_selects'],
-        fold_change_filter_direction=config['fold_change_filter_direction'])
-
-inputs['metrics_test'] = expand('{output_dir}/summary/{cross_validation}/metrics.test.txt', 
-    output_dir=output_dir, cross_validation=['cross_validation', 'cross_validation_diffexp'])
-inputs['metrics_train'] = expand('{output_dir}/summary/{cross_validation}/metrics.train.txt', 
-    output_dir=output_dir, cross_validation=['cross_validation', 'cross_validation_diffexp'])
-inputs['feature_stability'] = expand('{output_dir}/summary/{cross_validation}/feature_stability.txt',
-    output_dir=output_dir, cross_validation=['cross_validation', 'cross_validation_diffexp'])
-'''
 # read selector-classifier
 with open(os.path.join(config_dir, 'machine_learning.yaml'), 'r') as f:
     cv_config = yaml.load(f)
@@ -223,6 +184,7 @@ rule cross_validation:
         with open(output_config_file, 'w') as f:
             yaml.dump(output_config, f, default_flow_style=False)
         command = [
+            'python',
             os.path.join(config['bin_dir'], 'machine_learning.py'), 'run_pipeline',
             '--matrix', input.matrix,
             '--sample-classes', input.sample_classes,
@@ -255,6 +217,7 @@ rule cross_validation_diffexp:
         diffexp_filter_params['fold_change_direction'] = wildcards.fold_change_direction
         diffexp_filter_params['script'] = os.path.join(bin_dir, 'differential_expression.R')
         command = [
+            'python',
             os.path.join(config['bin_dir'], 'machine_learning.py'), 'cross_validation',
             '--matrix', input.matrix,
             '--sample-classes', input.sample_classes,
