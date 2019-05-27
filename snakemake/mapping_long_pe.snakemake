@@ -1,9 +1,9 @@
 include: 'common.snakemake'
 
-star_map_steps = ['rRNA', 'genome', 'circRNA']
+star_map_steps = ['spikein', 'univec', 'rRNA', 'genome', 'circRNA']
 map_steps = list(star_map_steps)
 if config['remove_duplicates_long']:
-    map_steps += ['genome_rmdup', 'circRNA_rmdup', 'rRNA_rmdup']
+    map_steps += ['genome_rmdup', 'circRNA_rmdup']
 
 def get_all_inputs(wildcards):
     available_inputs = dict(
@@ -12,8 +12,6 @@ def get_all_inputs(wildcards):
         summarize_read_length=expand('{output_dir}/stats/mapped_read_length_by_sample/{sample_id}',
             output_dir=output_dir, sample_id=sample_ids),
         summarize_insert_size=expand('{output_dir}/stats/mapped_insert_size_by_sample/{sample_id}',
-            output_dir=output_dir, sample_id=sample_ids),
-        count_clean_fragments=expand('{output_dir}/stats/fragment_counts/{sample_id}/clean',
             output_dir=output_dir, sample_id=sample_ids),
         summarize_mapping_star=expand('{output_dir}/summary/mapping_star.html',
             output_dir=output_dir)
@@ -44,26 +42,6 @@ rule rename_fastq_pe:
             | awk 'NR%4==1{{printf "@%012d\n", int(NR/4);next}} NR%4==3{{printf "+\n";next}} {{print}}' \
             | pigz -c -p {threads} > {output}
         '''
-        
-rule count_clean_reads_paired:
-    input:
-        '{output_dir}/unmapped/{sample_id}/clean_1.fastq.gz'
-    output:
-        '{output_dir}/stats/read_counts_clean/{sample_id}'
-    shell:
-        '''gzip -d -c {input} | wc -l | awk '{print int($0/4)}' > {output}
-        '''
-
-rule count_clean_fragments:
-    input:
-        '{output_dir}/unmapped/{sample_id}/clean_1.fastq.gz'
-    output:
-        '{output_dir}/stats/fragment_counts/{sample_id}/clean'
-    threads:
-        config['threads_compress']
-    shell:
-        '''pigz -p {threads} -d -c {input} | wc -l | awk '{{print int($0/4)}}' > {output}
-        '''
 
 map_command_pe = '''STAR --genomeDir {params.index} \
             --readFilesIn {input.reads1} {input.reads2} \
@@ -80,10 +58,48 @@ map_command_pe = '''STAR --genomeDir {params.index} \
         rm -f {params.output_prefix}Unmapped.out.mate1 {params.output_prefix}Unmapped.out.mate2
         '''
 
-rule map_rRNA_pe:
+rule map_spikein_pe:
     input:
         reads1='{output_dir}/unmapped/{sample_id}/clean_1.fastq.gz',
         reads2='{output_dir}/unmapped/{sample_id}/clean_2.fastq.gz',
+        index=config.get('spikein_index', genome_dir + '/index/star/spikein_long') + '/SA'
+    output:
+        bam='{output_dir}/bam/{sample_id}/spikein.bam',
+        unmapped1='{output_dir}/unmapped/{sample_id}/spikein_1.fastq.gz',
+        unmapped2='{output_dir}/unmapped/{sample_id}/spikein_2.fastq.gz',
+        log='{output_dir}/mapping_star/{sample_id}/spikein/Log.final.out'
+    params:
+        output_prefix='{output_dir}/mapping_star/{sample_id}/spikein/',
+        index=config.get('spikein_index', genome_dir + '/index/star/spikein_long/'),
+        seedPerWindowNmax=20
+    threads:
+        config['threads_mapping']
+    run:
+        shell(map_command_pe)
+
+rule map_univec_pe:
+    input:
+        reads1='{output_dir}/unmapped/{sample_id}/spikein_1.fastq.gz',
+        reads2='{output_dir}/unmapped/{sample_id}/spikein_2.fastq.gz',
+        index=genome_dir + '/index/star/univec/SA'
+    output:
+        bam='{output_dir}/bam/{sample_id}/univec.bam',
+        unmapped1='{output_dir}/unmapped/{sample_id}/univec_1.fastq.gz',
+        unmapped2='{output_dir}/unmapped/{sample_id}/univec_2.fastq.gz',
+        log='{output_dir}/mapping_star/{sample_id}/univec/Log.final.out'
+    params:
+        output_prefix='{output_dir}/mapping_star/{sample_id}/univec/',
+        index=genome_dir + '/index/star/univec',
+        seedPerWindowNmax=20
+    threads:
+        config['threads_mapping']
+    run:
+        shell(map_command_pe)
+
+rule map_rRNA_pe:
+    input:
+        reads1='{output_dir}/unmapped/{sample_id}/univec_1.fastq.gz',
+        reads2='{output_dir}/unmapped/{sample_id}/univec_2.fastq.gz',
         index=genome_dir + '/index/star/rRNA/SA'
     output:
         bam='{output_dir}/bam/{sample_id}/rRNA.bam',
@@ -166,6 +182,8 @@ rule remove_duplicates:
         '''
 
 rule samtools_stats:
+    '''Statistics for mapped reads
+    '''
     input:
         '{output_dir}/bam/{sample_id}/{map_step}.bam'
     output:
@@ -173,7 +191,6 @@ rule samtools_stats:
     shell:
         '''samtools stats {input} > {output}
         '''
-
 
 rule parse_samtools_stats_pe:
     input:
