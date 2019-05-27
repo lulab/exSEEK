@@ -134,9 +134,8 @@ def refine_peaks(args):
     import re
     import h5py
     #from bx.bbi.bigwig_file import BigWigFile
-    from pykent import BigWigFile
+    import pyBigWig
     from ioutils import open_file_or_stdout
-
 
     logger.info('read input matrix file: ' + args.peaks)
     #matrix = pd.read_table(args.matrix, sep='\t', index_col=0)
@@ -157,21 +156,21 @@ def refine_peaks(args):
     chrom_sizes = chrom_sizes.set_index('chrom').iloc[:, 0]
 
     logger.info('read input genomic bigwig file: ' + args.tbigwig)
-    tbigwig = BigWigFile(args.tbigwig)
+    tbigwig = pyBigWig.open(args.tbigwig)
     #chrom_sizes.update(dict(tbigwig.get_chrom_sizes()))
 
     gbigwig = {}
     logger.info('read input genomic bigwig (+) file: ' + args.gbigwig_plus)
-    gbigwig['+'] = BigWigFile(args.gbigwig_plus)
+    gbigwig['+'] = pyBigWig.open(args.gbigwig_plus)
     logger.info('read input genomic bigwig (-) file: ' + args.gbigwig_minus)
-    gbigwig['-'] = BigWigFile(args.gbigwig_minus)
+    gbigwig['-'] = pyBigWig.open(args.gbigwig_minus)
     #chrom_sizes.update(dict(gbigwig['+'].get_chrom_sizes()))
 
     flanking = args.flanking
     signals = []
     signals_mean = []
     windows = []
-    pat_gene_id = re.compile('^(.*)_([0-9]+)_([0-9]+)_([+-])$')
+    #pat_gene_id = re.compile('^(.*)_([0-9]+)_([0-9]+)_([+-])$')
     for _, peak in peaks.iterrows():
         if peak['chrom'].startswith('chr'):
         #if feature['gene_type'] == 'genomic':
@@ -180,12 +179,12 @@ def refine_peaks(args):
             #end = int(end)
             window_start = max(0, peak['start'] - flanking)
             window_end = min(peak['end'] + flanking, chrom_sizes[peak['chrom']])
-            data = gbigwig[peak['strand']].query_interval(peak['chrom'], window_start, window_end, fillna=0)
+            data = np.nan_to_num(gbigwig[peak['strand']].values(peak['chrom'], window_start, window_end))
         else:
             strand = '+'
             window_start = max(0, peak['start'] - flanking)
             window_end = min(peak['end'] + flanking, chrom_sizes[peak['chrom']])
-            data = tbigwig.query_interval(peak['chrom'], window_start, window_end, fillna=0)
+            data = np.nan_to_num(tbigwig.values(peak['chrom'], window_start, window_end))
         if data is None:
             data = np.zeros((window_end - window_start))
             #logger.info('no coverage data found for peak: {}'.format(feature['domain_id']))
@@ -194,6 +193,9 @@ def refine_peaks(args):
         signals.append(data)
         signals_mean.append(np.mean(data))
         windows.append((peak['chrom'], window_start, window_end, peak['start'], peak['end'], peak['strand']))
+    tbigwig.close()
+    gbigwig['+'].close()
+    gbigwig['-'].close()
     windows = pd.DataFrame.from_records(windows)
     windows.columns = ['chrom', 'window_start', 'window_end', 'start', 'end', 'strand']
 
