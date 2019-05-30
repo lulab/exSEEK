@@ -291,8 +291,8 @@ rule count_genomic_reads:
         bam='{output_dir}/bam/{sample_id}/genome.bam',
         exon=genome_dir + '/bed/long_RNA.exon.bed',
         intron=genome_dir + '/bed/long_RNA.intron.bed',
-        promoter=genome_dir + '/bed/promoter.merged.bed',
-        enhancer=genome_dir + '/bed/enhancer.merged.bed',
+        promoter=genome_dir + '/bed/promoter.stranded.bed',
+        enhancer=genome_dir + '/bed/enhancer.stranded.bed',
         repeats=genome_dir + '/bed/rmsk.bed'
     output:
         exon='{output_dir}/stats/fragment_counts/{sample_id}/exon',
@@ -312,8 +312,8 @@ rule count_genomic_reads_rmdup:
         bam='{output_dir}/bam/{sample_id}/genome_rmdup.bam',
         exon=genome_dir + '/bed/long_RNA.exon.bed',
         intron=genome_dir + '/bed/long_RNA.intron.bed',
-        promoter=genome_dir + '/bed/promoter.merged.bed',
-        enhancer=genome_dir + '/bed/enhancer.merged.bed',
+        promoter=genome_dir + '/bed/promoter.stranded.bed',
+        enhancer=genome_dir + '/bed/enhancer.stranded.bed',
         repeats=genome_dir + '/bed/rmsk.bed'
     output:
         exon='{output_dir}/stats/fragment_counts/{sample_id}/exon_rmdup',
