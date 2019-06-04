@@ -25,6 +25,7 @@ steps = (
     'prepare_genome', 
     'bigwig',
     'mapping', 
+    'filter',
     'count_matrix', 
     'call_domains', 
     'merge_domains',
