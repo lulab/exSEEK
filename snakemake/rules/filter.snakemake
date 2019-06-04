@@ -1,0 +1,23 @@
+rule filter_step:
+    input:
+        matrix='{output_dir}/count_matrix/{count_method}.txt',
+        sample_classes=data_dir + '/sample_classes.txt'
+    output:
+        matrix='{output_dir}/matrix_processing/filter.{count_method}.txt'
+    threads:
+        config['threads']
+    run:
+        command= '''Rscript {bin_dir}/matrix-process.R -s filter \
+            -c {input.sample_classes} \
+            -i {input.matrix} \
+            -o {output.matrix} \
+            -p {threads}'''
+        if config['filtercount'] > 0:
+            command = command + ' --filtercount {}'.format(config['filtercount'])
+        if config['filterexpv'] > 0:
+            if config['small_rna']:
+                command = command + ' --filtercpm {}'.format(config['filterexpv'])
+            else:
+                command = command + ' --filterrpkm {}'.format(config['filterexpv'])
+        command = command + ' --filtersample {}'.format(config['filtersample'])
+        shell(command)
