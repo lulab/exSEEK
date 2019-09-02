@@ -4,7 +4,7 @@ import os
 import yaml
 with open(data_dir + '/compare_groups.yaml', 'r') as f:
     compare_groups = yaml.load(f)
-with open(os.path.join(config_dir, 'evaluate_features.yaml'), 'r') as f:
+with open(get_config_file('evaluate_features.yaml'), 'r') as f:
     cv_config = yaml.load(f)
 
 classifiers = list(cv_config['classifiers'].keys())
