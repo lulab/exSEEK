@@ -9,7 +9,7 @@ with open(data_dir + '/compare_groups.yaml', 'r') as f:
 # key: count_method, value: preprocess_method
 
 # read selector-classifier
-with open(os.path.join(config_dir, 'machine_learning.yaml'), 'r') as f:
+with open(get_config_file('machine_learning.yaml'), 'r') as f:
     cv_config = yaml.load(f)
 
 selectors = list(cv_config['selectors'].keys())
