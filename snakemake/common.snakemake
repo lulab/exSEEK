@@ -14,11 +14,17 @@ def require_variable(variable, condition=None):
         raise ValueError('cannot find input file {}: {}'.format(variable, value))
     return value
 
+def get_config_file(filename):
+    for config_dir in config_dirs:
+        if os.path.isfile(os.path.join(config_dir, filename)):
+            return os.path.join(config_dir, filename)
+
 # setup global variables
 root_dir = require_variable('root_dir', 'input_dir')
-config_dir = require_variable('config_dir', 'input_dir')
+config_dirs = require_variable('config_dirs')
+config_dirs = config_dirs.split(':')
 # load default config
-with open(os.path.join(config['config_dir'], 'default_config.yaml'), 'r') as f:
+with open(get_config_file('default_config.yaml'), 'r') as f:
     default_config = yaml.load(f)
 
 default_config.update(config)
@@ -26,7 +32,7 @@ config = default_config
 
 dataset = config['dataset']
 data_dir = require_variable('data_dir', 'input_dir')
-genome_dir = require_variable('genome_dir', 'input_dir')
+genome_dir = require_variable('genome_dir')
 bin_dir = require_variable('bin_dir', 'input_dir')
 output_dir = require_variable('output_dir')
 rna_types = require_variable('rna_types')
@@ -202,14 +208,11 @@ use_singularity = config.get('use_singularity')
 if use_singularity:
     os.environ['PATH'] = config['singularity']['wrapper_dir'] + ':' + os.environ['PATH']
 
-rule make_temp:
-    output:
-        temp_dir
-    shell:
-        'mkdir -p {output}'
+if not os.path.isdir(temp_dir):
+    os.makedirs(temp_dir)
 
 sub_matrix_regex = '(mirna_only)'
-count_method_regex = '(featurecounts)|(htseq)|(domains_combined)|(transcript)|(transcript_long)|(mirna_and_domains)|(mirna_and_domains_rna)|(transcript_mirna)|(featurecounts_mrna)|(featurecounts_lncrna)'
+count_method_regex = '(featurecounts)|(htseq)|(transcript)|(transcript_long)|(mirna_and_domains)|(mirna_and_domains_rna)|(transcript_mirna)|(featurecounts_mrna)|(featurecounts_lncrna)'
 imputation_method_regex = '(scimpute_count)|(viper_count)|(null)'
 normalization_method_regex = '(SCnorm)|(TMM)|(RLE)|(CPM)|(CPM_top)|(CPM_rm)|(CPM_refer)|(UQ)|(null)'
 batch_removal_method_with_batchinfo_regex = '(ComBat)|(limma)'
