@@ -7,15 +7,6 @@ import shutil
 import shlex
 import subprocess
 
-def quoted_string_join(strs, sep=' '):
-    quoted = []
-    for s in strs:
-        if len(s.split()) > 1:
-            quoted.append('"' + s + '"')
-        else:
-            quoted.append(s)
-    return sep.join(quoted)
-
 steps = (
     'quality_control',
     'quality_control_clean',
@@ -39,6 +30,24 @@ steps = (
     'update_singularity_wrappers'
 )
 
+root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+config_dirs = [os.path.join(root_dir, 'config')]
+
+def quoted_string_join(strs, sep=' '):
+    quoted = []
+    for s in strs:
+        if len(s.split()) > 1:
+            quoted.append('"' + s + '"')
+        else:
+            quoted.append(s)
+    return sep.join(quoted)
+
+def get_config_file(filename):
+    for config_dir in config_dirs:
+        if os.path.isfile(os.path.join(config_dir, filename)):
+            return os.path.join(config_dir, filename)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='exSeek main program')
 
@@ -59,14 +68,17 @@ if __name__ == '__main__':
     logger = logging.getLogger('exseek')
 
     snakefile = None
-    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    
     logger.info('root directory: {}'.format(root_dir))
 
-    if args.config_dir is None:
-        config_dir = os.path.join(root_dir, 'config')
+    if args.config_dir is not None:
+        config_dirs.append(args.config_dir)
+    else:
+        if os.path.isdir('config'):
+            config_dirs.append('config')
 
     logger.info('read default config file')
-    with open(os.path.join(config_dir, 'default_config.yaml'), 'r') as f:
+    with open(get_config_file('default_config.yaml'), 'r') as f:
         default_config = yaml.load(f)
 
     # find snakemake executable
@@ -78,11 +90,9 @@ if __name__ == '__main__':
     snakemake_args = ['snakemake', '-k', '--rerun-incomplete']
     extra_config = {}
     # check configuration file
-    if not os.path.isdir(config_dir):
-        raise ValueError('cannot find configuration directory: {}'.format(config_dir))
-    configfile = os.path.join(config_dir, '{}.yaml'.format(args.dataset))
-    if not os.path.isfile(configfile):
-        raise ValueError('cannot find configuration file: {} '.format(configfile))
+    configfile = get_config_file('{}.yaml'.format(args.dataset))
+    if configfile is None:
+        raise ValueError('cannot find configuration file: {} '.format('{}.yaml'.format(args.dataset)))
     logger.info('read user config file: ' + configfile)
     with open(configfile, 'r') as f:
         config = default_config
@@ -90,13 +100,13 @@ if __name__ == '__main__':
         config.update(user_config)
     # check cluster configuration
     if args.cluster:
-        cluster_config = os.path.join(config_dir, 'cluster.yaml')
+        cluster_config = get_config_file('cluster.yaml')
         if not os.path.isfile(cluster_config):
             if args.cluster_config is None:
                 raise ValueError('cannot find {}/cluster.yaml and --cluster-config is not specified'.format(config_dir))
             cluster_config = args.cluster_config
 
-        cluster_command_file = os.path.join(config_dir, 'cluster_command.txt')
+        cluster_command_file = get_config_file('cluster_command.txt')
         if os.path.isfile(cluster_command_file):
             with open(cluster_command_file, 'r') as f:
                 cluster_command = f.read().strip()
@@ -190,7 +200,7 @@ if __name__ == '__main__':
     extra_config['bin_dir'] = os.path.join(root_dir, 'bin')
     extra_config['root_dir'] = root_dir
     extra_config['dataset'] = args.dataset
-    extra_config['config_dir'] = config_dir
+    extra_config['config_dirs'] = ':'.join(config_dirs)
     # extra args
     snakemake_args = [str(s) for s in snakemake_args]
     snakemake_args += extra_args
