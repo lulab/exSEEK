@@ -15,7 +15,7 @@ scale_method: robust
 classifiers: random_forest
 # Number of features to select
 #n_selects: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-n_selects: [10]
+n_selects: [5, 10]
 resample_method: bootstrap
 # Feature selection methods
 #select_methods: [robust]
@@ -239,7 +239,7 @@ star_sjdboverhang: 100
 # Number of threads for mapping
 threads_mapping: 4
 # Remove duplicates for long RNA-seq before feature counting
-remove_duplicates_long: false
+remove_duplicates_long: true
 # Input reads are paired-end
 paired_end: false
 # Use small RNA-seq pipeline (sequential mapping)
@@ -259,7 +259,7 @@ count_multimap_reads: true
 count_overlapping_features: true
 
 # Base URL for IGV web server
-igv_base_url: http://172.22.220.21:5000
+igv_base_url: http://127.0.0.1:5000
 
 # Configuration for singularity
 singularity:
