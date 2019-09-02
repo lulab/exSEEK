@@ -49,7 +49,7 @@ if __name__ == '__main__':
         with open(os.path.join(args.output_dir, basename), 'w') as f:
             f.write('''#! /bin/bash
 exec "{0}" exec "{1}" "{2}" "$@"
-'''.format(args.runner_path, os.path.abspath(args.image), filename))
+'''.format(runner_path, os.path.abspath(args.image), filename))
         os.chmod(os.path.join(args.output_dir, basename), 0o755)
 
     with open(args.list_file, 'r') as fin:
