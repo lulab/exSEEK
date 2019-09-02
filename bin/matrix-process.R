@@ -207,7 +207,7 @@ viper_count <- function(mat, num = 5000, percentage.cutoff = 0.1, alpha= 0.5, te
 ################################################################################
 ###############################normalization####################################
 ################################################################################
-suppressPackageStartupMessages(library(clusterSim))
+#suppressPackageStartupMessages(library(clusterSim))
 suppressPackageStartupMessages(library(scRNA.seq.funcs))
 suppressPackageStartupMessages(library(scater))
 suppressPackageStartupMessages(library(scran))
