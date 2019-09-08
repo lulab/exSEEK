@@ -1,21 +1,8 @@
-batch_indices: []
-    
-# file paths
-annotation_dir: genome/hg38
-genome_dir: genome/hg38
 output_dir: output/example
 temp_dir: tmp
 data_dir: data/example
 
-# general parameters
-threads_compress: 1
-
-# mapping parameters
-aligner: bowtie2
-paired_end: false
-small_rna: true
 count_method: [mirna_and_domains_rna]
 batch_indices: [1]
 normalization_method: ["RLE"]
 batch_removal_method: ["limma"]
-rna_types: [univec, rRNA, lncRNA, miRNA, mRNA, piRNA, snoRNA, snRNA, srpRNA, tRNA, tucpRNA, Y_RNA]
