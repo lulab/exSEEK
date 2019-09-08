@@ -1,0 +1,64 @@
+FROM centos:7
+
+COPY CentOS-Base.repo /etc/yum.repos.d
+RUN yum group install -y 'Development Tools' \
+    && yum install -y epel-release \
+    && yum install -y curl screen parallel \
+         yum-utils \
+        coreutils which binutils vim nano emacs openssl-devel Xorg-devel mesa-libGL-devel \
+        libxml-devel libxml2-devel \
+        java-1.8.0-openjdk wget pigz \
+    && yum-builddep -y R
+RUN mkdir -p /apps/archive
+# install R
+RUN wget --quiet -P /apps/archive 'https://mran.blob.core.windows.net/install/mro/3.5.3/rhel/microsoft-r-open-3.5.3.tar.gz'
+RUN tar -C /apps/archive -zxf /apps/archive/microsoft-r-open-3.5.3.tar.gz
+RUN bash /apps/archive/microsoft-r-open/install.sh -s -a -u
+# install R packages
+COPY install-R-packages.R R-packages.txt /apps/archive/
+RUN cd /apps/archive; \
+    && git clone https://github.com/ChenMengjie/VIPER.git \
+    && git clone https://github.com/kassambara/easyGgplot2.git \
+    && git clone https://github.com/Vivianstats/scImpute.git \
+    && git clone https://github.com/hemberg-lab/scRNA.seq.funcs.git \
+    && git clone https://github.com/theislab/kBET.git
+RUN cd /apps/archive; Rscript /apps/archive/install-R-packages.R
+
+# install anaconda3
+RUN wget --quiet -P /apps/archive 'https://repo.anaconda.com/archive/Anaconda3-2019.03-Linux-x86_64.sh' \
+    && bash /apps/archive/Anaconda3-2019.03-Linux-x86_64.sh -b -p /apps/anaconda3
+# install anaconda2
+RUN wget --quiet -P /apps/archive 'https://repo.anaconda.com/archive/Anaconda2-2019.03-Linux-x86_64.sh' \
+    && bash /apps/archive/Anaconda2-2019.03-Linux-x86_64.sh -b -p /apps/anaconda2
+# install pip packages
+RUN /apps/anaconda3/bin/pip install skrebate \
+    && /apps/anaconda3/bin/conda install -c conda-forge datrie \
+    && /apps/anaconda3/bin/pip install mlxtend tqdm flask flask-AutoIndex jinja2 umap snakemake
+# install conda packages
+RUN /apps/anaconda3/bin/conda install -y numpy scipy scikit-learn 'openssl<1.1' \
+    && /apps/anaconda3/bin/conda install -y pandas matplotlib seaborn h5py bokeh \
+    && /apps/anaconda3/bin/conda install -c conda-forge jupyterhub \
+    && /apps/anaconda3/bin/conda install -c bioconda -y bedtools samtools star subread bowtie2 \
+    && /apps/anaconda3/bin/conda install -c bioconda -y rsem bamtools cutadapt picard gffread gffcompare \
+    && /apps/anaconda3/bin/conda install -c bioconda -y ucsc-bedtogenepred ucsc-genepredtogtf ucsc-bedgraphtobigwig ucsc-bigwigtobedgraph \
+    && /apps/anaconda3/bin/conda install -c bioconda -y htseq fastx_toolkit biopython \
+    && /apps/anaconda3/bin/conda install -c bioconda -y multiqc
+
+# Jupyter
+RUN /apps/anaconda3/bi/conda install -y -c conda-forge jupyterhub \
+    && /apps/anaconda3/bin/conda install notebook \
+    && /usr/bin/R --slave -e "install.packages('IRkernel');IRkernel::installspec(user = FALSE);"
+
+# UCSC kent tools
+RUN rsync -aP rsync://hgdownload-sd.soe.ucsc.edu/genome/admin/exe/linux.x86_64/ /apps/ucsc_tools/ \
+    && rm -f /apps/ucsc_tools/FOOTER.txt \
+    && chmod +x /apps/ucsc_tools/*
+
+# cleanup 
+RUN /apps/anaconda3/bin/conda clean -y --all \
+    && yum clean all
+
+# Download exSeek
+RUN git clone https://github.com/ltbyshi/exSeek.git /apps/exSeek
+
+ENV PATH=/apps/exseek/bin:/apps/ucsc_tools:/opt/microsoft/ropen/3.5.3/lib64/R/bin:/apps/anaconda3/bin:/apps/anaconda2/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
