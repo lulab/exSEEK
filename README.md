@@ -126,15 +126,17 @@ This will evaluate all combinations of feature selection methods and classifiers
 
 Three summary files will be generated:
 
-* `output/${dataset}/summary/${cross_validation}/metrics.test.txt`
-* `output/${dataset}/summary/${cross_validation}/metrics.train.txt`
-* `output/${dataset}/summary/${cross_validation}/feature_stability.txt`
+* `output/${dataset}/summary/cross_validation/metrics.test.txt`
+* `output/${dataset}/summary/cross_validation/metrics.train.txt`
+* `output/${dataset}/summary/cross_validation/feature_stability.txt`
 
 Cross-validation results and trained models for individual combinations are in this directory:
 
-`output/${dataset}/cross_validation/filter.${imputation_method}.Norm_${normalization_method}.Batch_${batch_removal_method}_${batch_index}.${count_method}/${compare_group}/${classifier}.${n_select}.${selector}.${fold_change_filter_direction}`
+`output/${dataset}/feature_selection/filter.${imputation_method}.Norm_${normalization_method}.Batch_${batch_removal_method}_${batch_index}.${count_method}/${compare_group}/${classifier}.${n_select}.${selector}.${fold_change_filter_direction}`
 
 Selected list of features are in `features.txt`.
+
+More information about output files can be found on [File format](docs/file_format.md) page. Detailed parameters of feature selection and classifiers can be found in [config/machine_learning.yaml](config/machine_learning.yaml).
 
 ## Contact
 
