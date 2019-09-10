@@ -140,7 +140,7 @@ More information about output files can be found on [File format](docs/file_form
 
 ## Contact
 
-Binbin Shi: ltbyshi AT gmail.com
+Binbin Shi: sbb14 AT mails.tsinghua.edu.cn
 
 
 ## Copyright and License Information
