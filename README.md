@@ -16,7 +16,6 @@ We also recommend other alternatives for the pre-process, such as [exceRpt](http
 - [Usage](#usage)
 - [Contact](#contact)
 - [Copyright and License Information](#copyright-and-license-information)
-- [Detailed Docs for Advanced Users](http://exSEEK.gitbook.io)
 
 
 ## Installation
@@ -139,8 +138,6 @@ Selected list of features are in `features.txt`.
 More information about output files can be found on [File format](docs/file_format.md) page. Detailed parameters of feature selection and classifiers can be found in [config/machine_learning.yaml](config/machine_learning.yaml).
 
 ## Contact
-
-[GitHub Issues](https://github.com/lulab/exSEEK/issues)
 
 Binbin Shi: ltbyshi AT gmail.com
 
