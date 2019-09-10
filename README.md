@@ -142,7 +142,7 @@ More information about output files can be found on [File format](docs/file_form
 
 [GitHub Issues](https://github.com/lulab/exSEEK/issues)
 
-Binbin Shi<ltbyshi AT gmail.com>
+Binbin Shi: ltbyshi AT gmail.com
 
 
 ## Copyright and License Information
