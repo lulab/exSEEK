@@ -148,4 +148,4 @@ Copyright (C) 2019 Tsinghua University, Beijing, China
 
 Authors: Binbin Shi, Xupeng Chen, Jingyi Cao and Zhi John Lu
 
-This program is licensed with commercial restriction use license. Please see the [LICENSE](https://choosealicense.com/licenses/gpl-3.0/) file for details.
+This program is licensed with commercial restriction use license. Please see the [LICENSE](https://github.com/lulab/exSEEK_docs/blob/master/LICENSE) file for details.
