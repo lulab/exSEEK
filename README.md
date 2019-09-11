@@ -2,7 +2,7 @@
 
 > exRNA Biomarker Discovery for Liquid Biopsy
 >
-> Update: April 30th, 2019
+> Update: Sep 6th, 2019
 
 **Note**
 
@@ -21,7 +21,7 @@ We also recommend other alternatives for the pre-process, such as [exceRpt](http
 
 ## Installation
 
-For easy intallation, you can use the [exSEEK docker image](https://hub.docker.com/r/ltbyshi/exseek) with all dependencies installed:
+For easy installation, you can use the [exSEEK docker image](https://hub.docker.com/r/ltbyshi/exseek) with all dependencies installed:
 
 ```bash
 docker pull ltbyshi/exseek
@@ -103,7 +103,7 @@ This will generate normalized expression matrix for every combination of methods
 
 `output/${dataset}/matrix_processing/filter.${imputation_method}.Norm_${normalization_method}.Batch_${batch_removal_method}_${batch_index}.${count_method}.txt`
 
-You can specify normalization methods by setting the value of `normalization_method` and the batch removal method
+You can specify normalization methods by setting the value of `normalization_method` and the batch removal methods
 by setting the value of `batch_removal_method` in in `config/${dataset}.yaml`.
 
 Supported normalization methods: TMM, RLE, CPM, CPM_top, UQ, null
@@ -146,6 +146,6 @@ Binbin Shi: sbb14 AT mails.tsinghua.edu.cn
 ## Copyright and License Information
 Copyright (C) 2019 Tsinghua University, Beijing, China 
 
-Authors: Binbin Shi, Jingyi Cao, Xupeng Chen, and Zhi John Lu
+Authors: Binbin Shi, Xupeng Chen, Jingyi Cao and Zhi John Lu
 
 This program is licensed with commercial restriction use license. Please see the [LICENSE](http://exseek.ncrnalab.org/LICENCE) file for details.
