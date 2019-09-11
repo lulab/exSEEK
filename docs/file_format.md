@@ -15,7 +15,7 @@ Tab-separated text file with two columns: sample_id, sample_class. The first lin
 
 This YAML file contains definition of sample groups for feature selection. In the following example, there are two comparisons: "Normal-Cancer", "Normal-stage_A".
 In "Normal-Cancer", the negative class and positive class are "Normal" and samples with "stage_A", "stage_B", "stage_C" respectively. 
-In "Normal-stage_A", "Normal" samples are compared to only "stage_A" samples. the class labels after comparison name should match class labels defined in `data/${dataset}/sample_classes.txt`. 
+In "Normal-stage_A", "Normal" samples are compared to only "stage_A" samples. The class labels after comparison name should match class labels defined in `data/${dataset}/sample_classes.txt`. 
 
 ```yaml
 Normal-Cancer: ['Normal', 'stage_A,stage_B,stage_C']
