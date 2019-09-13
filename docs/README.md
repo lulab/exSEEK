@@ -2,12 +2,11 @@
 
 Table of contents
 
-- [Preprocess](pre-process)
+- Pre-process
   - [genome and annotations](pre-process/genome_and_annotations.md)
   - [small RNA-seq mapping](pre-process/small_rna_mapping.md)
   - [long RNA-seq mapping](pre-process/long_rna_mapping.md)
-- [exSEEK](exseek)
-  - [config file](exseek/configuration.md)
+- exSEEK
   - [matrix processing](exseek/matrix_processing.md)
   - [feature selection](exseek/feature_selection.md)
   - [cluster configuration](exseek/cluster_configuration.md)
