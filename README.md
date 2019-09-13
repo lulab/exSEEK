@@ -16,7 +16,7 @@ We also recommend other alternatives for the pre-process, such as [exceRpt](http
 - [Usage](#usage)
 - [Contact](#contact)
 - [Copyright and License Information](#copyright-and-license-information)
-- [Advanced Usage](https://github.com/lulab/exSEEK_docs)
+- [Advanced Usage](docs/README.md)
 
 
 ## Installation
