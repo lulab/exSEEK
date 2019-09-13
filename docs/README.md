@@ -7,7 +7,7 @@ Table of contents
   - [small RNA-seq mapping](pre-process/small_rna_mapping.md)
   - [long RNA-seq mapping](pre-process/long_rna_mapping.md)
 - exSEEK
-  - [matrix processing](exseek/matrix_processing.md)
-  - [feature selection](exseek/feature_selection.md)
-  - [cluster configuration](exseek/cluster_configuration.md)
+  - [matrix processing](matrix_processing.md)
+  - [feature selection](feature_selection.md)
+  - [cluster configuration](cluster_configuration.md)
   
