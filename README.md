@@ -37,6 +37,8 @@ Run the main program `exseek.py` from docker:
 docker run --rm -it -v $PWD:/workspace -w /workspace ltbyshi/exseek exseek.py
 ```
 
+The exSEEK directory was cloned to /apps/exseek in the docker.
+
 You can create a bash script named `exseek` and set the script executable:
 ```bash
 #! /bin/bash
