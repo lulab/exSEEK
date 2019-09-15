@@ -1,22 +1,21 @@
 # exSEEK
 
-> exRNA Biomarker Discovery for Liquid Biopsy
->
-> Update: Sep 6th, 2019
+**exRNA Biomarker Discovery for Liquid Biopsy**
 
-**Note**
-
-The exSEEK program starts from a data matrix of gene expression (read counts of each gene in each sample) and performs normalization, feature selection and evaluation. 
-Meanwhile, we provide some pipelines and QC steps for the [pre-process](https://github.com/lulab/exSEEK_docs/tree/master/pre-process) of exRNA-seq (including long and short  cfRNA-seq/exoRNA-seq) raw data. 
-We also recommend other alternatives for the pre-process, such as [exceRpt](https://github.com/gersteinlab/exceRpt), that is specifically developed for the process of exRNA-seq raw reads.
+> **Note:**
+> * The exSEEK program starts from a data matrix of gene expression (read counts of each gene in each sample) and performs normalization, feature selection and evaluation. 
+> * Meanwhile, we provide some pipelines and QC steps for the [pre-process](https://github.com/lulab/exSEEK_docs/tree/master/pre-process) of exRNA-seq (including long and short  cfRNA-seq/exoRNA-seq) raw data. 
+> * We also recommend other alternatives for the pre-process, such as [exceRpt](https://github.com/gersteinlab/exceRpt), that is specifically developed for the process of exRNA-seq raw reads.
 
 ## Table of Contents
 
-- [Installation](#installation)
-- [Usage](#usage)
-- [Contact](#contact)
-- [Copyright and License Information](#copyright-and-license-information)
-- [Advanced Usage](docs/README.md)
+**Table of Contents:**
+
+* TOC
+{:toc}
+
+---
+---
 
 
 ## Installation
@@ -54,14 +53,14 @@ The basic usage of exSEEK is:
 exseek ${step_name} -d ${dataset}
 ```
 
-Note:
+> **Note:**
 > * Other arguments are passed to [snakemake](https://snakemake.readthedocs.io/en/stable/)
 > * Specify number of processes to run in parallel with *-j*
 > * `${step_name}` is one of `normalization` and `cross_validation`.
 > * `${dataset}` is the name of your dataset that should match the prefix of your configuration file described in the following section.
 
 
-## Input files
+### Input files
 
 An example can be found in `example_data` directory with the following structure:
 ```
@@ -80,20 +79,19 @@ example_data/
             └── mirna_and_domains_rna.txt
 ```
 
-**Note**
-
-* `config/example.yaml`: configuration file
-* `data/example/batch_info.txt`: table of batch information
-* `data/example/compare_groups.yaml`: configuration file for definition of positive and negative samples
-* `data/example/sample_classes.txt`: table of sample labels
-* `output/example/count_matrix/mirna_and_domains_rna.txt`: input matrix of read counts
+> **Note:**
+> * `config/example.yaml`: configuration file
+> * `data/example/batch_info.txt`: table of batch information
+> * `data/example/compare_groups.yaml`: configuration file for definition of positive and negative samples
+> * `data/example/sample_classes.txt`: table of sample labels
+> * `output/example/count_matrix/mirna_and_domains_rna.txt`: input matrix of read counts
 
 You can create your own data directory with the above directory structure. 
 Multiple datasets can be put in the same directory by replacing "example" with your own dataset names.
 
 More information about input and output files can be found on [File Format](docs/file_format.md) page.
 
-## Normalization
+### Normalization
 
 Run:
 
@@ -116,7 +114,7 @@ When the method name is set to "null", the step is skipped.
 
 `${batch_index}` is the column number (start from 1) in `config/${dataset}/batch_info.txt` to be used to remove batch effects.
 
-## Feature selection
+### Feature selection
 
 Run:
 
@@ -138,7 +136,11 @@ Cross-validation results and trained models for individual combinations are in t
 
 Selected list of features are in `features.txt`.
 
-More information about output files can be found on [File format](docs/file_format.md) page. Detailed parameters of feature selection and classifiers can be found in [config/machine_learning.yaml](config/machine_learning.yaml).
+> **Note:**
+> More information about output files can be found on [File format](docs/file_format.md) page. Detailed parameters of feature selection and classifiers can be found in [config/machine_learning.yaml](config/machine_learning.yaml).
+
+
+### [Advanced Usage](docs/README.md)
 
 ## Contact
 
@@ -146,8 +148,12 @@ Binbin Shi: sbb14 AT mails.tsinghua.edu.cn
 
 
 ## Copyright and License Information
+
 Copyright (C) 2019 Tsinghua University, Beijing, China 
 
-Authors: Binbin Shi, Xupeng Chen, Jingyi Cao and Zhi John Lu
-
 This program is licensed with commercial restriction use license. Please see the [LICENSE](https://github.com/lulab/exSEEK_docs/blob/master/LICENSE) file for details.
+
+## Citation
+
+Binbin Shi, Xupeng Chen, Jingyi Cao and Zhi John Lu (2019) exSEEK: a computational tool of exRNA biomarker detection for liquid biopsy. 
+
