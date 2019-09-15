@@ -156,5 +156,5 @@ This program is licensed with commercial restriction use license. Please see the
 
 ## Citation
 
-Binbin Shi, Jingyi Cao, Xupeng Chen and Zhi John Lu (2019) exSEEK: a computational tool of exRNA biomarker detection for liquid biopsy. 
+Binbin Shi, Jingyi Cao, Xupeng Chen and Zhi John Lu (2019) exSEEK: an integrative computational framework for identifying extracellular RNA biomarkers in liquid biopsy
 
