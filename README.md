@@ -141,10 +141,6 @@ Selected list of features are in `features.txt`.
 
 ### [Advanced Usage](docs/README.md)
 
-## Contact
-
-Binbin Shi: sbb14 AT mails.tsinghua.edu.cn
-
 
 ## Copyright and License Information
 
