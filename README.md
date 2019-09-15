@@ -10,8 +10,15 @@
 
 **Table of Contents:**
 
-* TOC
-{:toc}
+* [Installation](#istallation)
+* [Usage](#Usage)
+  * [Input files](#Input files)
+  * [Normalization](#Normalization)
+  * [Feature selection](#Feature selection)
+  * [Advanced usage](#Advanced usage)
+* [Copyright and License Information](#Copyright and License Information)
+* [Citation](#Citation)
+
 
 ---
 ---
