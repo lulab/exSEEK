@@ -139,8 +139,9 @@ Selected list of features are in `features.txt`.
 > More information about output files can be found on [File format](docs/file_format.md) page. Detailed parameters of feature selection and classifiers can be found in [config/machine_learning.yaml](config/machine_learning.yaml).
 
 
-### [Advanced Usage](docs/README.md)
+### Advanced Usage
 
+* [Click here](docs/README.md) to see details
 
 ## Copyright and License Information
 
