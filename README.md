@@ -19,8 +19,6 @@
 * [Copyright and License Information](#copyright-and-license-information)
 * [Citation](#citation)
 
-
----
 ---
 
 
