@@ -7,7 +7,6 @@
 > * Meanwhile, we provide some pipelines and QC steps for the [pre-process](https://github.com/lulab/exSEEK_docs/tree/master/pre-process) of exRNA-seq (including long and short  cfRNA-seq/exoRNA-seq) raw data. 
 > * We also recommend other alternatives for the pre-process, such as [exceRpt](https://github.com/gersteinlab/exceRpt), that is specifically developed for the process of exRNA-seq raw reads.
 
-## Table of Contents
 
 **Table of Contents:**
 
