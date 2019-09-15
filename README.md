@@ -12,12 +12,12 @@
 
 * [Installation](#istallation)
 * [Usage](#Usage)
-  * [Input files](#Input files)
-  * [Normalization](#Normalization)
-  * [Feature selection](#Feature selection)
-  * [Advanced usage](#Advanced usage)
-* [Copyright and License Information](#Copyright and License Information)
-* [Citation](#Citation)
+  * [Input files](#input-files)
+  * [Normalization](#normalization)
+  * [Feature selection](#feature-selection)
+  * [Advanced usage](#advanced-usage)
+* [Copyright and License Information](#copyright-and-license-information)
+* [Citation](#citation)
 
 
 ---
