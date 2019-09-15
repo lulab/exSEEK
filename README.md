@@ -19,7 +19,7 @@
 
 ## Installation
 
-For easy installation, you can use the [exSEEK docker image](https://hub.docker.com/r/ltbyshi/exseek) with all dependencies installed:
+For easy installation, you can use the [exSEEK image](https://hub.docker.com/r/ltbyshi/exseek) of [docker](https://www.docker.com) with all dependencies installed:
 
 ```bash
 docker pull ltbyshi/exseek
