@@ -1,0 +1,22 @@
+include: 'common.snakemake'
+
+rule all:
+    input:
+        expand('{output_dir}/count_matrix/mirna_and_domains_rna.txt', output_dir=output_dir)
+
+
+rule combine_mirna_and_domains_rna:
+    '''Count matrix of miRNA and domains
+    Remove genomic regions
+    '''
+    input:
+        mirna='{output_dir}/count_matrix/transcript_mirna.txt',
+        domains_long='{output_dir}/count_matrix/domains_long.txt'
+    output:
+        '{output_dir}/count_matrix/mirna_and_domains_rna.txt'
+    shell:
+        '''{{
+            cat {input.mirna}
+            awk '(NR>1)&&(!($0 ~ /genomic/))' {input.domains_long}
+        }} > {output}
+        '''

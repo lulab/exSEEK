@@ -1,0 +1,141 @@
+# RNA types for sequential mapping in small-RNA pipeline
+rna_types: [univec, rRNA, lncRNA, mature_miRNA, miRNA, mRNA, piRNA, snoRNA, 
+  snRNA, srpRNA, tRNA, tucpRNA, Y_RNA]
+
+# Define recurrent domain as domains called in fraction of samples above this value
+cov_threshold: 0.05
+ 
+# Maximum number of features to select
+n_features_to_select: [10]
+
+# Parameters for evalation of features
+evaluation_features:
+  classifier: logistic_regression
+  classifier_params:
+    logistic_regression:
+      penalty: l2
+
+# Type of counts for feature selection
+#   domains_combined: combine miRNA/piRNA with long RNA domains
+#   transcript: transcript-level features
+#   featurecounts: gene-level features counted using featureCounts
+count_method: mirna_and_long_fragments
+# Define low expression value as read counts below this value
+filtercount: 5
+# Threshold for filtering low expression features
+filterexpv: 0
+# Quantification method for low expression filter
+filtermethod: filtercount
+# Keep features with high expression in fraction of samples above this value
+filtersample: 0.2
+# Imputation methods to try (set to "null" to skip imputation)
+#imputation_methods: ["viper_count", "null"]
+imputation_method: ["null"]
+# Read depth normalization methods to try
+normalization_method: ["TMM"]
+# Batch effect removal methods to try (set "null" to skip batch effect removal)
+batch_removal_method: ["ComBat"]
+# Column index of batch effect in batch_info.txt to considier for Combat
+batch_index: 1
+    
+# Root directory
+root_dir: "."
+# Directory for sequences and annotations
+genome_dir: "genome/hg38"
+# Temporary directory (e.g. samtools sort, sort)
+temp_dir: "tmp"
+# Directory for third-party tools
+tools_dir: "tools"
+# Directory for exSeek scripts
+bin_dir: "bin"
+# Directory for spike-in sequences and index
+spikein_dir: "genome/hg38/spikein"
+# bin path to R
+# r_dir: "/usr/bin"
+# Input files are clean reads
+input_clean_reads: false
+
+# Number of threads for uncompression and compression
+threads_compress: 1
+# Default number of threads to use
+threads: 1
+# alignment software to use (valie choices: bowtie, star)
+aligner: bowtie2
+# Remove 3'-end adaptor sequence from single-end reads
+adaptor: ""
+# Remove 5'-end adaptor sequence from single-end reads
+adaptor_5p: ""
+# Remove 3'-end adaptor sequence from the first read in a pair
+adaptor1: ""
+# Remove 3'-end adaptor sequence from the second read in a pair
+adaptor2: ""
+# Remove 5'-end adaptor sequence from the first read in a pair
+adaptor1_5p: ""
+# Remove 5'-end adaptor sequence from the second in a pair
+adaptor2_5p: ""
+# Exact number of bases to trim from 5'-end
+trim_5p: 0
+# Exact number of bases to trim from 3'-end
+trim_3p: 0
+# Trim exact number of bases after adapter trimming
+trim_after_adapter: false
+# Discard reads of length below this value
+min_read_length: 16
+# Maximum read length
+max_read_length: 100
+# Trim bases with quality below this value from 3'-end
+min_base_quality: 30
+# Trim bases with quality below this value from 5'-end
+min_base_quality_5p: 30
+# Trim bases with quality below this value from 3'-end
+min_base_quality_3p: 30
+# Quality encoding in FASTQ files
+quality_base: 33
+# Strandness (valid choices: forward, reverse, no)
+strandness: forward
+# Filter out reads with mapping quality below this value
+min_mapping_quality: 0
+# Only considier longest transcript for transcriptome mapping
+use_longest_transcript: true
+# Expected read length for mapping using STAR
+star_genome_generate:
+  sjdbOverhang: 100
+  limitGenomeGenerateRAM: 31000000000
+# Number of threads for mapping
+threads_mapping: 4
+# Remove duplicates for long RNA-seq before feature counting
+remove_duplicates_long: true
+# Input reads are paired-end
+paired_end: false
+# Use small RNA-seq pipeline (sequential mapping)
+small_rna: true
+# Remove UMI tags (leading nucleotides)
+umi_tags: false
+# Length of the UMI barcode
+umi_length: 0
+# Evaluate published biomarkers
+evaluate_features_preprocess_methods: []
+# Differential expression method
+# Available methods: deseq2, edger_glmlrt, edger_glmqlf, edger_exact, wilcox
+diffexp_method: [deseq2, edger_glmlrt]
+# Count multi-mapping reads
+count_multimap_reads: true
+# Count overlapping features
+count_overlapping_features: true
+
+# Base URL for IGV web server
+igv_base_url: http://127.0.0.1:5000
+
+# Configuration for singularity
+container:
+  singularity_path: singularity
+  udocker_path: udocker
+  image: singularity/exseek.simg
+  wrapper_dir: singularity/wrappers
+
+# Configuration for cluster jobs
+cluster:
+  # Command template for submitting a job to cluster
+  submit_command: 'bsub -q {cluster.queue} -J {cluster.name} -e {cluster.stderr} -o {cluster.stdout} -R {cluster.resources} -n {cluster.threads}'
+  # Snakemake configuration file for cluster jobs
+  config_file: config/cluster.yaml

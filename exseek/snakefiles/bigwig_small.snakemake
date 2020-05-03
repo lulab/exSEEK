@@ -1,0 +1,82 @@
+include: 'common.snakemake'
+
+rna_types_tbigwig = list(filter(lambda x: x not in ('rRNA', 'spikein', 'univec'), rna_types))
+rna_types_transcriptome = list(filter(lambda x: x not in ('rRNA', 'spikein', 'univec', 'piRNA', 'miRNA'), rna_types))
+
+rule all:
+    input:
+        tbigwig=expand('{output_dir}/tbigwig/{sample_id}.{rna_type}.bigWig',
+            output_dir=output_dir, sample_id=sample_ids, rna_type=['transcriptome']),
+        tbigwig_normalized=expand('{output_dir}/tbigwig_normalized/{sample_id}.{rna_type}.bigWig',
+            output_dir=output_dir, sample_id=sample_ids, rna_type=['transcriptome'])
+
+
+rule merge_tbam_transcriptome:
+    input:
+        lambda wildcards: expand('{output_dir}/tbam/{sample_id}/{rna_type}.bam',
+            output_dir=wildcards.output_dir, sample_id=wildcards.sample_id, rna_type=rna_types_transcriptome)
+    output:
+        '{output_dir}/tbam/{sample_id}/transcriptome.bam'
+    shell:
+        '''samtools merge -f {output} {input}
+        '''
+
+rule sort_tbam:
+    input:
+        '{output_dir}/tbam/{sample_id}/{rna_type}.bam'
+    output:
+        '{output_dir}/tbam_sorted/{sample_id}/{rna_type}.bam'
+    params:
+        temp_dir=config['temp_dir']
+    shell:
+        '''samtools sort -T {params.temp_dir} -o {output} {input}
+        '''
+
+rule tbam_to_bedgraph:
+    input:
+        bam='{output_dir}/tbam_sorted/{sample_id}/{rna_type}.bam',
+        chrom_sizes=genome_dir + '/chrom_sizes/{rna_type}'
+    output:
+        '{output_dir}/tbedgraph/{sample_id}.{rna_type}.bedGraph'
+    params:
+        temp_dir=config['temp_dir']
+    run:
+        shell('''bedtools genomecov -ibam {input.bam} -bg -split | LC_COLLATE=C sort -T {params.temp_dir} -k1,1 -k2,2n > {output}''')
+        # write a zero line if the output file is empty
+        '''
+        with open(output[0], 'r') as f:
+            data = f.readline()
+        if len(data) == 0:
+            with open(input.chrom_sizes, 'r') as f:
+                    chrom, size = f.readline().strip().split('\t')
+                    size = int(size)
+            with open(output[0], 'w') as f:
+                f.write('{0}\t{1}\t{2}\t0'.format(chrom, 0, size))
+        '''
+
+rule tbedgraph_to_bigwig:
+    input:
+        bedgraph='{output_dir}/tbedgraph/{sample_id}.{rna_type}.bedGraph',
+        chrom_sizes=genome_dir + '/chrom_sizes/{rna_type}'
+    output:
+        '{output_dir}/tbigwig/{sample_id}.{rna_type}.bigWig'
+    shell:
+        '''bedGraphToBigWig {input.bedgraph} {input.chrom_sizes} {output}'''
+
+
+rule normalize_tbigwig:
+    input:
+        summary='{output_dir}/summary/read_counts.txt',
+        bam='{output_dir}/tbam/{sample_id}/{rna_type}.bam',
+        bigwig='{output_dir}/tbigwig/{sample_id}.{rna_type}.bigWig',
+        chrom_sizes=genome_dir + '/chrom_sizes/{rna_type}'
+    output:
+        bigwig='{output_dir}/tbigwig_normalized/{sample_id}.{rna_type}.bigWig',
+        bedgraph=temp('{output_dir}/tbigwig_normalized/{sample_id}.{rna_type}.bedGraph')
+    run:
+        library_size = get_library_size_small(input.summary, wildcards.sample_id)
+        shell(r'''bigWigToBedGraph {input.bigwig} stdout \
+            | awk -v d="{library_size}" 'BEGIN{{OFS="\t";FS="\t"}}{{print $1,$2,$3,1000000.0*$4/d}}' > {output.bedgraph}''')
+        shell(r'''bedGraphToBigWig {output.bedgraph} {input.chrom_sizes} {output.bigwig}''')
+
+

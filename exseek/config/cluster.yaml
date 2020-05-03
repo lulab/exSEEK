@@ -1,0 +1,10 @@
+__default__:
+  queue: "default"
+  name: "{rule}.{wildcards}"
+  stderr: "logs/cluster/{rule}/{wildcards}.stderr"
+  stdout: "logs/cluster/{rule}/{wildcards}.stdout"
+  threads: "{threads}"
+  resources: "span[hosts=1]"
+
+"map_genome_paired":
+  resources: "span[hosts=1] rusage[mem=30000]"

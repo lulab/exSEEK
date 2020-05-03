@@ -1,0 +1,408 @@
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="">
+    <meta name="author" content="">
+    <link rel="shortcut icon" href="https://igv.org/web/img/favicon.ico">
+    <title>Integrative Genomics Viewer</title>
+
+    <!-- Bootstrap 4 Dependancies - jQuery | Popper -->
+    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+
+    <!-- Latest compiled and minified CSS -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+
+    <!-- Optional theme -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap-theme.min.css" integrity="sha384-rHyoN1iRsVXV4nD0JutlnGaslCJuC7uwjduW9SVrLvRYooPp2bWYgmgJQIXwl/Sp" crossorigin="anonymous">
+
+    <!-- Latest compiled and minified JavaScript -->
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+
+    <!-- Global styles -->
+    <style type="text/css">
+    body {
+            font-size: 11px;
+        }
+    p.panel-title {
+        font-size: 14px;
+        font-weight: bold;
+        margin-bottom: 0.5em;
+    }
+    #sample-list {
+        list-style-type: none;
+        margin: 0;
+        padding: 0;
+    }
+    #sample-list li{
+        margin: 0;
+    }
+    </style>
+
+    <!-- IGV JS -->
+    <script src="https://igv.org/web/release/2.1.0/dist/igv.min.js"></script>
+
+</head>
+
+<body>
+
+<script type="text/javascript">
+    var dataTrackTypes = {"wig": 0, "alignment": 0};
+    var tracks = {{ tracks_json }};
+
+    var groups = [
+    {% for group_name, group in groups.items() %}
+        {
+            "name": "{{ group_name }}",
+            "color": "{{ group.color }}",
+            "show": "{{ group.show }}"
+        } {% if not loop.last %},{% endif %}
+    {% endfor %}
+    ];
+    var showStrand = {"+": true, "-": true};
+    var showGroup = {};
+    for(let i = 0; i < groups.length; i ++)
+        showGroup[groups[i].name] = groups[i].show;
+    var sampleIds = [];
+    var showSample = {};
+    for(name in tracks){
+        if(tracks[name].type in dataTrackTypes){
+            if(!(tracks[name].sample_id in showSample))
+                sampleIds.push(tracks[name].sample_id);
+            showSample[tracks[name].sample_id] = tracks[name].show;
+        }
+    }
+
+    applyForAllTracks = function(func){
+        for(name in tracks){
+            if(tracks[name].type in dataTrackTypes){
+                func(tracks[name]);
+            }
+        }
+    };
+
+    findGroup = function(name){
+        var found = [];
+        groups.forEach(function(group){
+            if(group.name == name)
+                found.push(group);
+        });
+        if(found.length > 0)
+            return found[0];
+    }
+
+    createTrackNavigator = function(){
+        var trackNav = document.getElementById("track-nav");
+        onToggleTrack = function(event){
+            tracks[event.target.name].show = event.target.checked;
+            toggleTracks();
+        };
+        var checkbox, label, ul, li;
+        var trackNavCheckBoxes = {};
+        ul = document.createElement("ul");
+        ul.setAttribute("id", "sample-list");
+        for(name in tracks){
+            li = document.createElement("li");
+            checkbox = document.createElement("input");
+            checkbox.setAttribute("type", "checkbox");
+            checkbox.setAttribute("name", name);
+            if(tracks[name].show)
+                checkbox.setAttribute("checked", "");
+            checkbox.addEventListener("change", onToggleTrack);
+            li.appendChild(checkbox);
+            trackNavCheckBoxes[name] = checkbox;
+
+            label = document.createElement("label");
+            label.setAttribute("for", name);
+            label.appendChild(document.createTextNode(name));
+            li.appendChild(label);
+            ul.appendChild(li);
+        }
+        trackNav.appendChild(ul);
+        return trackNavCheckBoxes;
+    };
+
+    createTrackGroupSelector = function(){
+        var tr, td, checkbox, label, color;
+        var groupTable = document.getElementById("track-groups-table");
+        onShowTrackGroupChecked = function(event){
+            groups[event.target.name].show = event.target.checked;
+            showTrackGroup(event.target);
+        }
+        onTrackColorGroupChanged = function(event){
+            groups[event.target.name].show = event.target.value;
+            setTrackColorGroup(event.target);
+        }
+        for(let i = 0; i < groups.length; i ++){
+            var group = groups[i];
+            tr = document.createElement("tr");
+
+            checkbox = document.createElement("input");
+            checkbox.setAttribute("type", "checkbox");
+            checkbox.setAttribute("name", "show-group-" + i);
+            if(group.show)
+                checkbox.setAttribute("checked", "");
+            checkbox.addEventListener("change", showTrackGroup);
+            
+            label = document.createElement("label");
+            label.setAttribute("for", "show-group-" + i);
+            label.innerHTML = group.name;
+
+            td = document.createElement("td");
+            td.appendChild(checkbox);
+            td.appendChild(label);
+            tr.appendChild(td);
+
+            color = document.createElement("input");
+            color.setAttribute("type", "color");
+            color.setAttribute("name", "track-color-group-" + i);
+            color.setAttribute("value", group.color);
+            color.addEventListener("change", setTrackColorGroup);
+            td = document.createElement("td");
+            td.appendChild(color);
+            tr.appendChild(td);
+
+            groupTable.appendChild(tr);
+        }
+    };
+
+    updateTrackViews = function(items){
+        for(name in tracks){
+            if(!(tracks[name].type in dataTrackTypes))
+                continue;
+            igv.browser.findTracks("name", name).forEach(function(track){
+                for(let i = 0; i < items.length; i ++){
+                    if(items[i] == "height")
+                        track.trackView.setTrackHeight(tracks[name].height);
+                    else if(items[i] == "data_range"){
+                        track.trackView.setDataRange(tracks[name].min, tracks[name].max, tracks[name].autoscale);
+                        if(tracks[name].autoscale)
+                            track.trackView.updateViews();
+                    }else if(items[i] == "color"){
+                        track.trackView.setColor(tracks[name].color);
+                    }else{
+                        track.trackView.track.logScale = tracks[name].logScale;
+                        track.trackView.updateViews();
+                    }
+                }
+            });
+        }
+    };
+
+    // show or remove tracks according to track config
+    toggleTracks = function(){
+        var currentTrack;
+        var showTrack;
+        var track;
+        for(name in tracks){
+            track = tracks[name];
+            currentTrack = igv.browser.findTracks("name", name);
+            if(track.type in dataTrackTypes){
+                showTrack = track.show && showGroup[track.group];
+                if(track.type == "wig"){
+                    showTrack = showTrack && showStrand[track.strand];
+                }
+            }else{
+                showTrack = track.show;
+            }
+            if(showTrack && (currentTrack.length == 0)){
+                igv.browser.loadTrack(track);
+            }else if(!showTrack && (currentTrack.length > 0)){
+                igv.browser.removeTrackByName(name);
+            }
+        }
+    };
+
+    showTracksWithStrand = function(element){
+        var name, group;
+        var strand = (element.name == "show-plus-track")? "+" : "-";
+        showStrand[strand] = element.checked;
+        toggleTracks();
+    };
+
+    showTrackGroup = function(element){
+        var c = element.name.split("-");
+        var group = groups[parseInt(c[c.length - 1])];
+        showGroup[group.name] = element.checked;
+        group.show = element.checked;
+        toggleTracks();
+    };
+
+    setTrackColorGroup = function(element){
+        var c = element.name.split("-");
+        var group = groups[parseInt(c[c.length - 1])].name;
+        var i;
+        var trackView;
+        for(name in tracks){
+            if(tracks[name].group == group){
+                tracks[name].color = element.value;
+            }
+        }
+        updateTrackViews(["color"]);
+    };
+</script>
+
+<div id="left-panel" style="position: fixed; margin-left: 5px; width: 300px; height: 100%; overflow: scroll">
+    <div id="config-panel" style="border:1px solid lightgray; padding-left: 10px; padding-top: 10px;padding-bottom: 10px">
+        <p class="panel-title">Track configuation</p>
+        <table id="table-config">
+            <tr><td>Minimum value: </td><td><input type="text" id="config-data-min" value="0" style="width: 50px"></td></tr>
+            <tr><td>Maximum value: </td><td><input type="text" id="config-data-max" value="100" style="width: 50px"></td></tr>
+            <tr><td>Autoscale: </td><td><input type="checkbox" id="config-autoscale" checked></td></tr>
+            <tr><td>Track height: </td><td><input type="text" id="config-height" value="25" style="width: 50px"></td></tr>
+        </table>
+    </div>
+    <div id="sequence-panel" style="border:1px solid lightgray; padding-left: 10px; padding-top: 10px;padding-bottom: 10px; margin-top: 5px">
+        <p class="panel-title">Sequence</p> 
+        <p id="sequence-locus"></p>
+        <textarea id="sequence-box" rows="4" cols="40" readonly></textarea><br>
+        <input type="checkbox" id="reverse-sequence" name="reverse-sequence" onchange="showSequence()">
+        <label for="reverse-sequence">Reverse complement</label><br>
+        <input type="button" id="show-sequence" value="Show sequence">
+        <input type="button" id="copy-sequence" value="Copy sequence">
+    </div>
+    <div id="track-selection" style="border:1px solid lightgray; padding-left: 10px; padding-top: 10px;padding-bottom: 10px; margin-top: 5px">
+        <p class="panel-title">Track selection</p>
+        <input type="checkbox" onchange="showTracksWithStrand(this)" name="show-plus-track" checked>
+        <label for="show-plus-track">Show tracks in + strand</label><br>
+        <input type="checkbox" onchange="showTracksWithStrand(this)" name="show-minus-strand" checked>
+        <label for="show-minus-track">Show tracks in - strand</label><br>
+    </div>
+    <div id="track-groups" style="border:1px solid lightgray; padding-left: 10px; padding-top: 10px;padding-bottom: 10px; margin-top: 5px">
+        <p class="panel-title">Track groups</p>
+        <table id="track-groups-table" border="0">
+        {% for name, group in groups.items() %}
+            <tr>
+            <td><input type="checkbox" onchange="showTrackGroup(this)" name="show-group-{{ loop.index0 }}" checked>
+            <label for="show-group-{{ loop.index0 }}">{{ name }}</label></td>
+            <td><input type="color" onchange="setTrackColorGroup(this)" name="track-color-group-{{ loop.index0 }}" value="{{ group.color }}"></td>
+            </tr>
+        {% endfor %}
+        </table>
+    </div>
+    <div id="track-nav" style="border:1px solid lightgray; padding-left: 10px; padding-top: 10px;padding-bottom: 10px; margin-top: 5px; overflow: scroll; height:400px;">
+        <p class="panel-title">Track navigator</p>
+    </div>
+</div>
+
+<div id="igv-div" style="margin-left: 310px; padding-top: 10px;padding-bottom: 10px; border:1px solid lightgray"></div>
+
+<script type="text/javascript">
+    document.addEventListener("DOMContentLoaded", function () {
+
+        var options = {{ options_json }};
+
+        if(window.location.hash.length > 1){
+            options["locus"] = window.location.hash.substr(1);
+        }
+
+        var igvDiv = document.getElementById("igv-div");
+
+        igv.createBrowser(igvDiv, options)
+            .then(function (browser) {
+                console.log("Created IGV browser");
+                for(name in tracks){
+                    if(tracks[name].show){
+                        browser.loadTrack(tracks[name]);
+                    }
+                }
+        });
+        
+
+        createTrackNavigator();
+
+        showSequence = function(){
+            var complement = {'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A'};
+            var referenceFrame;
+
+            referenceFrame = igv.browser.genomicStateList[0].referenceFrame;
+            var start = referenceFrame.start;
+            var chrName = referenceFrame.chrName;
+            var end = referenceFrame.start + 
+                referenceFrame.bpPerPixel * (igv.browser.viewportContainerWidth() / igv.browser.genomicStateList.length);
+            end = Math.floor(end);
+            var locus;
+            if((end - start) > 100000){
+                alert("Sequence too long");
+                return;
+            }
+
+            igv.browser.genome.sequence.getSequence(chrName, start, end).then(function(seq){
+                seq = seq.toUpperCase();
+                locus = "Locus: " + chrName + ":" + start + "-" + end;
+                document.getElementById("sequence-locus").innerHTML = locus;
+                if(document.getElementById("reverse-sequence").checked){
+                    seq = seq.split("").map(function(cv){
+                        return complement[cv];
+                    }).join("");
+                    seq = seq.split("").reverse().join("");
+                }
+                document.getElementById("sequence-box").value = seq;
+            });
+        }
+
+        
+        document.getElementById("show-sequence").addEventListener("click", function(event){
+            showSequence();
+        });
+
+        document.getElementById("copy-sequence").addEventListener("click", function(event){
+            showSequence();
+            document.getElementById("sequence-box").select();
+            document.execCommand('copy');
+        });
+
+        document.getElementById("config-data-min").addEventListener("change", function(event){
+            var value = parseFloat(event.target.value);
+            if(isNaN(value)){
+                alert("Error: minimum value should be a number");
+            }else{
+                applyForAllTracks(function(track){ track.min = value; });
+                updateTrackViews(["data_range"]);
+            }
+        });
+
+        document.getElementById("config-data-max").addEventListener("change", function(event){
+            var value = parseFloat(event.target.value);
+            if(isNaN(value)){
+                alert("Error: maximum value should be a number");
+            }else{
+                applyForAllTracks(function(track){ track.max = value; });
+                updateTrackViews(["data_range"]);
+            }
+        });
+
+        document.getElementById("config-autoscale").addEventListener("change", function(event){
+            applyForAllTracks(function(track){
+                if(!track.autoscale){
+                    track.min = parseFloat(document.getElementById("config-data-min").value);
+                    track.max = parseFloat(document.getElementById("config-data-max").value);
+                }
+                track.autoscale = event.target.checked;
+            });
+            updateTrackViews(["data_range"]);
+        });
+
+        document.getElementById("config-height").addEventListener("change", function(event){
+            var value = parseInt(event.target.value);
+            if(isNaN(value)){
+                alert("Error: track height should be a number");
+            }else {
+                applyForAllTracks(function(track){ track.height = event.target.value; });
+                updateTrackViews(["height"]);
+            }
+        });
+
+    });
+
+</script>
+
+</body>
+
+</html>

@@ -1,0 +1,15 @@
+# file paths
+genome_dir: genome/hg38
+output_dir: output/small_se_example
+data_dir: data/small_se_example
+
+# general parameters
+threads_compress: 1
+
+# mapping parameters
+adaptor: AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC
+paired_end: false
+# Discard reads of length below this value
+min_read_length: 16
+small_rna: true
+count_method: domains_combined

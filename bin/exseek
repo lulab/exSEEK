@@ -1,0 +1,299 @@
+#! /usr/bin/env python
+import argparse, sys, os, errno
+import logging
+logging.basicConfig(level=logging.INFO, format='[%(asctime)s] [%(levelname)s] %(name)s: %(message)s')
+import yaml
+import shutil
+import shlex
+import subprocess
+import re
+import exseek
+import pkg_resources
+
+steps = (
+    'quality_control',
+    'quality_control_clean',
+    'cutadapt', 
+    'bigwig',
+    'mapping',
+    'count_matrix', 
+    'call_domains', 
+    'normalization', 
+    'feature_selection', 
+    'update_singularity_wrappers',
+    'build_index'
+)
+
+# use current directory as working directory by default
+package_dir = os.path.dirname(exseek.__file__)
+package_dir = pkg_resources.resource_filename('exseek', '/')
+root_dir = os.getcwd()
+config_dirs = []
+
+def quoted_string_join(strs, sep=' '):
+    quoted = []
+    for s in strs:
+        if len(s.split()) > 1:
+            quoted.append('"' + s + '"')
+        else:
+            quoted.append(s)
+    return sep.join(quoted)
+
+def get_config_file(filename):
+    for config_dir in config_dirs:
+        if os.path.isfile(os.path.join(config_dir, filename)):
+            return os.path.join(config_dir, filename)
+
+def execute_snakemake(exec_method='execv'):
+    global snakemake_args
+
+    snakemake_args += ['--snakefile', snakefile, '--configfile', configfile]
+    # set root_dir and bin_dir
+    extra_config['package_dir'] = package_dir
+    extra_config['bin_dir'] = os.path.join(package_dir, 'scripts')
+    extra_config['root_dir'] = root_dir
+    extra_config['dataset'] = args.dataset
+    extra_config['config_dirs'] = ':'.join(config_dirs)
+    # extra args
+    snakemake_args = [str(s) for s in snakemake_args]
+    snakemake_args += extra_args
+
+    if args.singularity:
+        if not os.path.isdir(config['container']['wrapper_dir']):
+            update_singularity_wrappers()
+        logger.info('enable singularity')
+        extra_config['use_singularity'] = True
+    
+    # extra config
+    snakemake_args += ['--config'] + ['{}={}'.format(key, val) for key, val in extra_config.items()]
+    #subprocess.check_call(snakemake_args, shell=False)
+    logger.info('run snakemake: {}'.format(quoted_string_join(snakemake_args)))
+    # run snakemake
+    if exec_method == 'execv':
+        os.execv(snakemake_path, snakemake_args)
+    elif exec_method == 'check_call':
+        subprocess.check_call(snakemake_args, shell=False)
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='exSeek main program')
+
+    parser.add_argument('step', type=str)
+    parser.add_argument('--dataset', '-d', type=str, required=True,
+        help='dataset name')
+    parser.add_argument('--workdir', '-w', type=str,
+        help='working directory')
+    parser.add_argument('--config-dir', '-c', type=str,
+        help='directory for configuration files')
+    parser.add_argument('--cluster', action='store_true', help='submit to cluster')
+    parser.add_argument('--singularity', action='store_true',
+        help='use singularity')
+    args, extra_args = parser.parse_known_args()
+    # default number of jobs
+    is_set_jobs = False
+    for arg in extra_args:
+        if (re.match(r'-j[0-9]*', arg) is not None) \
+            or (re.match(r'--cores[0-9]*', arg) is not None) \
+            or (re.match(r'--jobs[0-9]*', arg) is not None):
+            is_set_jobs = True
+            break
+    if not is_set_jobs:
+        extra_args += ['-j', '1']
+
+    logger = logging.getLogger('exseek')
+
+    snakefile = None
+    
+    if args.workdir is not None:
+        root_dir = args.workdir
+    logger.info('root directory: {}'.format(root_dir))
+
+    config_dirs.append(os.path.join(package_dir, 'config'))
+    config_dirs.append(os.path.join(root_dir, 'config'))
+    if args.config_dir is not None:
+        config_dirs.append(args.config_dir)
+    else:
+        if os.path.isdir('config'):
+            config_dirs.append('config')
+
+    logger.info('read default config file')
+    with open(get_config_file('default_config.yaml'), 'r') as f:
+        default_config = yaml.load(f)
+
+    # find snakemake executable
+    snakemake_path = shutil.which('snakemake')
+    if snakemake_path is None:
+        raise ValueError('cannot find snakemake command')
+
+    # snakemake command
+    snakemake_args = [snakemake_path, '-k', '--rerun-incomplete']
+    extra_config = {}
+    # check configuration file
+    configfile = get_config_file('{}.yaml'.format(args.dataset))
+    if configfile is None:
+        raise ValueError('cannot find configuration file: {} '.format('{}.yaml'.format(args.dataset)))
+    logger.info('read user config file: ' + configfile)
+    with open(configfile, 'r') as f:
+        config = default_config
+        user_config = yaml.load(f)
+        config.update(user_config)
+    # check cluster configuration
+    if args.cluster:
+        cluster_config = get_config_file('cluster.yaml')
+        if not os.path.isfile(cluster_config):
+            if args.cluster_config is None:
+                raise ValueError('cannot find cluster.yaml')
+
+        cluster_command = config.get('cluster_command')
+        if cluster_command is None:
+            raise ValueError('variable cluster_command is not defined in the configuration file')
+        snakemake_args += ['--cluster', cluster_command, '--cluster-config', cluster_config]
+    
+    def update_sequential_mapping():
+        snakefile = os.path.join(package_dir, 'snakefiles', 'sequential_mapping.snakemake')
+        logger.info('generate sequential_mapping.snakemake')
+        update_command = [os.path.join(package_dir, 'scripts', 'generate_snakemake.py'), 'sequential_mapping',
+                '--rna-types', ','.join(config['rna_types']), 
+                '--template', os.path.join(package_dir, 'templates', 'sequential_mapping.snakemake'),
+                '-o', snakefile]
+        logger.info('run ' + ' '.join(update_command))
+        subprocess.check_call(update_command, shell=False)
+    
+    def generate_sequential_mapping_snakefile():
+        snakefile = os.path.join(config['output_dir'], 'sequential_mapping.snakemake')
+        logger.info('generate sequential_mapping.snakemake')
+        update_command = [os.path.join(package_dir, 'scripts', 'generate_snakemake.py'), 'sequential_mapping',
+                '--rna-types', ','.join(config['rna_types']), 
+                '--template', os.path.join(package_dir, 'templates', 'sequential_mapping_subworkflow.snakemake'),
+                '--common-snakemake', os.path.join(package_dir, 'snakefiles', 'common.snakemake'),
+                '-o', snakefile]
+        logger.info('run ' + ' '.join(update_command))
+        subprocess.check_call(update_command, shell=False)
+        return snakefile
+        
+    def update_singularity_wrappers():
+        container_backend = config.get('container', {}).get('backend')
+        if container_backend == 'singularity':
+            backend_executable = config.get('container', {}).get('singularity_path')
+            if backend_executable is None:
+                backend_executable = shutil.which('singularity')
+            if backend_executable is None:
+                raise ValueError('cannot find singularity executable')
+            container_image = config.get('container', {}).get('singularity_image')
+        elif container_backend == 'udocker':
+            backend_executable = config.get('container', {}).get('udocker_path')
+            if backend_executable is None:
+                backend_executable = shutil.which('udocker')
+            if backend_executable is None:
+                raise ValueError('cannot find udocker executable')
+            container_image = config.get('container', {}).get('udocker_image')
+        elif container_backend == 'docker':
+            backend_executable = config.get('container', {}).get('docker_path')
+            if backend_executable is None:
+                backend_executable = shutil.which('docker')
+            if backend_executable is None:
+                raise ValueError('cannot find docker executable')
+            container_image = config.get('container', {}).get('docker_image')
+        else:
+            raise ValueError('unknown container backend: {}'.format(container_backend))
+        logger.info('generate container wrappers')
+        subprocess.check_call(['python', os.path.join(package_dir, 'scripts', 'make_singularity_wrappers.py'), 
+            '--image', container_image,
+            '--list-file', os.path.join(package_dir, 'singularity', 'exports.txt'),
+            '--backend', container_backend,
+            '--backend-executable', backend_executable,
+            '-o', config['container']['wrapper_dir']
+        ], shell=False)
+        
+    # find proper version of snakemake
+    if args.step == 'quality_control':
+        if config['paired_end']:
+            snakefile = os.path.join(package_dir, 'snakefiles', 'quality_control_pe.snakemake')
+        else:
+            snakefile = os.path.join(package_dir, 'snakefiles', 'quality_control_se.snakemake')
+    elif args.step == 'create_index':
+        if config['small_rna']:
+            snakefile = os.path.join(package_dir, 'snakefiles', 'create_index_small.snakemake')
+        else:
+            snakefile = os.path.join(package_dir, 'snakefiles', 'create_index_long.snakemake')
+    elif args.step == 'cutadapt':
+        if config['paired_end']:
+            snakefile = os.path.join(package_dir, 'snakefiles', 'cutadapt_pe.snakemake')
+        else:
+            snakefile = os.path.join(package_dir, 'snakefiles', 'cutadapt_se.snakemake')
+    elif args.step == 'quality_control_clean':
+        if config['paired_end']:
+            snakefile = os.path.join(package_dir, 'snakefiles', 'quality_control_clean_pe.snakemake')
+        else:
+            snakefile = os.path.join(package_dir, 'snakefiles', 'quality_control_clean_se.snakemake')
+    elif args.step == 'sequential_mapping':
+        snakefile = generate_sequential_mapping_snakefile()
+    elif args.step == 'mapping':
+        if config['small_rna']:
+            # first run sequential_mapping
+            snakefile = generate_sequential_mapping_snakefile()
+            execute_snakemake(exec_method='check_call')
+            snakefile = os.path.join(package_dir, 'snakefiles', 'mapping_small.snakemake')
+        else:
+            if config['paired_end']:
+                snakefile = os.path.join(package_dir, 'snakefiles', 'mapping_long_pe.snakemake')
+            else:
+                snakefile = os.path.join(package_dir, 'snakefiles', 'mapping_long_se.snakemake')
+    elif args.step == 'count_matrix':
+        if config['small_rna']:
+            snakefile = os.path.join(package_dir, 'snakefiles', 'count_matrix_small.snakemake')
+        else:
+            snakefile = os.path.join(package_dir, 'snakefiles', 'count_matrix_long.snakemake')
+    elif args.step == 'combine_domains':
+        if config['small_rna']:
+            snakefile = os.path.join(package_dir, 'snakefiles', 'combine_domains_with_small.snakemake')
+        else:
+            raise ValueError('combine_domains can only be applied to small RNA-seq data')
+    elif args.step == 'update_sequential_mapping':
+        if config['small_rna']:
+            update_sequential_mapping()
+        sys.exit(0)
+    elif args.step == 'update_singularity_wrappers':
+        if args.singularity is None:
+            raise ValueError('argument --singularity is required for step: update-singularity-wrappers')
+        update_singularity_wrappers()
+        sys.exit(0)
+    elif args.step == 'bigwig':
+        if config['small_rna']:
+            snakefile = os.path.join(package_dir, 'snakefiles', 'bigwig_small.snakemake')
+        else:
+            snakefile = os.path.join(package_dir, 'snakefiles', 'bigwig_long.snakemake')
+    elif args.step == 'call_domains':
+        if config['small_rna']:
+            snakefile = os.path.join(package_dir, 'snakefiles', 'call_domains.snakemake')
+        else:
+            raise ValueError('call_domains can only be applied to small RNA-seq data')
+    elif args.step in steps:
+        snakefile = os.path.join(package_dir, 'snakefiles', args.step + '.snakemake')
+    else:
+        raise ValueError('unknown step: ' + args.step)
+    execute_snakemake()
+    '''
+    snakemake_args += ['--snakefile', snakefile, '--configfile', configfile]
+    # set root_dir and bin_dir
+    extra_config['package_dir'] = package_dir
+    extra_config['bin_dir'] = os.path.join(package_dir, 'scripts')
+    extra_config['root_dir'] = root_dir
+    extra_config['dataset'] = args.dataset
+    extra_config['config_dirs'] = ':'.join(config_dirs)
+    # extra args
+    snakemake_args = [str(s) for s in snakemake_args]
+    snakemake_args += extra_args
+
+    if args.singularity:
+        if not os.path.isdir(config['container']['wrapper_dir']):
+            update_singularity_wrappers()
+        logger.info('enable singularity')
+        extra_config['use_singularity'] = True
+    
+    # extra config
+    snakemake_args += ['--config'] + ['{}={}'.format(key, val) for key, val in extra_config.items()]
+    #subprocess.check_call(snakemake_args, shell=False)
+    logger.info('run snakemake: {}'.format(quoted_string_join(snakemake_args)))
+    # run snakemake
+    os.execv(snakemake_path, snakemake_args)
+    '''

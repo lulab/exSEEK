@@ -103,3 +103,13 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+singularity/
+genome/
+data/
+.snakemake/
+genome/
+genome
+.vscode/
+sync.sh
+docs_old/
+output/

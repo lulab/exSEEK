@@ -1,0 +1,251 @@
+include: 'common.snakemake'
+
+genome_dir = config['genome_dir']
+rna_types_long = ['genome_long_rna', 'spikein_long', 'rRNA', 'circRNA', 'univec']
+
+def get_all_inputs(wildcards):
+    available_inputs = dict(
+        fasta_index=expand('{genome_dir}/fasta/genome.fa.fai', genome_dir=genome_dir)
+    )
+    if config['small_rna']:
+        available_inputs.update(dict(
+            bowtie2_genome_index=expand('{genome_dir}/genome_index/bowtie2/genome.1.bt2', genome_dir=genome_dir),
+            chrom_sizes=expand('{genome_dir}/chrom_sizes/transcriptome', genome_dir=genome_dir),
+            chrom_sizes2=expand('{genome_dir}/chrom_sizes/transcriptome_genome', genome_dir=genome_dir),
+            gtf_to_transcript_table=expand('{genome_dir}/transcript_table/{rna_type}.txt',
+                genome_dir=genome_dir, rna_type=config['rna_types'] + ['all']),
+            bowtie2_index=expand('{genome_dir}/index/bowtie2/{rna_type}.1.bt2',
+                genome_dir=genome_dir, rna_type=config['rna_types'])
+        ))
+    else:
+        available_inputs.update(dict(
+            star_index=expand('{genome_dir}/index/star/{rna_type}/SA',
+                genome_dir=genome_dir, rna_type=['genome_long_rna', 'spikein_long', 'rRNA', 'circRNA', 'univec']),
+            transcript_table=expand('{genome_dir}/transcript_table/{rna_type}.txt',
+                genome_dir=genome_dir, rna_type=['genome_long_rna', 'long'])
+        ))
+    enabled_inputs = list(available_inputs.keys())
+    inputs = []
+    for key, l in available_inputs.items():
+        if key in enabled_inputs:
+            inputs += l
+    return inputs
+
+rule all:
+    input:
+        get_all_inputs
+
+rule build_bowtie2_index:
+    input:
+
+rule fasta_index:
+    input:
+        '{genome_dir}/fasta/{rna_type}.fa'
+    output:
+        '{genome_dir}/fasta/{rna_type}.fa.fai'
+    shell:
+        '''samtools faidx {input}
+        '''
+
+rule transcript_index_bowtie2:
+    input:
+        '{genome_dir}/fasta/{rna_type}.fa'
+    output:
+        bt2_1='{genome_dir}/index/bowtie2/{rna_type}.1.bt2',
+        bt2rev_1='{genome_dir}/index/bowtie2/{rna_type}.rev.1.bt2'
+    params:
+        output_prefix='{genome_dir}/index/bowtie2/{rna_type}'
+    threads:
+        config['threads_mapping']
+    shell:
+        '''bowtie2-build --threads {threads} {input} {params.output_prefix}
+        '''
+
+rule transcript_index_star:
+    input:
+        fasta='{genome_dir}/fasta/{rna_type}.fa',
+        fai='{genome_dir}/fasta/{rna_type}.fa.fai'
+    output:
+        Genome='{genome_dir}/index/star/{rna_type}/Genome',
+        SA='{genome_dir}/index/star/{rna_type}/SA'
+    params:
+        output_prefix='{genome_dir}/index/star/{rna_type}',
+        limitGenomeGenerateRAM=config['star_genome_generate']['limitGenomeGenerateRAM']
+    wildcard_constraints:
+        rna_type='(?!genome_long_rna).*'
+    threads:
+        config['threads_mapping']
+    run:
+        from math import log2
+        # calculate star parameters
+        genome_length = 0
+        n_seqs = 0
+        with open(input.fai, 'r') as f:
+            for line in f:
+                genome_length += int(line.split('\t')[1])
+                n_seqs += 1
+        genomeSAindexNbases = min(14, int(log2(genome_length)//2) - 1)
+        genomeChrBinNbits = min(18, int(log2(genome_length/n_seqs)))
+        if params.rna_type == 'rRNA':
+            genomeSAindexNbases = 5
+
+        shell('''STAR --runThreadN {threads} \
+            --runMode genomeGenerate \
+            --genomeSAindexNbases {genomeSAindexNbases} \
+            --genomeDir {params.output_prefix} \
+            --genomeFastaFiles {input.fasta} \
+            --genomeChrBinNbits {genomeChrBinNbits} \
+            --limitGenomeGenerateRAM {params.limitGenomeGenerateRAM}
+        ''')
+
+rule genome_index_bowtie2:
+    input:
+        '{genome_dir}/fasta/genome.fa'
+    output:
+        bt2_1='{genome_dir}/genome_index/bowtie2/genome.1.bt2',
+        bt2rev_1='{genome_dir}/genome_index/bowtie2/genome.rev.1.bt2'
+    params:
+        output_prefix='{genome_dir}/genome_index/bowtie2/genome'
+    threads:
+        config['threads_mapping']
+    shell:
+        '''bowtie2-build --threads {threads} {input} {params.output_prefix}
+        '''
+
+rule genome_index_star:
+    input:
+        '{genome_dir}/fasta/genome.fa'
+    output:
+        SA='{genome_dir}/genome_index/star/SA',
+        Genome='{genome_dir}/genome_index/star/Genome'
+    params:
+        output_prefix='{genome_dir}/genome_index/star/',
+        limitGenomeGenerateRAM=config['star_genome_generate']['limitGenomeGenerateRAM']
+    threads:
+        config['threads_mapping']
+    shell:
+        '''STAR --runMode genomeGenerate --runThreadN {threads} \
+            --genomeDir {params.output_prefix} --genomeFastaFiles {input} \
+            --limitGenomeGenerateRAM {params.limitGenomeGenerateRAM}
+        '''
+
+rule star_index_genome_long_rna:
+    input:
+        fasta='{genome_dir}/fasta/genome.fa',
+        gtf='{genome_dir}/gtf/long_RNA.gtf'
+    output:
+        SA='{genome_dir}/index/star/genome_long_rna/SA',
+        Genome='{genome_dir}/index/star/Genome'
+    params:
+        output_prefix='{genome_dir}/index/star/genome_long_rna',
+        sjdbOverhang=config['star_genome_generate']['sjdbOverhang'],
+        limitGenomeGenerateRAM=config['star_genome_generate']['limitGenomeGenerateRAM']
+    threads:
+        config['threads_mapping']
+    shell:
+        '''STAR --runMode genomeGenerate --runThreadN {threads} \
+            --genomeDir {params.output_prefix} --genomeFastaFiles {input.fasta} \
+            --sjdbGTFfile {input.gtf} --sjdbOverhang {params.sjdbOverhang} \
+            --outFileNamePrefix {params.output_prefix} \
+            --limitGenomeGenerateRAM {params.limitGenomeGenerateRAM}
+        '''
+
+rule chrom_sizes:
+    """Get transcript sizes of RNAs without gtf files from FASTA index
+    """
+    input:
+        '{genome_dir}/fasta/{rna_type}.fa.fai'
+    output:
+        '{genome_dir}/chrom_sizes/{rna_type}'
+    wildcard_constraints:
+        rna_type='(?!transcriptome).*'
+    shell:
+        '''cut -f1,2 {input} > {output}
+        '''
+
+rule merge_transcript_sizes:
+    input:
+        lambda wildcards: expand('{genome_dir}/chrom_sizes/{rna_type}',
+            genome_dir=wildcards.genome_dir, rna_type=rna_types)
+    output:
+        '{genome_dir}/chrom_sizes/transcriptome'
+    shell:
+        '''cat {input} > {output}
+        '''
+
+
+rule merge_transcriptome_genome_sizes:
+    input:
+        '{genome_dir}/chrom_sizes/transcriptome',
+        '{genome_dir}/chrom_sizes/genome'
+    output:
+        '{genome_dir}/chrom_sizes/transcriptome_genome'
+    shell:
+        '''cat {input} > {output}
+        '''
+
+
+rule gtf_longest_transcript:
+    input:
+        '{genome_dir}/gtf_longest_transcript/{rna_type}.gtf'
+    output:
+        '{genome_dir}/gtf_longest_transcript/{rna_type}.gtf'
+    shell:
+        '''{bin_dir}/preprocess.py extract_longest_transcript -i {input} -o {output}
+        '''
+
+rule fasta_index_to_transcript_table:
+    input:
+        '{genome_dir}/fasta/{rna_type}.fa.fai'
+    output:
+        '{genome_dir}/transcript_table/{rna_type}.txt'
+    #wildcard_constraints:
+    #    rna_type='(rRNA)|(spikein)|(univec)'
+    shell:
+        r'''{{
+            echo -e 'chrom\tstart\tend\tname\tscore\tstrand\tgene_id\ttranscript_id\tgene_name\ttranscript_name\tgene_type\ttranscript_type\tsource'
+            awk 'BEGIN{{OFS="\t";FS="\t"}}{{print $1,0,$2,$1,0,"+",$1,$1,$1,$1,"{wildcards.rna_type}","{wildcards.rna_type}","miRBase"}}' {input}
+          }} > {output}
+        '''
+
+
+rule gtf_to_transcript_table:
+    input:
+        '{genome_dir}/gtf/long_RNA.gtf'
+    output:
+        '{genome_dir}/transcript_table/{rna_type}.txt'
+    wildcard_constraints:
+        rna_type='genome_long_rna'
+    shell:
+        '''{bin_dir}/preprocess.py gtf_to_transcript_table --feature exon \
+            --gene-type {wildcards.rna_type} \
+            --transcript-type {wildcards.rna_type} \
+            -i {input} -o {output}
+        '''
+
+
+rule merge_transcript_table:
+    input:
+        lambda wildcards: expand('{genome_dir}/transcript_table/{rna_type}.txt',
+            genome_dir=wildcards.genome_dir, rna_type=rna_types_with_gtf)
+    output:
+        '{genome_dir}/transcript_table/all.txt'
+    shell:
+        '''{{
+           echo -e  'chrom\tstart\tend\tname\tscore\tstrand\tgene_id\ttranscript_id\tgene_name\ttranscript_name\tgene_type\ttranscript_type\tsource'
+           sed '1 d' {input}
+        }} > {output}
+        '''
+
+rule merge_transcript_table_long:
+    input:
+        lambda wildcards: expand('{genome_dir}/transcript_table/{rna_type}.txt',
+            genome_dir=wildcards.genome_dir, rna_type=rna_types_long)
+    output:
+        '{genome_dir}/transcript_table/long.txt'
+    shell:
+        '''{{
+           echo -e  'chrom\tstart\tend\tname\tscore\tstrand\tgene_id\ttranscript_id\tgene_name\ttranscript_name\tgene_type\ttranscript_type\tsource'
+           sed '1 d' {input}
+        }} > {output}
+        '''

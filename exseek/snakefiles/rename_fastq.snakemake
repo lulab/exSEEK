@@ -1,0 +1,43 @@
+include: 'common.snakemake'
+
+def get_all_inputs(wildcards):
+    inputs = []
+    if config['paired_end']:
+        inputs += expand('{output_dir}/unmapped/{sample_id}/clean_{mate_index}.fastq.gz',
+            output_dir=output_dir, sample_id=sample_ids, mate_index=[1, 2])
+    else:
+        inputs += expand('{output_dir}/unmapped/{sample_id}/clean.fastq.gz',
+            output_dir=output_dir, sample_id=sample_ids, mate_index=[1, 2])
+    return inputs
+
+rule all:
+    input:
+        get_all_inputs
+
+rule rename_fastq_pe:
+    input:
+        auto_gzip_input('{output_dir}/cutadapt/{sample_id}_{mate_index}.fastq')
+    output:
+        '{output_dir}/unmapped/{sample_id}/clean_{mate_index}.fastq.gz'
+    threads: 
+        1
+    wildcard_constraints:
+        mate_index='[12]'
+    shell:
+        r'''{bin_dir}/auto_uncompress {input} \
+            | awk 'NR%4==1{{printf "@%012d\n", int(NR/4);next}} NR%4==3{{printf "+\n";next}} {{print}}' \
+            | pigz -c -p {threads} > {output}
+        '''
+
+rule rename_fastq_se:
+    input:
+        auto_gzip_input('{output_dir}/cutadapt/{sample_id}.fastq')
+    output:
+        '{output_dir}/unmapped/{sample_id}/clean.fastq.gz'
+    threads: 
+        1
+    shell:
+        r'''{bin_dir}/auto_uncompress {input} \
+            | awk 'NR%4==1{{printf "@%012d\n", int(NR/4);next}} NR%4==3{{printf "+\n";next}} {{print}}' \
+            | pigz -c -p {threads} > {output}
+        '''

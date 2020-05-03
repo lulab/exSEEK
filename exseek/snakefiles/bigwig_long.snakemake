@@ -1,0 +1,142 @@
+include: 'common.snakemake'
+
+import re
+
+if config['remove_duplicates_long']:
+    map_steps = ['genome_rmdup', 'circRNA_rmdup', 'rRNA_rmdup']
+else:
+    map_steps = ['genome', 'circRNA', 'rRNA']
+
+def get_all_inputs(wildcards):
+    available_inputs = dict()
+    for map_step in map_steps:
+        if map_step.startswith('genome'):
+            strands = ['+', '-']
+        else:
+            strands = '+'
+        available_inputs[map_step] = expand('{output_dir}/bigwig/{sample_id}.{map_step}.{strand}.bigWig',
+            output_dir=output_dir, sample_id=sample_ids, map_step=map_step, strand=strands)
+        available_inputs[map_step + '_normalized'] = expand('{output_dir}/bigwig_normalized/{sample_id}.{map_step}.{strand}.bigWig',
+            output_dir=output_dir, sample_id=sample_ids, map_step=map_step, strand=strands)
+        available_inputs[map_step + '_bam'] = expand('{output_dir}/bam_sorted_by_coord/{sample_id}/{map_step}.bam',
+            output_dir=output_dir, sample_id=sample_ids, map_step=map_step)
+        available_inputs[map_step + '_bai'] = expand('{output_dir}/bam_sorted_by_coord/{sample_id}/{map_step}.bam.bai',
+            output_dir=output_dir, sample_id=sample_ids, map_step=map_step)
+        if map_step.startswith('circRNA'):
+            available_inputs[map_step + '_bigwig_pseudo_genome'] = expand('{output_dir}/bigwig_pseudo_genome/{sample_id}.{map_step}.{strand}.bigWig',
+                output_dir=output_dir, sample_id=sample_ids, map_step=map_step, strand=strands)
+            available_inputs[map_step + '_bam_pseudo_genome'] = expand('{output_dir}/bam_pseudo_genome/{sample_id}/{map_step}.bam',
+                output_dir=output_dir, sample_id=sample_ids, map_step=map_step)
+    enabled_inputs = list(available_inputs.keys())
+    inputs = []
+    for key, l in available_inputs.items():
+        if key in enabled_inputs:
+            inputs += l
+    return inputs
+
+rule all:
+    input:
+        get_all_inputs
+
+rule sort_bam_by_coord:
+    input:
+        '{output_dir}/bam/{sample_id}/{map_step}.bam'
+    output:
+        '{output_dir}/bam_sorted_by_coord/{sample_id}/{map_step}.bam'
+    params:
+        temp_dir=config['temp_dir']
+    shell:
+        '''samtools sort -T {params.temp_dir} -o {output} {input}
+        '''
+
+rule index_bam_by_coord:
+    input:
+        '{output_dir}/bam_sorted_by_coord/{sample_id}/{map_step}.bam'
+    output:
+        '{output_dir}/bam_sorted_by_coord/{sample_id}/{map_step}.bam.bai'
+    shell:
+        '''samtools index {input}
+        '''
+
+rule genomecov:
+    input:
+        '{output_dir}/bam_sorted_by_coord/{sample_id}/{map_step}.bam'
+    output:
+        '{output_dir}/bedgraph/{sample_id}.{map_step}.{strand}.bedGraph'
+    params:
+        #pc='-pc' if config['paired_end'] else '',
+        pc='',
+        temp_dir=config['temp_dir']
+    wildcard_constraints:
+        strand='[+-]'
+    shell:
+        '''bedtools genomecov -strand {wildcards.strand} -bg {params.pc} -split -ibam {input} \
+            | LC_COLLATE=C sort -T {params.temp_dir} -k1,1 -k2,2n > {output}
+        '''
+
+rule bedgraph_to_bigwig:
+    input:
+        bedgraph='{output_dir}/bedgraph/{sample_id}.{map_step}.{strand}.bedGraph',
+        chrom_sizes=lambda wildcards: genome_dir + '/chrom_sizes/' + re.sub('_rmdup$', '', wildcards.map_step)
+    output:
+        '{output_dir}/bigwig/{sample_id}.{map_step}.{strand}.bigWig'
+    shell:
+        '''bedGraphToBigWig {input.bedgraph} {input.chrom_sizes} {output}
+        '''
+
+rule normalize_bigwig:
+    input:
+        bam='{output_dir}/bam/{sample_id}/{map_step}.bam',
+        bigwig='{output_dir}/bigwig/{sample_id}.{map_step}.{strand}.bigWig',
+        chrom_sizes=lambda wildcards: genome_dir + '/chrom_sizes/' + re.sub('_rmdup$', '', wildcards.map_step)
+    output:
+        bigwig='{output_dir}/bigwig_normalized/{sample_id}.{map_step}.{strand}.bigWig',
+        bedgraph=temp('{output_dir}/bigwig_normalized/{sample_id}.{map_step}.{strand}.bedGraph')
+    wildcard_constraints:
+        strand='[+-]'
+    shell:
+        r'''read_depth=`bamtools count -in {input.bam}`
+        bigWigToBedGraph {input.bigwig} stdout \
+            | awk -v d="$read_depth" 'BEGIN{{OFS="\t";FS="\t"}}{{print $1,$2,$3,1000000.0*2*$4/d}}' > {output.bedgraph}
+        bedGraphToBigWig {output.bedgraph} {input.chrom_sizes} {output.bigwig}
+        '''
+
+rule map_bigwig_to_pseudo_genome:
+    input:
+        bigwig='{output_dir}/bigwig_normalized/{sample_id}.{map_step}.{strand}.bigWig',
+        annotation=lambda wildcards: expand(genome_dir + '/bed/pseudo_genome.{gene_type}.bed', 
+            gene_type=re.sub(r'_rmdup$', '', wildcards.map_step)),
+        chrom_sizes=lambda wildcards: expand(genome_dir + '/chrom_sizes/pseudo_genome.{gene_type}',
+            gene_type=re.sub(r'_rmdup$', '', wildcards.map_step))
+    output:
+        bigwig='{output_dir}/bigwig_pseudo_genome/{sample_id}.{map_step}.{strand}.bigWig',
+        bedgraph=temp('{output_dir}/bigwig_pseudo_genome/{sample_id}.{map_step}.{strand}.bedGraph')
+    wildcard_constraints:
+        map_step='(circRNA)|(circRNA_rmdup)'
+    shell:
+        r'''bigWigToBedGraph {input.bigwig} stdout \
+            | awk 'BEGIN{{OFS="\t";FS="\t"}} FNR==NR{{chrom[$4]=$1;start[$4]=$2;next}} {{if($1 in chrom) print chrom[$1],start[$1]+$2,start[$1]+$3,$4}}' \
+                {input.annotation} - > {output.bedgraph}
+            bedGraphToBigWig {output.bedgraph} {input.chrom_sizes} {output.bigwig}
+        '''
+
+rule map_bam_to_pseudo_genome:
+    input:
+        bam='{output_dir}/bam/{sample_id}/{map_step}.bam',
+        bed=lambda wildcards: expand(genome_dir + '/bed/pseudo_genome.{gene_type}.bed', 
+            gene_type=re.sub(r'_rmdup$', '', wildcards.map_step)),
+        chrom_sizes=lambda wildcards: expand(genome_dir + '/chrom_sizes/pseudo_genome.{gene_type}',
+            gene_type=re.sub(r'_rmdup$', '', wildcards.map_step))
+    output:
+        bam='{output_dir}/bam_pseudo_genome/{sample_id}/{map_step}.bam',
+        unsorted_bam=temp('{output_dir}/bam_pseudo_genome/{sample_id}/{map_step}.unsorted.bam'),
+        bai='{output_dir}/bam_pseudo_genome/{sample_id}/{map_step}.bam.bai'
+    wildcard_constraints:
+        map_step='(circRNA)|(circRNA_rmdup)'
+    shell:
+        '''{bin_dir}/preprocess.py map_bam_to_pseudo_genome -i {input.bam} \
+            --bed {input.bed} --chrom-sizes {input.chrom_sizes} \
+            -o {output.unsorted_bam}
+        samtools sort {output.unsorted_bam} > {output.bam}
+        samtools index {output.bam}
+        '''

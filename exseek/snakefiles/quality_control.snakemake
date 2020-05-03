@@ -1,0 +1,259 @@
+shell.prefix('set -x;')
+include: 'common.snakemake'
+
+import os
+
+def get_all_inputs(wildcards):
+    if config['paired_end']:
+        available_inputs = dict(
+            prinseq=expand('{output_dir}/prinseq/{sample_id}.html',
+                output_dir=output_dir, sample_id=sample_ids)
+        )
+    else:
+        available_inputs = dict(
+            fastqc=expand('{output_dir}/fastqc/{sample_id}_fastqc.zip',
+                output_dir=output_dir, sample_id=sample_ids),
+            summarize_fastqc=expand('{output_dir}/summary/fastqc.txt',
+                output_dir=output_dir),
+            summarize_fastqc_html=expand('{output_dir}/summary/fastqc.html',
+                output_dir=output_dir),
+            clean=expand('{output_dir}/unmapped/{sample_id}/clean.fa.gz',
+                output_dir=output_dir, sample_id=sample_ids)
+        )
+    enabled_inputs = list(available_inputs.keys())
+    inputs = []
+    for key, l in available_inputs.items():
+        if key in enabled_inputs:
+            inputs += l
+    return inputs
+
+rule all:
+    input:
+        get_all_inputs
+
+def get_input_fastq_se(wildcards):
+    fastq = expand(data_dir + '/fastq/{sample_id}.fastq', sample_id=wildcards.sample_id)
+    fastq_gz = expand(data_dir + '/fastq/{sample_id}.fastq.gz', sample_id=wildcards.sample_id)
+
+    if all(os.path.exists(f) for f in fastq_gz):
+        return fastq_gz
+    else:
+        return fastq
+
+rule cutadapt_se:
+    input:
+        auto_gzip_input(data_dir + '/fastq/{sample_id}.fastq')
+    output:
+        trimmed='{output_dir}/cutadapt/{sample_id}.fastq.gz'
+    params:
+        adaptor=config['adaptor'],
+        min_read_length=config['min_read_length'],
+        min_base_quality=config['min_base_quality']
+    log:
+        '{output_dir}/log/cutadapt/{sample_id}'
+    threads:
+        config['threads_compress']
+    shell:
+        '''cutadapt -a {params.adaptor} -m {params.min_read_length} --trim-n -q {params.min_base_quality} \
+            -o >(pigz -c -p {threads} > {output.trimmed}) {input} > {log} 2>&1
+        '''
+
+rule fastq_to_fasta_se:
+    input:
+        '{output_dir}/cutadapt/{sample_id}.fastq.gz'
+    output:
+        '{output_dir}/unmapped/{sample_id}/clean.fa.gz'
+    threads:
+        config['threads_compress']
+    shell:
+        '''pigz -d -c -p {threads} {input} | fastq_to_fasta -r | pigz -p {threads} -c > {output}
+        '''
+
+rule fastq_to_fasta_pe:
+    input:
+        '{output_dir}/cutadapt/{sample_id}_{pair_index}.fastq.gz'
+    output:
+        '{output_dir}/unmapped/{sample_id}/clean_{pair_index}.fa.gz'
+    threads:
+        config['threads_compress']
+    wildcard_constraints:
+        pair_index='[12]'
+    shell:
+        '''pigz -p {threads} -d -c {input} \
+            | fastq_to_fasta -r -n \
+            | pigz -p {threads} -c > {output}
+        '''
+
+rule cutadapt_pe:
+    input:
+        fastq1=auto_gzip_input(data_dir + '/fastq/{sample_id}_1.fastq'),
+        fastq2=auto_gzip_input(data_dir + '/fastq/{sample_id}_2.fastq')
+    output:
+        fastq1='{output_dir}/cutadapt/{sample_id}_1.fastq.gz',
+        fastq2='{output_dir}/cutadapt/{sample_id}_2.fastq.gz'
+    threads:
+        config['threads']
+    params:
+        quality_5p=config['min_base_quality_5p'],
+        quality_3p=config['min_base_quality_3p'],
+        adaptor1=lambda wildcards: '-a ' + config['adaptor1'] if len(config['adaptor1']) > 0 else '',
+        adaptor2=lambda wildcards: '-A ' + config['adaptor2'] if len(config['adaptor2']) > 0 else '',
+        miniL=config['min_read_length'],
+        quality_base=config['quality_base']
+    log:
+        '{output_dir}/log/cutadapt/{sample_id}'
+    shell:
+        '''cutadapt -j {threads} -q {params.quality_5p},{params.quality_3p} \
+            {params.adaptor1} {params.adaptor2} --trim-n -m {params.miniL} \
+            -o >(gzip -c > {output.fastq1}) -p >(gzip -c > {output.fastq2}) \
+            {input.fastq1} {input.fastq2} > {log} 2>&1
+        '''
+
+rule fastqc:
+    input:
+        data_dir + '/fastq/{sample_id}.fastq'
+    output:
+        html='{output_dir}/fastqc/{sample_id}_fastqc.html',
+        zip='{output_dir}/fastqc/{sample_id}_fastqc.zip'
+    params:
+        output_prefix='{output_dir}/fastqc/',
+        temp_dir=config['temp_dir']
+    log:
+        '{output_dir}/log/fastqc/{sample_id}'
+    shell:
+        '''fastqc -q -o {params.output_prefix} -d {params.temp_dir} {input}
+        '''
+
+def parse_fastqc_data(fp):
+    section = None
+    qc_status = OrderedDict()
+    basic_statistics = OrderedDict()
+    for line in fp:
+        line = str(line, encoding='utf-8')
+        line = line.strip()
+        if line.startswith('>>'):
+            if line == '>>END_MODULE':
+                continue
+            section, status = line[2:].split('\t')
+            qc_status[section] = status
+        else:
+            if section == 'Basic Statistics':
+                key, val = line.split('\t')
+                basic_statistics[key] = val
+    for key, val in qc_status.items():
+        basic_statistics[key] = val
+    return basic_statistics
+        
+rule summarize_fastqc:
+    input:
+        zip=lambda wildcards: expand('{output_dir}/fastqc/{sample_id}_fastqc.zip',
+            output_dir=wildcards.output_dir, sample_id=sample_ids)
+    output:
+        '{output_dir}/summary/fastqc.txt'
+    run:
+        import pandas as pd
+        from zipfile import ZipFile
+        import os
+        from collections import OrderedDict
+
+        summary = OrderedDict()
+        columns = None
+        for filename in input.zip:
+            sample_id = os.path.splitext(os.path.basename(filename))[0][:-7]
+            with ZipFile(filename, 'r') as zf:
+                with zf.open(sample_id + '_fastqc/fastqc_data.txt', 'r') as f:
+                    summary[sample_id] = parse_fastqc_data(f)
+                    if columns is None:
+                        columns = list(summary[sample_id].keys())
+        summary = pd.DataFrame.from_records(summary)
+        summary = summary.T
+        summary = summary.reindex(columns=columns)
+        summary.index.name = 'sample_id'
+        summary.to_csv(output[0], sep='\t', index=True, header=True) 
+
+rule summarize_fastqc_ipynb:
+    input:
+        '{output_dir}/summary/fastqc.txt'
+    output:
+        ipynb='{output_dir}/summary/fastqc.ipynb'
+    run:
+        import nbformat
+        from nbformat.v4 import new_notebook, new_code_cell, new_markdown_cell
+        nb = new_notebook()
+        nb['cells'].append(new_code_cell(r"""import pandas as pd
+import numpy as np"""))
+
+        nb['cells'].append(new_code_cell(r"""summary = pd.read_table('fastqc.txt', sep='\t')"""))
+        nb['cells'].append(new_code_cell(r"""summary.set_index('sample_id', inplace=True, drop=False)
+qc_status = summary.iloc[:, 9:].copy()
+qc_status.fillna('NA')
+qc_status = qc_status.astype('str')
+sample_ids = qc_status.index.values
+sections = qc_status.columns.values
+def style_func(val):
+    status, row, col = val.split('|')
+    row, col = int(row), int(col)
+    color = {'pass': 'green', 'fail': 'red', 'warn': 'orange'}.get(status, 'gray')
+    return '<a href="../fastqc/{sample_id}_fastqc.html#M{section}" style="color: {color}">{status}</a>'.format(
+        sample_id=sample_ids[row], color=color, status=status, section=col)
+
+pd.DataFrame(qc_status.values \
+             + '|' + np.arange(qc_status.shape[0]).astype('str')[:, np.newaxis] \
+             + '|' + np.arange(qc_status.shape[1]).astype('str')[np.newaxis, :],
+             index=qc_status.index, columns=qc_status.columns) \
+    .style.format(style_func)"""))
+        nb['metadata']['kernel_spec'] = {
+            'display_name': 'Python 3',
+            'language': 'python', 
+            'name': 'python3'
+        }
+        nb['metadata']['laugnage_info'] = {
+            'codemirror_mode': {
+                'name': 'ipython',
+                'version': 3
+            },
+            'name': 'python', 
+            'file_extension': '.py', 
+            'mimetype': 'text/x-python',
+            'nbconvert_exporter': 'python',
+            'version': '3.6'
+        }
+        nbformat.write(nb, output.ipynb)
+
+rule summarize_fastqc_html:
+    input:
+        '{output_dir}/summary/fastqc.ipynb'
+    output:
+        '{output_dir}/summary/fastqc.html'
+    shell:
+        '''jupyter nbconvert --execute --to html \
+            --HTMLExporter.exclude_code_cell=False \
+            --HTMLExporter.exclude_input_prompt=True \
+            --HTMLExporter.exclude_output_prompt=True \
+            {input}
+        '''
+
+rule prinseq_se:
+    input:
+        fastq='{output_dir}/cutadapt/{sample_id}.fastq.gz'
+    output:
+        graph_data='{output_dir}/prinseq/{sample_id}.gd',
+        html='{output_dir}/prinseq/{sample_id}.html'
+    shell:
+        '''perl {tools_dir}/prinseq/prinseq-lite.pl -verbose -fastq <(zcat {input.fastq}) \
+            -ns_max_n 0 -graph_data {output.graph_data} -out_good null -out_bad null
+        perl {tools_dir}/prinseq/prinseq-graphs.pl -i {output.graph_data} -html_all -o {output.html}
+        '''
+
+rule prinseq_pe:
+    input:
+        fastq1='{output_dir}/cutadapt/{sample_id}_1.fastq.gz',
+        fastq2='{output_dir}/cutadapt/{sample_id}_2.fastq.gz'
+    output:
+        graph_data='{output_dir}/prinseq/{sample_id}.gd',
+        html='{output_dir}/prinseq/{sample_id}.html'
+    shell:
+        '''perl {tools_dir}/prinseq/prinseq-lite.pl -verbose -fastq {input.fastq1} -fastq2 {input.fastq2} \
+            -ns_max_n 0 -graph_data {output.graph_data} -out_good null -out_bad null
+        perl {tools_dir}/prinseq/prinseq-graphs.pl -i {output.graph_data} -html_all -o {output.html}
+        '''

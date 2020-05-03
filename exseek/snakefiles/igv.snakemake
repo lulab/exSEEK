@@ -1,0 +1,114 @@
+shell.prefix('set -x;')
+include: 'common.snakemake'
+
+def get_all_inputs(wildcards):
+    if config['small_rna']:
+        map_steps = ['transcriptome']
+    else:
+        if config['remove_duplicates_long']:
+            map_steps = ['genome_rmdup', 'rRNA_rmdup', 'circRNA_rmdup']
+        else:
+            map_steps = ['genome', 'rRNA', 'circRNA']
+    track_types = ['bigwig', 'bam']
+    inputs = []
+    inputs += expand('igv/html/{dataset}/{map_step}.{track_type}.html',
+        dataset=dataset, map_step=map_steps, track_type=track_types)
+    inputs += expand('igv/config/{dataset}/{map_step}.{track_type}.yaml',
+        dataset=dataset, map_step=map_steps, track_type=track_types)
+    return inputs
+
+rule all:
+    input:
+        get_all_inputs
+
+def get_reference(wildcards):
+    if wildcards.map_step in ('transcriptome', 'genome', 'genome_rmdup'):
+        return 'templates/igv/config/genome.yaml'
+    elif wildcards.map_step in ('rRNA', 'rRNA_rmdup'):
+        return 'templates/igv/config/rRNA.yaml'
+    elif wildcards.map_step in ('circRNA', 'circRNA_rmdup'):
+        return 'templates/igv/config/circRNA.yaml'
+    else:
+        raise ValueError('unknown map_step: {}'.format(wildcards.map_step))
+
+def get_track_pattern(wildcards):
+    if wildcards.track_type == 'bigwig':
+        return 'bigwig/{dataset}/{{sample_id}}.{map_step}.{{strand}}.bigWig'.format(**wildcards)
+    elif wildcards.track_type == 'bam':
+        return 'bam/{dataset}/{{sample_id}}/{map_step}.bam'.format(**wildcards)
+    else:
+        raise ValueError('unknown track type: {}'.format(wildcards.track_type))
+
+rule igv_config:
+    input:
+        reference=get_reference,
+        sample_classes=data_dir + '/sample_classes.txt'
+    output:
+        config='igv/config/{dataset}/{map_step}.{track_type}.yaml',
+    params:
+        igv_base_url=config['igv_base_url'],
+        max_samples_per_class=lambda wildcards: 10 if wildcards.track_type == 'bigwig' else 1,
+        strand=lambda wildcards: '--strand "+"' if wildcards.map_step not in ('transcriptome', 'genome', 'genome_rmdup') else '',
+        track_pattern=get_track_pattern
+    shell:
+        '''{bin_dir}/create_igv.py generate_config {params.strand} \
+            --sample-classes {input.sample_classes} \
+            --track-pattern '{params.track_pattern}' \
+            --base-url '{params.igv_base_url}' \
+            --max-samples-per-class {params.max_samples_per_class} \
+            --reference '{input.reference}' \
+            -o '{output.config}'
+        '''
+
+def get_count_matrix(wildcards):
+    if config['small_rna']:
+        return expand('{output_dir}/count_matrix/transcript.txt', **wildcards)
+    else:
+        return expand('{output_dir}/count_matrix/featurecounts.txt', **wildcards)
+
+rule abundant_gene_ids:
+    input:
+        matrix=get_count_matrix
+    output:
+        '{output_dir}/igv_reference/{gene_type}/gene_ids.txt'
+    params:
+        max_genes=100
+    run:
+        import pandas as pd
+
+        matrix = pd.read_table(str(input.matrix), sep='\t', index_col=0)
+        feature_info = matrix.index.to_series().str.split('|', expand=True)
+        feature_info.columns = ['gene_id', 'gene_type', 'gene_name', 'domain_id', 'transcript_id', 'start', 'end']
+        matrix = matrix.loc[feature_info[feature_info['gene_type'] == wildcards.gene_type].index.values]
+        features = matrix.mean(axis=1).sort_values(ascending=False).head(params.max_genes).index.values
+        gene_ids = feature_info.loc[features, 'gene_id'].values
+        pd.Series(gene_ids).to_csv(output[0], index=False, header=False)
+
+rule create_reference:
+    input:
+        fa=genome_dir + '/fasta/{gene_type}.fa',
+        fai=genome_dir + '/fasta/{gene_type}.fa.fai',
+        gene_ids='{output_dir}/igv_reference/{gene_type}/gene_ids.txt'
+    output:
+        fa='{output_dir}/igv_reference/{gene_type}/reference.fa',
+        fai='{output_dir}/igv_reference/{gene_type}/reference.fa.fai',
+        cytoband='{output_dir}/igv_reference/{gene_type}/cytoband.txt',
+        bed='{output_dir}/igv_reference/{gene_type}/annotation.bed'
+    params:
+        output_dir='{output_dir}/igv_reference/{gene_type}'
+    shell:
+        '''{bin_dir}/create_igv.py create_reference --genome '{wildcards.gene_type}' \
+            --name '{wildcards.gene_type}' --fasta {input.fa} \
+            --gene-ids {input.gene_ids} -o {params.output_dir}
+        '''
+
+rule igv_html:
+    input:
+        config='igv/config/{dataset}/{map_step}.yaml',
+        template='templates/igv/main.html'
+    output:
+        html='igv/html/{dataset}/{map_step}.html'
+    shell:
+        '''{bin_dir}/create_igv.py render -i {input.template} \
+            -c {input.config} -o {output.html}
+        '''

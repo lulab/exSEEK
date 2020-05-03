@@ -1,0 +1,242 @@
+shell.prefix('set -x; set -e;')
+import os
+import yaml
+import re
+from glob import glob
+
+def require_variable(variable, condition=None):
+    value = config.get(variable)
+    if value is None:
+        raise ValueError('configuration variable "{}" is required'.format(variable))
+    if (condition == 'input_dir') and (not os.path.isdir(value)):
+        raise ValueError('cannot find input directory {}: {}'.format(variable, value))
+    elif (condition == 'input_file') and (not os.path.isfile(value)):
+        raise ValueError('cannot find input file {}: {}'.format(variable, value))
+    return value
+
+def get_config_file(filename):
+    for config_dir in config_dirs:
+        if os.path.isfile(os.path.join(config_dir, filename)):
+            return os.path.join(config_dir, filename)
+
+# setup global variables
+package_dir = require_variable('package_dir')
+root_dir = require_variable('root_dir', 'input_dir')
+config_dirs = require_variable('config_dirs')
+config_dirs = config_dirs.split(':')
+# load default config
+with open(get_config_file('default_config.yaml'), 'r') as f:
+    default_config = yaml.load(f)
+# read selector-classifier
+with open(get_config_file('machine_learning.yaml'), 'r') as f:
+    default_config['machine_learning'] = yaml.load(f)
+
+default_config.update(config)
+config = default_config
+
+dataset = config['dataset']
+data_dir = require_variable('data_dir', 'input_dir')
+genome_dir = require_variable('genome_dir')
+bin_dir = require_variable('bin_dir', 'input_dir')
+output_dir = require_variable('output_dir')
+rna_types = require_variable('rna_types')
+tools_dir = require_variable('tools_dir')
+temp_dir = require_variable('temp_dir')
+# r_dir = require_variable('r_dir')
+# create temp_dir
+if not os.path.isdir(temp_dir):
+    os.makedirs(temp_dir)
+    
+# read sample ids from file
+with open(os.path.join(data_dir, 'sample_ids.txt'), 'r') as f:
+    sample_ids = f.read().split()
+for sample_id in sample_ids:
+    if '.' in sample_id:
+        raise ValueError('"." is not allowed in sample ID: {}'.format(sample_id))
+
+# rna types with annotation gtf
+rna_types_with_gtf = []
+for rna_type in config['rna_types']:
+    if rna_type not in ('univec', 'rRNA', 'spikein'):
+        rna_types_with_gtf.append(rna_type)
+
+# long RNA types
+long_rna_types = list(filter(lambda x: x not in ('miRNA', 'piRNA', 'rRNA', 'spikein', 'univec'), config['rna_types']))
+
+# read adapter sequences
+for key in ('adaptor', 'adaptor_5p'):
+    if isinstance(config[key], str):
+        if config[key].startswith('file:'):
+            filename = config[key][5:].strip()
+            adapters = {}
+            with open(filename, 'r') as f:
+                for lineno, line in enumerate(f):
+                    c = line.strip().split('\t')
+                    if len(c) != 2:
+                        raise ValueError('expect 2 columns in adapter file: {}, {} found'.format(filename, len(c)))
+                    adapters[c[0]] = c[1]
+            config[key] = adapters
+    
+def get_preprocess_methods():
+    '''Get combinations of preprocess methods for feature selection and feature evaluation
+    '''
+    preprocess_methods = []
+    for batch_removal_method in config['batch_removal_methods']:
+        if batch_removal_method in ('ComBat', 'limma'):
+            template = 'filter.{imputation_method}.Norm_{normalization_method}.Batch_{batch_removal_method}_{batch_index}'
+            preprocess_methods += expand(template,
+                output_dir=output_dir,
+                imputation_method=config['imputation_methods'],
+                normalization_method=config['normalization_methods'],
+                batch_removal_method=batch_removal_method,
+                batch_index=config['batch_index'])
+        elif batch_removal_method in ('RUV', 'RUVn', 'null'):
+            template = 'filter.{imputation_method}.Norm_{normalization_method}.Batch_{batch_removal_method}_1'
+            preprocess_methods += expand(template,
+                output_dir=output_dir,
+                imputation_method=config['imputation_methods'],
+                normalization_method=config['normalization_methods'],
+                batch_removal_method=batch_removal_method)
+    return preprocess_methods
+
+def auto_gzip_input(template):
+    '''Input function that automatically detect gzip files
+    '''
+    def get_filename(wildcards):
+        gzip_names = expand(template + '.gz', **wildcards)
+        if all(os.path.exists(f) for f in gzip_names):
+            return gzip_names
+        original_names = expand(template, **wildcards)
+        #if all(os.path.exists(f) for f in original_names):
+        return original_names
+        
+    return get_filename
+
+def parse_fastqc_data(fp):
+    '''
+    '''
+    section = None
+    qc_status = OrderedDict()
+    basic_statistics = OrderedDict()
+    for line in fp:
+        line = str(line, encoding='utf-8')
+        line = line.strip()
+        if line.startswith('>>'):
+            if line == '>>END_MODULE':
+                continue
+            section, status = line[2:].split('\t')
+            qc_status[section] = status
+        else:
+            if section == 'Basic Statistics':
+                key, val = line.split('\t')
+                basic_statistics[key] = val
+    for key, val in qc_status.items():
+        basic_statistics[key] = val
+    return basic_statistics
+    
+def get_input_matrix(wildcards):
+    # Use RPM for small RNA
+    if config['small_rna']:
+        return '{output_dir}/matrix_processing/{preprocess_method}.{count_method}.txt'.format(**wildcards)
+    # Use RPKM for long RNA
+    else:
+        return '{output_dir}/rpkm/{preprocess_method}.{count_method}.txt'.format(**wildcards)
+    
+def get_known_biomarkers():
+    biomarkers = []
+    for filename in glob(os.path.join(data_dir, 'known_biomarkers', '*/*.txt')):
+        c = filename.split('/')
+        compare_group = c[-2]
+        feature_set = os.path.splitext(c[-1])[0]
+        biomarkers.append((compare_group, feature_set))
+    return biomarkers
+
+def to_list(obj):
+    '''Wrap objects as a list
+    '''
+    if isinstance(obj, list):
+        return obj
+    if isinstance(obj, str) or isinstance(obj, bytes):
+        return [obj]
+    return list(obj)
+
+def get_cutadapt_adapter_args(wildcards, adapter, option):
+    '''Get adapter sequence for a sample
+
+    ===========
+    Parameters:
+        adapter: adapter config value
+        option: option for cutadapt
+
+    ========
+    Returns:
+        arguments: command arguments for cutadapt
+
+    '''
+    if isinstance(adapter, str):
+        if len(adapter) == 0:
+            return ''
+        else:
+            return option + ' ' +  adapter
+    elif isinstance(adapter, list):
+        return ' '.join(expand(option + ' {a}', adapter))
+    elif isinstance(adapter, dict):
+        adapter_seq = adapter.get(wildcards.sample_id)
+        if adapter_seq is None:
+            raise ValueError('adapter sequence is not found for sample {}'.format(wildcards.sample_id))
+        return option + ' ' + adapter_seq
+    else:
+        return ''
+        
+def get_library_size_small(summary_file, sample_id):
+    '''Get library size for a sample from summary file
+    '''
+    columns = {}
+    data = {}
+    with open(summary_file, 'r') as f:
+        for lineno, line in enumerate(f):
+            c = line.strip().split('\t')
+            if lineno == 0:
+                columns = {c[i]:i for i in range(1, len(c))}
+                column = columns[sample_id]
+            else:
+                data[c[0]] = int(c[column])
+    library_size = data['clean.unmapped'] - data['other.unmapped']
+    # remove these types from library size calculation
+    for key in ['spikein.mapped', 'univec.mapped', 'rRNA.mapped']:
+        if key in data:
+            library_size -= data[key]
+    return library_size
+
+# template for nbconvert
+nbconvert_command = '''cp {input.jupyter} {output.jupyter}
+jupyter nbconvert --execute --to html \
+    --HTMLExporter.exclude_code_cell=False \
+    --HTMLExporter.exclude_input_prompt=True \
+    --HTMLExporter.exclude_output_prompt=True \
+    {output.jupyter}
+'''
+
+# export singularity wrappers
+use_singularity = config.get('use_singularity')
+if use_singularity:
+    os.environ['PATH'] = config['container']['wrapper_dir'] + ':' + os.environ['PATH']
+
+if not os.path.isdir(temp_dir):
+    os.makedirs(temp_dir)
+
+sub_matrix_regex = '(mirna_only)'
+count_method_regex = '(featurecounts)|(htseq)|(transcript)|(mirna_and_long_fragments)|(featurecounts_lncrna)'
+count_method_regex = r'[^\.]+'
+imputation_method_regex = '(scimpute_count)|(viper_count)|(null)'
+normalization_method_regex = '(SCnorm)|(TMM)|(RLE)|(CPM)|(CPM_top)|(CPM_rm)|(CPM_refer)|(UQ)|(null)'
+batch_removal_method_with_batchinfo_regex = '(ComBat)|(limma)'
+batch_removal_method_without_batchinfo_regex = '(RUV)|(RUVn)|(null)'
+
+# batch information is provided
+has_batch_info = os.path.isfile(os.path.join(data_dir, 'batch_info.txt'))
+# clustering scores for normalization, feature_selection and evaluate_features
+clustering_scores = ['uca_score']
+if has_batch_info:
+    #clustering_scores += ['kbet_score', 'combined_score', 'knn_score']
+    clustering_scores += ['combined_score', 'knn_score']

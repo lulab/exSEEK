@@ -1,0 +1,126 @@
+include: 'common.snakemake'
+
+rule all:
+    input:
+        cutadapt=expand('{output_dir}/cutadapt/{sample_id}_{mate_index}.fastq.gz',
+            output_dir=output_dir, sample_id=sample_ids, mate_index=[1, 2]),
+        clean=expand('{output_dir}/unmapped/{sample_id}/clean_{mate_index}.fastq.gz',
+            output_dir=output_dir, sample_id=sample_ids, mate_index=[1, 2]),
+        summary=expand('{output_dir}/summary/cutadapt.txt', output_dir=output_dir),
+        jupyter=expand('{output_dir}/summary/cutadapt.ipynb', output_dir=output_dir),
+        html=expand('{output_dir}/summary/cutadapt.html', output_dir=output_dir)
+
+rule cutadapt_pe:
+    input:
+        fastq1=auto_gzip_input(data_dir + '/fastq/{sample_id}_1.fastq'),
+        fastq2=auto_gzip_input(data_dir + '/fastq/{sample_id}_2.fastq')
+    output:
+        fastq1='{output_dir}/cutadapt/{sample_id}_1.fastq.gz',
+        fastq2='{output_dir}/cutadapt/{sample_id}_2.fastq.gz'
+    threads:
+        config['threads']
+    params:
+        quality_5p=config['min_base_quality_5p'],
+        quality_3p=config['min_base_quality_3p'],
+        adaptor1=lambda wildcards: '-a ' + config['adaptor1'] if len(config['adaptor1']) > 0 else '',
+        adaptor2=lambda wildcards: '-A ' + config['adaptor2'] if len(config['adaptor2']) > 0 else '',
+        adaptor1_5p=lambda wildcards: '-g' + config['adaptor1_5p'] if len(config['adaptor1_5p']) > 0 else '',
+        adaptor2_5p=lambda wildcards: '-G' + config['adaptor2_5p'] if len(config['adaptor2_5p']) > 0 else '',
+        miniL=config['min_read_length'],
+        quality_base=config['quality_base']
+    log:
+        '{output_dir}/log/cutadapt/{sample_id}'
+    threads: 3
+    shell:
+        '''cutadapt --pair-filter any -j {threads} -q {params.quality_5p},{params.quality_3p} \
+            {params.adaptor1} {params.adaptor2} {params.adaptor1_5p} {params.adaptor2_5p} \
+            --trim-n -m {params.miniL} -o >(gzip -c > {output.fastq1}) -p >(gzip -c > {output.fastq2}) \
+            {input.fastq1} {input.fastq2} > {log} 2>&1
+        '''
+
+rule clean_fastq_pe:
+    input:
+        '{output_dir}/cutadapt/{sample_id}_{mate_index}.fastq.gz'
+    output:
+        '{output_dir}/unmapped/{sample_id}/clean_{mate_index}.fastq.gz'
+    wildcard_constraints:
+        mate_index='[12]'
+    shell:
+        '''ln -r -f -s {input} {output}
+        '''
+
+rule summarize_cutadapt_pe:
+    input:
+        lambda wildcards: expand('{output_dir}/log/cutadapt/{sample_id}',
+            output_dir=wildcards.output_dir, sample_id=sample_ids)
+    output:
+        '{output_dir}/summary/cutadapt.txt'
+    run:
+        import pandas as pd
+        
+        def parse_number(s):
+            return int(''.join(s.split(',')))
+
+        columns = ['sample_id', 'total_read_pairs', 
+            'read1_with_adapters', 'read2_with_adapters', 
+            'read_pairs_too_short', 'read_pairs_kept',
+            'total_bp', 'total_bp_read1', 'total_bp_read2',
+            'bp_quality_trimmed', 'bp_quality_trimmed_read1', 'bp_quality_trimmed_read2',
+            'bp_kept', 'bp_kept_read1', 'bp_kept_read2'
+        ]
+        summary = []
+        for filename in input:
+            sample_id = os.path.basename(filename)
+            record = {'sample_id': sample_id}
+            section = ''
+            with open(filename, 'r') as fin:
+                for line in fin:
+                    line = line.strip()
+                    if line.startswith('Total read pairs processed:'):
+                        record['total_read_pairs'] = parse_number(line.split()[-1])
+                    elif line.startswith('Read 1 with adapter:'):
+                        record['read1_with_adapters'] = parse_number(line.split()[-2])
+                    elif line.startswith('Read 2 with adapter:'):
+                        record['read2_with_adapters'] = parse_number(line.split()[-2])
+                    elif line.startswith('Pairs that were too short:'):
+                        record['read_pairs_too_short'] = parse_number(line.split()[-2])
+                    elif line.startswith('Pairs written (passing filters):'):
+                        record['read_pairs_kept'] = parse_number(line.split()[-2])
+                    elif line.startswith('Total basepairs processed:'):
+                        record['total_bp'] = parse_number(line.split()[-2])
+                        section = 'total_bp'
+                    elif line.startswith('Quality-trimmed:'):
+                        record['bp_quality_trimmed'] = parse_number(line.split()[-3])
+                        section = 'bp_quality_trimmed'
+                    elif line.startswith('Total written (filtered):'):
+                        record['bp_kept'] = parse_number(line.split()[-3])
+                        section = 'bp_kept'
+                    elif line.startswith('Read 1:'):
+                        if section == 'total_bp':
+                            record['total_bp_read1'] = parse_number(line.split()[-2])
+                        elif section == 'bp_quality_trimmed':
+                            record['bp_quality_trimmed_read1'] = parse_number(line.split()[-2])
+                        elif section == 'bp_kept':
+                            record['bp_kept_read1'] = parse_number(line.split()[-2])
+                    elif line.startswith('Read 2:'):
+                        if section == 'total_bp':
+                            record['total_bp_read2'] = parse_number(line.split()[-2])
+                        elif section == 'bp_quality_trimmed':
+                            record['bp_quality_trimmed_read2'] = parse_number(line.split()[-2])
+                        elif section == 'bp_kept':
+                            record['bp_kept_read2'] = parse_number(line.split()[-2])
+            summary.append(record)
+        summary = pd.DataFrame.from_records(summary)
+        summary = summary.reindex(columns=columns)
+        summary.to_csv(output[0], sep='\t', na_rep='NA', index=False, header=True)
+
+rule summarize_cutadapt_jupyter_se:
+    input:
+        summary='{output_dir}/summary/cutadapt.txt',
+        jupyter=package_dir + '/templates/summarize_cutadapt_pe.ipynb'
+    output:
+        jupyter='{output_dir}/summary/cutadapt.ipynb',
+        html='{output_dir}/summary/cutadapt.html'
+    run:
+        shell(nbconvert_command)
+    

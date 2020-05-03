@@ -1,0 +1,251 @@
+include: 'common.snakemake'
+
+# remove rRNA and spikein
+rna_types = list(filter(lambda x: x not in ('rRNA', 'spikein', 'univec'), rna_types))
+
+def get_all_inputs(wildcards):
+    available_inputs = dict(
+        count_matrix=expand('{output_dir}/count_matrix/transcript.txt', output_dir=output_dir),
+        count_matrix_mirna=expand('{output_dir}/count_matrix/transcript_mirna.txt', output_dir=output_dir),
+        count_matrix_mirna_and_long_fragments=expand('{output_dir}/count_matrix/mirna_and_long_fragments.txt', output_dir=output_dir)
+    )
+    if 'spikein' in config['rna_types']:
+        available_inputs['count_matrix_spikein'] = expand('{output_dir}/count_matrix/spikein.txt', output_dir=output_dir)
+
+    enabled_inputs = list(available_inputs.keys())
+    inputs = []
+    for key, l in available_inputs.items():
+        if key in enabled_inputs:
+            inputs += l
+    return inputs
+
+rule all:
+    input:
+        get_all_inputs
+
+rule featurecounts_gbam:
+    input:
+        bam='{output_dir}/gbam/{sample_id}/{rna_type}.bam',
+        gtf=genome_dir + '/gtf_by_biotype/{rna_type}.gtf'
+    output:
+        counts='{output_dir}/counts_by_biotype/featurecounts/{sample_id}/{rna_type}',
+        summary='{output_dir}/counts_by_biotype/featurecounts/{sample_id}/{rna_type}.summary'
+    params:
+        strandness={'forward': 1, 'reverse': 2}.get(config['strandness'], 0),
+        paired_end={True: '-p', False: ''}[config['paired_end']],
+        min_mapping_quality=config['min_mapping_quality']
+    log:
+        '{output_dir}/log/featurecounts_gbam/{sample_id}/{rna_type}'
+    shell:
+        '''featureCounts -t exon -g gene_id -s {params.strandness} -Q {params.min_mapping_quality} \
+            {params.paired_end} -a {input.gtf} -o {output.counts} {input.bam}
+        '''
+
+rule merge_featurecounts_by_biotype:
+    input:
+        lambda wildcards: expand('{output_dir}/counts_by_biotype/featurecounts/{sample_id}/{rna_type}',
+            output_dir=wildcards.output_dir, sample_id=wildcards.sample_id, rna_type=rna_types)
+    output:
+        '{output_dir}/counts/featurecounts/{sample_id}'
+    shell:
+        '''cat {input} | awk 'BEGIN{{OFS="\t";FS="\t"}}!($0 ~ /^#/)&& !($0 ~/^Geneid/) {{print $1,$NF}}' > {output}
+        '''
+
+rule count_matrix_mirna:
+    '''Count matrix of miRNA only
+    '''
+    input:
+        '{output_dir}/count_matrix/transcript.txt'
+    output:
+        '{output_dir}/count_matrix/transcript_mirna.txt'
+    shell:
+        '''awk 'NR==1{{print}}NR>1{{split($0,a,"|");if(a[2] == "miRNA") print}}' {input} > {output}
+        '''
+
+rule combine_mirna_and_domains_rna:
+    '''Count matrix of miRNA and domains
+    Remove genomic regions
+    '''
+    input:
+        mirna='{output_dir}/count_matrix/transcript_mirna.txt',
+        long_fragments='{output_dir}/count_matrix/long_fragments.txt'
+    output:
+        '{output_dir}/count_matrix/mirna_and_long_fragments.txt'
+    shell:
+        '''{{
+            cat {input.mirna}
+            awk '(NR>1)&&(!($0 ~ /genomic/))' {input.long_fragments}
+        }} > {output}
+        '''
+
+rule count_matrix_small:
+    '''Count matrix of miRNA and piRNA
+    '''
+    input:
+        '{output_dir}/count_matrix/transcript.txt'
+    output:
+        '{output_dir}/count_matrix/transcript_small.txt'
+    shell:
+        '''awk 'NR==1{{print}}NR>1{{split($0,a,"|");if((a[2] == "miRNA") || (a[2] == "piRNA")) print}}' {input} > {output}
+        '''
+
+
+def get_count_matrix_full_length_inputs(wildcards):
+    rna_types = [rna_type for rna_type in rna_types_with_gtf]
+    if wildcards.count_method == 'transcript':
+        rna_types = [rna_type for rna_type in rna_types_with_gtf]
+        return {
+            'counts': expand('{output_dir}/counts/transcript/{sample_id}',
+                output_dir=wildcards.output_dir, sample_id=sample_ids),
+            'transcript_table': expand(genome_dir + '/transcript_table/{rna_type}.txt', rna_type=rna_types),
+            'transcript_sizes': expand(genome_dir + '/chrom_sizes/{rna_type}', rna_type=rna_types)
+        }
+    elif wildcards.count_method == 'spikein':
+        return {
+            'counts': expand('{output_dir}/counts/spikein/{sample_id}',
+                output_dir=wildcards.output_dir, sample_id=sample_ids),
+            'transcript_table': [config['spikein_dir'] + '/transcript_table/spikein.txt'],
+            'transcript_sizes': [config['spikein_dir'] + '/chrom_sizes/spikein'],
+        }
+    else:
+        raise ValueError('unknown count method: {}'.format(wildcards.count_method))
+
+rule count_matrix_full_length:
+    '''Count matrix of full length transcripts (all types of RNAs)
+    '''
+    input:
+        unpack(get_count_matrix_full_length_inputs)
+    output:
+        '{output_dir}/count_matrix/{count_method}.txt'
+    wildcard_constraints:
+        count_method='(transcript)|(spikein).*'
+    run:
+        import pandas as pd
+        import os
+        from collections import OrderedDict
+        import numpy as np
+
+        counts = OrderedDict()
+        gene_ids = np.zeros(0, dtype='str')
+        for filename in input.counts:
+            sample_id = os.path.basename(filename)
+            counts[sample_id] = pd.read_table(filename, sep='\t', header=None, index_col=0,
+                names=['feature', 'count'], dtype={'feature': 'str', 'count': 'int'}).iloc[:, 0]
+            counts[sample_id].index = counts[sample_id].index.astype('str')
+            counts[sample_id] = counts[sample_id][counts[sample_id] > 0]
+            gene_ids = np.union1d(gene_ids, counts[sample_id].index.values)
+        # annotate features
+        transcript_table = []
+        for filename in input.transcript_table:
+            transcript_table.append(pd.read_table(filename, sep='\t', dtype='str'))
+        transcript_table = pd.concat(transcript_table, axis=0)
+        transcript_table = transcript_table.drop_duplicates('transcript_id', keep='first')
+        transcript_table.set_index('transcript_id', inplace=True, drop=False)
+
+        transcript_sizes = []
+        for filename in input.transcript_sizes:
+            transcript_sizes.append(pd.read_table(filename, 
+                sep='\t', header=None, names=['transcript_id', 'length'], dtype='str'))   
+        transcript_sizes = pd.concat(transcript_sizes, axis=0)  
+        transcript_sizes = transcript_sizes.drop_duplicates('transcript_id', keep='first')
+        transcript_sizes.set_index('transcript_id', inplace=True)
+        transcript_sizes = transcript_sizes.loc[:, 'length']
+
+        print(gene_ids)
+        print(transcript_table.head())
+        reindex_gene_ids = transcript_table.loc[:, 'transcript_id'].reindex(gene_ids)
+        isna_index = reindex_gene_ids.isna()
+        print(reindex_gene_ids[isna_index].head(25))
+        gene_ids = reindex_gene_ids[~isna_index].index.values
+        feature_names = transcript_table.loc[gene_ids, 'gene_id'].values \
+            + '|' + transcript_table.loc[gene_ids, 'gene_type'].values \
+            + '|' + transcript_table.loc[gene_ids, 'gene_name'].values \
+            + '|' + transcript_table.loc[gene_ids, 'gene_id'].values \
+            + '|' + transcript_table.loc[gene_ids, 'transcript_id'].values \
+            + '|0|' + transcript_sizes[transcript_table.loc[gene_ids, 'transcript_id'].values].values.astype('str')
+
+        #print('len(feature_names) = {}'.format(len(feature_names)))
+        #print('len(gene_ids) = {}'.format(len(gene_ids)))
+        # create matrix
+        matrix = pd.DataFrame(np.zeros((len(gene_ids), len(counts)), dtype=np.int32), 
+            index=gene_ids, columns=list(counts.keys()))
+        for sample_id in sample_ids:
+            counts[sample_id] = counts[sample_id].reindex(gene_ids).dropna()
+            matrix.loc[counts[sample_id].index.values, sample_id] = counts[sample_id].values
+        matrix.index = feature_names
+        matrix.index.name = 'feature'
+        
+        matrix.to_csv(output[0], sep='\t', header=True, index=True, na_rep='NA')
+
+rule htseq_gbam:
+    input:
+        bam='{output_dir}/gbam/{sample_id}/{rna_type}.bam',
+        gtf=genome_dir + '/gtf_by_biotype/{rna_type}.gtf'
+    output:
+        counts='{output_dir}/counts_by_biotype/htseq/{sample_id}/{rna_type}'
+    params:
+        strandness={'forward': 'yes', 'reverse': 'reverse'}.get(config['strandness'], 'no'),
+        min_mapping_quality=config['min_mapping_quality']
+    shell:
+        '''htseq-count -t exon -i gene_id -f bam -m intersection-strict -a {params.min_mapping_quality} \
+            -s {params.strandness} {input.bam} {input.gtf} > {output.counts}
+        '''
+
+rule merge_htseq_by_biotype:
+    input:
+        lambda wildcards: expand('{output_dir}/counts_by_biotype/htseq/{sample_id}/{rna_type}',
+            output_dir=wildcards.output_dir, sample_id=wildcards.sample_id, rna_type=rna_types)
+    output:
+        '{output_dir}/counts/htseq/{sample_id}'
+    shell:
+        '''
+        cat {input} | grep -v '^__' > {output}
+        '''
+
+rule count_transcript:
+    input:
+        bam='{output_dir}/tbam/{sample_id}/{rna_type}.bam'
+    output:
+        '{output_dir}/counts_by_biotype/transcript/{sample_id}/{rna_type}'
+    params:
+        min_mapping_quality=config['min_mapping_quality'],
+        strandness=config['strandness']
+    #wildcard_constraints:
+    #    rna_type='(?!miRNA).*'
+    shell:
+        '''{bin_dir}/count_reads.py count_transcript -i {input.bam} -s {params.strandness} -q {params.min_mapping_quality} -o {output}
+        '''
+
+"""
+rule count_mature_mirna:
+    input:
+        bam='{output_dir}/tbam/{sample_id}/miRNA.bam',
+        annotation=genome_dir + '/gff3/miRBase.gff3'
+    output:
+        '{output_dir}/counts_by_biotype/transcript/{sample_id}/miRNA'
+    params:
+        min_mapping_quality=config['min_mapping_quality']
+    shell:
+        '''{bin_dir}/count_reads.py count_mature_mirna -i {input.bam} -a {input.annotation} -q {params.min_mapping_quality} -o {output}
+        '''
+"""
+
+rule merge_transcript_by_biotype:
+    input:
+        lambda wildcards: expand('{output_dir}/counts_by_biotype/transcript/{sample_id}/{rna_type}',
+            output_dir=wildcards.output_dir, sample_id=wildcards.sample_id, rna_type=rna_types)
+    output:
+        '{output_dir}/counts/transcript/{sample_id}'
+    shell:
+        '''cat {input} > {output}
+        '''
+
+rule merge_spikein:
+    input:
+        lambda wildcards: expand('{output_dir}/counts_by_biotype/transcript/{sample_id}/spikein',
+            output_dir=wildcards.output_dir, sample_id=wildcards.sample_id)
+    output:
+        '{output_dir}/counts/spikein/{sample_id}'
+    shell:
+        '''cat {input} > {output}
+        '''

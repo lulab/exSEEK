@@ -1,0 +1,256 @@
+include: 'common.snakemake'
+
+import re
+
+config['normalization_methods'] = ["TMM", "RLE", "CPM", "CPM_top"]
+# Batch effect removal methods to try (set "null" to skip batch effect removal)
+config['batch_removal_methods'] = ["null", "RUV", "RUVn"]
+if has_batch_info:
+    config['batch_removal_methods'] += ['ComBat', 'limma']
+config['imputation_methods'] = ['null']
+
+def get_all_inputs(wildcards):
+    available_inputs = []
+    available_inputs += expand('{output_dir}/matrix_processing/filter.{count_method}.txt',
+            output_dir=output_dir, count_method=config['count_method'])
+    for batch_removal_method in config['batch_removal_methods']:
+        template = '{output_dir}/matrix_processing/filter.{imputation_method}.Norm_{normalization_method}.Batch_{batch_removal_method}_{batch_index}.{count_method}.txt'
+        available_inputs += expand(template,
+            output_dir=output_dir,
+            imputation_method=config['imputation_methods'],
+            normalization_method=config['normalization_methods'],
+            batch_removal_method=batch_removal_method,
+            batch_index=config['batch_index'],
+            count_method=config['count_method'])
+        template = '{output_dir}/matrix_processing/filter.{count_method}.txt'
+        available_inputs += expand(template,
+            output_dir=output_dir,
+            count_method=config['count_method'])
+    available_inputs += expand('{output_dir}/select_preprocess_method/{score}/{count_method}/selected_methods.txt',
+        output_dir=output_dir, score=clustering_scores, count_method=config['count_method'])
+    
+    return available_inputs
+
+
+rule all:
+    input:
+        get_all_inputs
+
+#include: 'rules/filter.snakemake'
+
+rule filter_step:
+    input:
+        matrix='{output_dir}/count_matrix/{count_method}.txt',
+        sample_classes=data_dir + '/sample_classes.txt'
+    output:
+        matrix='{output_dir}/matrix_processing/filter.{count_method}.txt'
+    threads:
+        config['threads']
+    run:
+        command= '''Rscript {bin_dir}/matrix-process.R -s filter \
+            -c {input.sample_classes} \
+            -i {input.matrix} \
+            -o {output.matrix} \
+            -p {threads}'''
+        if config['filtercount'] > 0:
+            command = command + ' --filtercount {}'.format(config['filtercount'])
+        if config['filterexpv'] > 0:
+            if config['small_rna']:
+                command = command + ' --filtercpm {}'.format(config['filterexpv'])
+            else:
+                command = command + ' --filterrpkm {}'.format(config['filterexpv'])
+        command = command + ' --filtersample {}'.format(config['filtersample'])
+        shell(command)
+
+rule imputation_step:
+    input:
+        matrix='{output_dir}/matrix_processing/filter.{count_method}.txt',
+        sample_classes=data_dir + '/sample_classes.txt'
+    output:
+        matrix='{output_dir}/matrix_processing/filter.{imputation_method}.{count_method}.txt',
+    threads:
+        config['threads']
+    params:
+        imputecluster=5,
+        temp_dir='{output_dir}/matrix_processing/filter.{imputation_method}.{count_method}.tmp'
+    wildcard_constraints:
+        imputation_method=imputation_method_regex,
+        count_method=count_method_regex
+    shell:
+        '''Rscript {bin_dir}/matrix-process.R -s imputation \
+        -i {input.matrix} \
+        -c {input.sample_classes} \
+        -o {output.matrix} \
+        --temp-dir {params.temp_dir} \
+        --method {wildcards.imputation_method} \
+        --imputecluster {params.imputecluster} \
+        -p {threads} \
+        '''
+
+rule normalization_step:
+    input:
+        matrix='{output_dir}/matrix_processing/filter.{imputation_method}.{count_method}.txt',
+        sample_classes=data_dir + '/sample_classes.txt'
+    output:
+        matrix='{output_dir}/matrix_processing/filter.{imputation_method}.Norm_{normalization_method}.{count_method}.txt'
+    threads:
+        config['threads']
+    wildcard_constraints:
+        normalization_method=normalization_method_regex,
+        count_method=count_method_regex
+    params:
+        cvthreshold=0.5,
+        remove_gene_types='miRNA,piRNA',
+        normtopk=20
+    shell:
+        '''Rscript {bin_dir}/matrix-process.R -s normalization \
+        -i {input.matrix} \
+        -o {output.matrix} \
+        -c {input.sample_classes} \
+        -p {threads} \
+        --method {wildcards.normalization_method} \
+        --normtopk {params.normtopk} \
+        --remove-gene-types {params.remove_gene_types} \
+        --cvthreshold {params.cvthreshold}
+        '''
+
+rule sub_matrix_filter:
+    input:
+        '{output_dir}/matrix_processing/filter.mirna_and_domains_rna.txt'
+    output:
+        '{output_dir}/matrix_processing/filter.mirna_only.txt'
+    shell:
+        r'''awk 'BEGIN{{OFS="\t";FS="\t"}}(NR==1)||($1 ~/miRNA/){{print}}' {input} > {output}
+        '''
+
+rule sub_matrix:
+    input:
+        '{output_dir}/matrix_processing/filter.{imputation_method}.Norm_{normalization_method}.Batch_{batch_removal_method}_{batch_index}.mirna_and_domains_rna.txt'
+    output:
+        '{output_dir}/matrix_processing/filter.{imputation_method}.Norm_{normalization_method}.Batch_{batch_removal_method}_{batch_index}.mirna_only.txt'
+    shell:
+        r'''awk 'BEGIN{{OFS="\t";FS="\t"}}(NR==1)||($1 ~/miRNA/){{print}}' {input} > {output}
+        '''
+
+rule batch_removal_step_with_batchinfo:
+    input:
+        matrix='{output_dir}/matrix_processing/filter.{imputation_method}.Norm_{normalization_method}.{count_method}.txt',
+        sample_classes=data_dir + '/sample_classes.txt',
+        batch_info=data_dir + '/batch_info.txt'
+    output:
+        matrix='{output_dir}/matrix_processing/filter.{imputation_method}.Norm_{normalization_method}.Batch_{batch_removal_method}_{batch_index}.{count_method}.txt'
+    threads:
+        config['threads']
+    wildcard_constraints:
+        batch_removal_method=batch_removal_method_with_batchinfo_regex
+    shell:
+        '''Rscript {bin_dir}/matrix-process.R -s batch_removal \
+        -i {input.matrix} \
+        -c {input.sample_classes} \
+        -b {input.batch_info} \
+        -o {output.matrix} \
+        -p {threads} \
+        --method {wildcards.batch_removal_method} \
+        --batch-index {wildcards.batch_index}
+        '''
+
+rule batch_removal_step_without_batchinfo:
+    input:
+        matrix='{output_dir}/matrix_processing/filter.{imputation_method}.Norm_{normalization_method}.{count_method}.txt',
+        sample_classes=data_dir + '/sample_classes.txt'
+    output:
+        matrix='{output_dir}/matrix_processing/filter.{imputation_method}.Norm_{normalization_method}.Batch_{batch_removal_method}_{batch_index}.{count_method}.txt'
+    threads:
+        config['threads']
+    wildcard_constraints:
+        batch_removal_method=batch_removal_method_without_batchinfo_regex
+    shell:
+        '''Rscript {bin_dir}/matrix-process.R -s batch_removal \
+        -i {input.matrix} \
+        -c {input.sample_classes} \
+        -o {output.matrix} \
+        -p {threads} \
+        --method {wildcards.batch_removal_method}
+        '''
+
+rule uca_score:
+    input:
+        matrix='{output_dir}/matrix_processing/{preprocess_method}.{count_method}.txt',
+        sample_classes=data_dir + '/sample_classes.txt'
+    output:
+        '{output_dir}/clustering_scores/uca_score/{count_method}/{preprocess_method}'
+    shell:
+        '''{bin_dir}/feature_selection.py calculate_clustering_score \
+        --matrix {input.matrix} --method uca_score \
+        --sample-classes {input.sample_classes} --transpose --use-log > {output}
+        '''
+
+rule knn_score:
+    input:
+        matrix='{output_dir}/matrix_processing/{preprocess_method}.{count_method}.txt',
+        batch=data_dir + '/batch_info.txt'
+    output:
+        '{output_dir}/clustering_scores/knn_score/{count_method}/{preprocess_method}'
+    params:
+        batch_index=config['batch_index']
+    shell:
+        '''{bin_dir}/feature_selection.py calculate_clustering_score \
+        --matrix {input.matrix} --method knn_score \
+        --batch {input.batch} --batch-index {params.batch_index} --transpose --use-log > {output}
+        '''
+
+rule kbet_score:
+    input:
+        matrix='{output_dir}/matrix_processing/{preprocess_method}.{count_method}.txt',
+        batch=data_dir + '/batch_info.txt'
+    output:
+        '{output_dir}/clustering_scores/kbet_score/{count_method}/{preprocess_method}'
+    params:
+        batch_index=config['batch_index']
+    shell:
+        '''{bin_dir}/calculate_kbet_score.R --matrix {input.matrix} \
+        --batch {input.batch} --batch-index {params.batch_index} -o {output}
+        '''
+
+rule combined_score:
+    input:
+        knn_score='{output_dir}/clustering_scores/knn_score/{count_method}/{preprocess_method}',
+        clustering_score='{output_dir}/clustering_scores/uca_score/{count_method}/{preprocess_method}'
+    output:
+        '{output_dir}/clustering_scores/combined_score/{count_method}/{preprocess_method}'
+    run:
+        with open(input.knn_score, 'r') as f:
+            knn_score = float(f.read().strip())
+        with open(input.clustering_score, 'r') as f:
+            clustering_score = float(f.read().strip())
+        combined_score = 0.5*((1.0 - knn_score) + clustering_score)
+        with open(output[0], 'w') as f:
+            f.write(str(combined_score))
+
+rule select_preprocess_method:
+    input:
+        lambda wildcards: expand('{output_dir}/clustering_scores/{score}/{count_method}/{preprocess_method}',
+            output_dir=wildcards.output_dir, score=wildcards.score, 
+            preprocess_method=get_preprocess_methods(), count_method=wildcards.count_method)
+    output:
+        summary='{output_dir}/select_preprocess_method/{score}/{count_method}/summary.txt',
+        selected_methods='{output_dir}/select_preprocess_method/{score}/{count_method}/selected_methods.txt'
+    params:
+        n_selected_preprocess_method=3
+    run:
+        import pandas as pd
+
+        scores = {}
+        for score_file in input:
+            preprocess_method = score_file.split('/')[-1]
+            with open(score_file, 'r') as f:
+                score = float(f.read())
+                scores[preprocess_method] = score
+        scores = pd.Series(scores)
+        scores.index.name = 'preprocess_method'
+        scores.name = wildcards.score
+        scores = scores.sort_values(ascending=False)
+        scores.to_csv(output.summary, sep='\t', na_rep='NA', index=True, header=True)
+
+        selected_methods = scores.index.to_series()[:params.n_selected_preprocess_method]
+        selected_methods.to_csv(output.selected_methods, index=False, header=False)

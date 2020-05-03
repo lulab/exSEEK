@@ -1,0 +1,141 @@
+include: 'common.snakemake'
+
+import os
+import yaml
+with open(data_dir + '/compare_groups.yaml', 'r') as f:
+    compare_groups = yaml.load(f)
+with open(get_config_file('evaluate_features.yaml'), 'r') as f:
+    cv_config = yaml.load(f)
+
+classifiers = list(cv_config['classifiers'].keys())
+
+inputs = {'evaluate_features': []}
+for compare_group, feature_set in get_known_biomarkers():
+    inputs['evaluate_features'] += expand('{output_dir}/evaluate_features/{compare_group}/{feature_set}/filter.{imputation_method}.Norm_{normalization_method}.Batch_{batch_removal_method}_{batch_index}.{count_method}/{classifier}',
+        output_dir=output_dir, 
+        imputation_method=config['imputation_method'],
+        normalization_method=config['normalization_method'],
+        batch_removal_method=config['batch_removal_method'],
+        batch_index=config['batch_index'],
+        count_method=config['count_method'],
+        classifier=classifiers, 
+        compare_group=compare_group,
+        feature_set=feature_set)
+inputs['summarize_evaluate_features'] = expand('{output_dir}/summary/evaluate_features/{summary_name}.txt',
+    output_dir=output_dir, summary_name=['metrics.train', 'metrics.test'])
+
+
+rule all:
+    input:
+        unpack(lambda wildcards: inputs)
+
+
+rule preprocess_features:
+    input:
+        '{output_dir}/evaluate_features/matrix/{compare_group}/{feature_set}.txt'
+    output:
+        '{output_dir}/evaluate_features/preprocess_features/{compare_group}/{feature_set}.txt'
+    params:
+        scaler=config['scale_method']
+    shell:
+        '''{bin_dir}/feature_selection.py preprocess_features -i {input} --scaler {params.scaler} \
+            --use-log --transpose -o {output}
+        '''
+
+rule evaluate_features:
+    input:
+        matrix='{output_dir}/matrix_processing/{preprocess_method}.{count_method}.txt',
+        sample_classes=data_dir+ '/sample_classes.txt',
+        features=data_dir + '/known_biomarkers/{compare_group}/{featureset}.txt'
+    output:
+        dir=directory('{output_dir}/evaluate_features/{compare_group}/{featureset}/{preprocess_method}.{count_method}/{classifier}')
+    run:
+        from copy import deepcopy
+
+        output_config = {}
+        # copy global config parameters
+        for key in ('transpose', 'features', 'cv_params', 'sample_weight', 'preprocess_steps'):
+            if key in cv_config:
+                output_config[key] = cv_config[key]
+        # copy classifier config
+        classifier_config = deepcopy(cv_config['classifiers'][wildcards.classifier])
+        classifier_config['params'] = classifier_config.get('params', {})
+        output_config['classifier'] = classifier_config['classifier']
+        output_config['classifier_params'] = classifier_config.get('classifier_params', {})
+        # copy classifier grid search params
+        if classifier_config.get('grid_search', False):
+            grid_search_params = deepcopy(cv_config['classifier_grid_search_params'])
+            grid_search_params.update(classifier_config['grid_search_params'])
+            # add classifier grid search config
+            output_config['grid_search'] = True
+            output_config['grid_search_params'] = grid_search_params
+        # write output config
+        if not os.path.isdir(output.dir):
+            os.makedirs(output.dir)
+        output_config_file = os.path.join(output.dir, 'config.yaml')
+        with open(output_config_file, 'w') as f:
+            yaml.dump(output_config, f, default_flow_style=False)
+        command = [
+            os.path.join(config['bin_dir'], 'machine_learning.py'), 'run_pipeline',
+            '--matrix', input.matrix,
+            '--sample-classes', input.sample_classes,
+            '--output-dir', output.dir,
+            '--features', input.features,
+            '--positive-class', '"' + compare_groups[wildcards.compare_group][1] + '"',
+            '--negative-class', '"' + compare_groups[wildcards.compare_group][0] + '"',
+            '--config', output_config_file
+        ]
+        shell(' '.join(command))
+
+"""
+rule evaluate_features:
+    input:
+        matrix='{output_dir}/matrix_processing/filter.{imputation_method}.Norm_{normalization_method}.Batch_{batch_removal_method}_{batch_index}.{count_method}.txt',
+        sample_classes=data_dir+ '/sample_classes.txt',
+        features=data_dir + '/known_biomarkers/{compare_group}/{feature_set}.txt'
+    output:
+        directory('{output_dir}/evaluate_features/{compare_group}/{feature_set}/filter.{imputation_method}.Norm_{normalization_method}.Batch_{batch_removal_method}_{batch_index}.{count_method}/{classifier}')
+    params:
+        count_method=count_method_regex
+    run:
+        import json
+        import os
+        import subprocess
+        from shlex import quote
+        from copy import deepcopy
+
+        command = [
+            os.path.join(config['bin_dir'], 'machine_learning.py'), 'cross_validation',
+            '--matrix', input.matrix,
+            '--sample-classes', input.sample_classes,
+            '--output-dir', output[0],
+            '--transpose',
+            '--positive-class', compare_groups[wildcards.compare_group][1],
+            '--negative-class', compare_groups[wildcards.compare_group][0],
+            '--cv-params', json.dumps(config['cv_params']),
+            '--selector', 'null',
+            '--features', input.features
+        ]
+        if config['log_transform']:
+            command += ['--log-transform', '--log-transform-params', json.dumps(config['log_transform_params'])]
+        if config['scaler']:
+            command += ['--scaler', config['scaler'], '--scaler-params', json.dumps(config['scaler_params'].get(config['scaler'], {}))]
+        #if config['grid_search']:
+        #    command += ['--grid-search', '--grid-search-params', json.dumps(config['grid_search_params'])]
+        if config['sample_weight']:
+            command += ['--sample-weight', config['sample_weight']]
+        command += ['--classifier', wildcards.classifier, 
+            '--classifier-params', json.dumps(config['classifier_params'].get(wildcards.classifier, {}))]
+        command = list(map(str, command))
+        print(' '.join(map(quote, command)))
+        subprocess.check_call(command)
+"""
+
+rule summarize_evaluate_features:
+    input:
+        input_dir=inputs['evaluate_features']
+    output:
+        metrics_test='{output_dir}/summary/{cross_validation}/metrics.test.txt',
+        metrics_train='{output_dir}/summary/{cross_validation}/metrics.train.txt'
+    script:
+        'scripts/summarize_cross_validation.py'

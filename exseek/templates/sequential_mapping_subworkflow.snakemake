@@ -1,0 +1,73 @@
+include: '{{ common_snakemake }}'
+
+rule all:
+    input:
+        unmapped=expand('{output_dir}/unmapped/{sample_id}/other.fa.gz',
+            output_dir=output_dir, sample_id=sample_ids),
+        bam=expand('{output_dir}/gbam/{sample_id}/other.bam',
+            output_dir=output_dir, sample_id=sample_ids),
+        {% for rna_type in rna_types %}
+        {% if loop.last %}
+        tbam_{{ rna_type }}=expand('{output_dir}/tbam/{sample_id}/{{ rna_type }}.bam',
+            output_dir=output_dir, sample_id=sample_ids)
+        {% else %}
+        tbam_{{ rna_type }}=expand('{output_dir}/tbam/{sample_id}/{{ rna_type }}.bam',
+            output_dir=output_dir, sample_id=sample_ids),
+        {% endif %}
+        {% endfor %}
+
+{% for rna_type in rna_types %}
+rule map_{{ rna_type }}:
+    input:
+        {% if loop.index0 == 0 %}
+        reads='{output_dir}/unmapped/{sample_id}/clean.fa.gz',
+        {% else %}
+        reads='{output_dir}/unmapped/{sample_id}/{{ rna_types[loop.index0 - 1] }}.fa.gz',
+        {% endif %}
+        {% if rna_type in ['univec', 'rRNA', 'miRNA', 'circRNA'] %}
+        index=config['genome_dir'] + '/index/{{ aligner }}/{{ rna_type }}.1.bt2'
+        {% elif rna_type == 'spikein' %}
+        index=config['spikein_dir'] + '/index/{{ aligner }}/{{ rna_type }}.1.bt2'
+        {% else %}
+        index=config['genome_dir'] + '/index/{{ aligner }}/{{ rna_type }}.1.bt2'
+        {% endif %}
+    output:
+        unmapped='{output_dir}/unmapped/{sample_id}/{{ rna_type }}.fa.gz',
+        bam='{output_dir}/tbam/{sample_id}/{{ rna_type }}.bam'
+    params:
+        {% if rna_type in ['univec', 'rRNA', 'miRNA', 'circRNA'] %}
+        index=config['genome_dir'] + '/index/{{ aligner }}/{{ rna_type }}'
+        {% elif rna_type == 'spikein' %}
+        index=config['spikein_dir'] + '/index/{{ aligner }}/{{ rna_type }}'
+        {% else %}
+        index=config['genome_dir'] + '/index/{{ aligner }}/{{ rna_type }}'
+        {% endif %}
+    threads: 
+        config['threads_mapping']
+    shell:
+        '''pigz -d -c {input.reads} \
+        | bowtie2 -f -p {threads} --norc --sensitive --no-unal \
+            --un-gz {output.unmapped} -x {params.index} - -S - \
+        | samtools view -b -o {output.bam}
+        '''
+
+{% endfor %}
+rule map_other:
+    input:
+        {% if (rna_types|length) == 0 %}
+        reads='{output_dir}/unmapped/{sample_id}/clean.fa.gz',
+        {% else %}
+        reads='{output_dir}/unmapped/{sample_id}/{{ rna_types[-1] }}.fa.gz',
+        {% endif %}
+        index=config['genome_dir'] + '/genome_index/{{ aligner }}/genome.1.bt2'
+    output:
+        unmapped='{output_dir}/unmapped/{sample_id}/other.fa.gz',
+        bam='{output_dir}/gbam/{sample_id}/other.bam'
+    params:
+        index=config['genome_dir'] + '/genome_index/{{ aligner }}/genome'
+    shell:
+        '''pigz -d -c {input.reads} \
+        | bowtie2 -f -p {threads} --sensitive --no-unal \
+            --un-gz {output.unmapped} -x {params.index} - -S - \
+        | samtools view -b -o {output.bam}
+        '''

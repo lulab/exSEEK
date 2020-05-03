@@ -1,0 +1,44 @@
+include: 'common.snakemake'
+
+def get_all_inputs(wildcards):
+    inputs = []
+    if config['paired_end']:
+        inputs += expand('{output_dir}/unmapped/{sample_id}/clean_{pair_index}.fa.gz',
+            output_dir=output_dir, sample_id=sample_ids, pair_index=[1, 2])
+    else:
+        inputs += expand('{output_dir}/unmapped/{sample_id}/clean.fa.gz',
+            output_dir=output_dir, sample_id=sample_ids)
+    return inputs
+
+rule all:
+    input:
+        get_all_inputs
+
+
+rule fastq_to_fasta_pe:
+    input:
+        auto_gzip_input('{output_dir}/cutadapt/{sample_id}_{pair_index}.fastq')
+    output:
+        '{output_dir}/unmapped/{sample_id}/clean_{pair_index}.fa.gz'
+    threads:
+        config['threads_compress']
+    wildcard_constraints:
+        pair_index='[12]'
+    shell:
+        '''{bin_dir}/auto_uncompress {input} \
+            | fastq_to_fasta -r -n \
+            | pigz -p {threads} -c > {output}
+        '''
+
+rule fastq_to_fasta_se:
+    input:
+        auto_gzip_input('{output_dir}/cutadapt/{sample_id}.fastq')
+    output:
+        '{output_dir}/unmapped/{sample_id}/clean.fa.gz'
+    threads:
+        config['threads_compress']
+    shell:
+        '''{bin_dir}/auto_uncompress {input} \
+            | fastq_to_fasta -r -n \
+            | pigz -p {threads} -c > {output}
+        '''

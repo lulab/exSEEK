@@ -1,0 +1,11 @@
+include:
+    'common.snakemake'
+include:
+    'rules/filter.snakemake'
+
+rule all:
+    input:
+        filter_step=expand('{output_dir}/matrix_processing/filter.{count_method}.txt',
+            output_dir=output_dir, count_method=config['count_method'])
+
+

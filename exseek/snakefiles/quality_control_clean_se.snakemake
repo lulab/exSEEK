@@ -1,0 +1,50 @@
+shell.prefix('set -x;')
+include: 'common.snakemake'
+
+import os
+
+def get_all_inputs(wildcards):
+    available_inputs = dict(
+        fastqc=expand('{output_dir}/fastqc_clean/{sample_id}_fastqc.zip',
+            output_dir=output_dir, sample_id=sample_ids),
+        summarize_fastqc_clean_html=expand('{output_dir}/summary/fastqc_clean.html',
+            output_dir=output_dir)
+    )
+    enabled_inputs = list(available_inputs.keys())
+    inputs = []
+    for key, l in available_inputs.items():
+        if key in enabled_inputs:
+            inputs += l
+    return inputs
+
+rule all:
+    input:
+        get_all_inputs
+
+rule fastqc_clean:
+    input:
+        '{output_dir}/cutadapt/{sample_id}.fastq.gz'
+    output:
+        html='{output_dir}/fastqc_clean/{sample_id}_fastqc.html',
+        zip='{output_dir}/fastqc_clean/{sample_id}_fastqc.zip'
+    params:
+        output_prefix='{output_dir}/fastqc_clean/',
+        temp_dir=config['temp_dir']
+    log:
+        '{output_dir}/log/fastqc_clean/{sample_id}'
+    shell:
+        '''fastqc -q -o {params.output_prefix} -d {params.temp_dir} {input} > {log} 2>&1
+        '''
+
+rule multiqc_clean:
+    input:
+        fastqc=expand('{output_dir}/fastqc_clean/{sample_id}_fastqc.zip',
+            output_dir=output_dir, sample_id=sample_ids)
+    output:
+        html='{output_dir}/summary/fastqc_clean.html',
+        data=directory('{output_dir}/summary/fastqc_clean_data')
+    params:
+        fastqc_dir='{output_dir}/fastqc_clean'
+    shell:
+        '''multiqc -m fastqc -n {output.html} {params.fastqc_dir}
+        '''

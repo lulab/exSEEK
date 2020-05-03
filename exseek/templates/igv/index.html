@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<style type="text/css">
+body {
+    font-size: 12px;
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+#panel {
+    border: 1px solid lightgray;
+    padding: 10px;
+    margin: auto;
+    width: 400px;
+    height: 400px;
+}
+
+#center-panel {
+    width: 600px;
+    height: 90%;
+    margin: 5px;
+    border: 1px solid lightgray;
+    border-radius: 10px;
+    margin: auto;
+    margin-top: 20px;
+    margin-bottom: 20px;
+}
+
+h1 {
+    text-align: center;
+}
+
+h2 {
+    text-align: center;
+}
+
+h3 {
+    text-align: center;
+}
+
+#dataset-table {
+    text-align: center
+}
+</style>
+
+</head>
+
+<body>
+
+<div id="center-panel">
+
+
+<table id="dataset-table">
+    <thead>
+        <tr>
+            <th>Dataset</th>
+            <th>Genome</th>
+            <th>Transcriptome</th>
+            <th>rRNA</th>
+            <th>circRNA</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for dataset in datasets %}
+        <tr>
+            <th scope="row">{{ dataset.name }}</th>
+            <td>{% if dataset.genome %}<a href="igv/html/{{ dataset.name }}/{{ dataset.genome }}">Link</a>{% else}NA{% endif %}</td>
+            <td>{% if dataset.transcriptome %}<a href="igv/html/{{ dataset.name }}/{{ dataset.transcriptome }}">Link</a>{% else}NA{% endif %}</td>
+            <td>{% if dataset.rRNA %}<a href="igv/html/{{ dataset.name }}/{{ dataset.rRNA }}">Link</a>{% else}NA{% endif %}</td>
+            <td>{% if dataset.circRNA %}<a href="igv/html/{{ dataset.name }}/{{ dataset.circRNA }}">Link</a>{% else}NA{% endif %}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+</div>
+</body>
+</html>

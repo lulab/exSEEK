@@ -1,0 +1,173 @@
+include: 'common.snakemake'
+
+map_steps = ['rRNA', 'genome', 'circRNA']
+if config['remove_duplicates_long']:
+    map_steps += ['genome_rmdup', 'circRNA_rmdup', 'rRNA_rmdup']
+
+def get_all_inputs(wildcards):
+    available_inputs = dict(
+        map_rRNA_paired=expand('{output_dir}/bam/{sample_id}/{map_step}.bam',
+            output_dir=output_dir, sample_id=sample_ids, map_step=map_steps),
+        summarize_read_length=expand('{output_dir}/stats/mapped_read_length_by_sample/{sample_id}',
+            output_dir=output_dir, sample_id=sample_ids),
+        count_clean_reads=expand('{output_dir}/stats/read_counts/{sample_id}/clean',
+            output_dir=output_dir, sample_id=sample_ids)
+    )
+    enabled_inputs = list(available_inputs.keys())
+    inputs = []
+    for key, l in available_inputs.items():
+        if key in enabled_inputs:
+            inputs += l
+    return inputs
+
+rule all:
+    input:
+        get_all_inputs
+
+map_command_se = '''STAR --genomeDir {params.index} \
+            --readFilesIn {input.reads1} {input.reads2} \
+            --runThreadN {threads} \
+            --outFileNamePrefix {params.output_prefix} \
+            --outSAMtype BAM Unsorted \
+            --outReadsUnmapped Fastx \
+            --readFilesCommand gzip -d -c \
+            --outSAMmultNmax 1 \
+            --seedPerWindowNmax {params.seedPerWindowNmax}
+        mv {params.output_prefix}Aligned.out.bam {output.bam}
+        gzip -c {params.output_prefix}Unmapped.out > {output.unmapped}
+        rm -f {params.output_prefix}Unmapped.out
+        '''
+    
+rule map_rRNA_se:
+    input:
+        reads='{output_dir}/unmapped/{sample_id}/clean.fa.gz',
+        index=genome_dir + '/index/star/rRNA/SA'
+    output:
+        bam='{output_dir}/bam/{sample_id}/rRNA.bam',
+        unmapped='{output_dir}/unmapped/{sample_id}/rRNA.fa.gz',
+        log='{output_dir}/mapping_star/{sample_id}/rRNA/Log.final.out'
+    params:
+        output_prefix='{output_dir}/mapping_star/{sample_id}/rRNA/',
+        index=genome_dir + '/index/star/rRNA',
+        seedPerWindowNmax=20
+    threads:
+        config['threads_mapping']
+    run:
+        shell(map_command_se)
+
+rule map_genome_se:
+    input:
+        reads='{output_dir}/unmapped/{sample_id}/rRNA.fa.gz',
+        index=genome_dir + '/long_index/star/SA'
+    output:
+        bam='{output_dir}/bam/{sample_id}/genome.bam',
+        unmapped='{output_dir}/unmapped/{sample_id}/genome.fa.gz',
+        log='{output_dir}/mapping_star/{sample_id}/genome/Log.final.out'
+    params:
+        output_prefix='{output_dir}/mapping_star/{sample_id}/genome/',
+        index=genome_dir + '/long_index/star',
+        seedPerWindowNmax=50
+    threads:
+        config['threads_mapping']
+    run:
+        shell(map_command_pe)
+    
+rule map_circRNA_se:
+    input:
+        reads='{output_dir}/unmapped/{sample_id}/genome.fa.gz'
+        index=genome_dir + '/index/star/circRNA/SA'
+    output:
+        bam='{output_dir}/bam/{sample_id}/circRNA.bam',
+        unmapped='{output_dir}/unmapped/{sample_id}/circRNA.fa.gz',
+        log='{output_dir}/mapping_star/{sample_id}/circRNA/Log.final.out'
+    params:
+        output_prefix='{output_dir}/mapping_star/{sample_id}/circRNA/',
+        index=genome_dir + '/index/star/circRNA',
+        seedPerWindowNmax=20
+    threads:
+        config['threads_mapping']
+    run:
+        shell(map_command_pe)
+
+rule sort_bam_by_name:
+    input:
+        '{output_dir}/bam/{sample_id}/{map_step}.bam'
+    output:
+        '{output_dir}/bam_sorted_by_name/{sample_id}/{map_step}.bam'
+    params:
+        temp_dir=config['temp_dir']
+    shell:
+        '''samtools sort -n -T {params.temp_dir} -o {output} {input}
+        '''
+
+rule remove_duplicates:
+    input:
+        bam='{output_dir}/bam_sorted_by_name/{sample_id}/{map_step}.bam'
+    output:
+        bam='{output_dir}/bam/{sample_id}/{map_step}_rmdup.bam',
+        metrics='{output_dir}/log/{map_step}_rmdup/{sample_id}'
+    wildcard_constraints:
+        map_step='(rRNA)|(genome)|(circRNA)'
+    shell:
+        '''picard MarkDuplicates REMOVE_DUPLICATES=true \
+            ASSUME_SORT_ORDER=queryname \
+            I={input.bam} \
+            O={output.bam} \
+            M={output.metrics}
+        '''
+
+rule samtools_stats:
+    input:
+        '{output_dir}/bam/{sample_id}/{map_step}.bam'
+    output:
+        '{output_dir}/samtools_stats/{sample_id}/{map_step}.txt'
+    shell:
+        '''samtools stats {input} > {output}
+        '''
+
+rule count_clean_reads:
+    input:
+        '{output_dir}/unmapped/{sample_id}/clean_1.fa.gz'
+    output:
+        '{output_dir}/stats/read_counts/{sample_id}/clean'
+    threads:
+        config['threads_compress']
+    shell:
+        '''pigz -p {threads} -d -c {input} | wc -l | awk '{{print int($0/2)}}' > {output}
+        '''
+
+rule parse_samtools_stats_se:
+    input:
+        '{output_dir}/samtools_stats/{sample_id}/{map_step}.txt'
+    output:
+        fragment_counts='{output_dir}/stats/read_counts/{sample_id}/{map_step}',
+        read_length_hist='{output_dir}/stats/read_length_hist/{sample_id}/{map_step}'
+    wildcard_constraints:
+        map_step='(?!clean).*'
+    shell:
+        '''
+        awk 'BEGIN{{OFS="\t";FS="\t"}}/^SN/{{if($2 == "reads mapped:") print int($3/2)}}' {input} > {output.fragment_counts}
+        awk 'BEGIN{{OFS="\t";FS="\t"}}/^RL/{{print $2,$3}}' {input} > {output.read_length_hist}
+        '''
+
+rule summarize_read_length:
+    input:
+        lambda wildcards: expand('{output_dir}/stats/read_length_hist/{sample_id}/{map_step}',
+            output_dir=wildcards.output_dir, sample_id=wildcards.sample_id, map_step=map_steps)
+    output:
+        '{output_dir}/stats/mapped_read_length_by_sample/{sample_id}'
+    run:
+        import pandas as pd
+
+        matrix = {}
+        for filename in input:
+            map_step = filename.split('/')[-1]
+            matrix[map_step] = pd.read_table(filename, sep='\t', index_col=0, header=None, names=['read_length', map_step]).iloc[:, 0]
+        matrix = pd.DataFrame(matrix)
+        matrix = matrix.loc[:, map_steps]
+        matrix.fillna(0, inplace=True)
+        matrix = matrix.astype('int')
+        matrix.index.name = 'read_length'
+        matrix.to_csv(output[0], sep='\t', header=True, index=True)
+
+
