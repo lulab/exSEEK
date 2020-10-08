@@ -30,6 +30,7 @@ Table of Contents:
   * [Feature selection and biomarker evaluation](#feature-selection-and-biomarker-evaluation)
 * [Copyright and License Information](#copyright-and-license-information)
 * [Citation](#citation)
+* [Tutorial](tutorial/)
 
 
 ## Installation
