@@ -2,6 +2,8 @@
 
 exSEEK is an integrated computational framework to discover and evaluate exRNA biomarkers for liquid biopsy.
 
+![Pipeline of Tutorial](pipeline.png)
+
 The exSEEK framework consists of:
 + Pre_processing:
    
